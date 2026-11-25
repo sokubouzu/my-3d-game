@@ -174,6 +174,476 @@
           "note": "glTF 2.0バイナリ検証およびヘッドレスChromium(Three.js r160 / WebGL2)でのメッシュ・テクスチャ表示および全15アニメーション再生を確認済み（状態D）。iPad Air 第5世代実機検証（状態E）は未実施。"
         }
       }
+    ],
+    "vehicles": [
+      {
+        "id": "2008__mazda_furai",
+        "path": "public/assets/vehicles/2008__mazda_furai.glb",
+        "format": "glb",
+        "fileSizeBytes": 6461816,
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "title": "2008 | Mazda furai",
+        "author": "kevin (ケビン) (https://sketchfab.com/sohyalebret)",
+        "source": "https://sketchfab.com/3d-models/2008-mazda-furai-6d19395599fd490eab73ae28d30663b2",
+        "imageCount": 11,
+        "maxTexturePx": 1024,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "2011_-_13_toyota_kijang_innova_2.0_g_tgn40",
+        "path": "public/assets/vehicles/2011_-_13_toyota_kijang_innova_2.0_g_tgn40.glb",
+        "format": "glb",
+        "fileSizeBytes": 6548972,
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "title": "2011 - 13 Toyota Kijang Innova 2.0 G [TGN40]",
+        "author": "boiled fish (https://sketchfab.com/iwak.rebus)",
+        "source": "https://sketchfab.com/3d-models/2011-13-toyota-kijang-innova-20-g-tgn40-3069bcbb3ee843a0bd2aa148c7a43130",
+        "imageCount": 3,
+        "maxTexturePx": 1024,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "2012_sea-doo_gti_se_130",
+        "path": "public/assets/vehicles/2012_sea-doo_gti_se_130.glb",
+        "format": "glb",
+        "fileSizeBytes": 6444032,
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "title": "2012 Sea-Doo GTI SE 130",
+        "author": "BoatUS Foundation (https://sketchfab.com/boatusfoundation)",
+        "source": "https://sketchfab.com/3d-models/2012-sea-doo-gti-se-130-d7b3e903d7dc43a694720bd347f4fadf",
+        "imageCount": 8,
+        "maxTexturePx": 1024,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "M939 Truck by J-Toastie - y8lBpvMlim",
+        "path": "public/assets/vehicles/M939 Truck by J-Toastie - y8lBpvMlim.glb",
+        "format": "glb",
+        "fileSizeBytes": 685984,
+        "license": "Unspecified (no embedded license metadata in GLB)",
+        "title": "M939 Truck by J-Toastie - y8lBpvMlim",
+        "author": "",
+        "source": "",
+        "imageCount": 0,
+        "maxTexturePx": 1024,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "Tank by Quaternius - jWS1CLA0RO",
+        "path": "public/assets/vehicles/Tank by Quaternius - jWS1CLA0RO.glb",
+        "format": "glb",
+        "fileSizeBytes": 836728,
+        "license": "Unspecified (no embedded license metadata in GLB)",
+        "title": "Tank by Quaternius - jWS1CLA0RO",
+        "author": "",
+        "source": "",
+        "imageCount": 0,
+        "maxTexturePx": 1024,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "free_1975_porsche_911_930_turbo",
+        "path": "public/assets/vehicles/free_1975_porsche_911_930_turbo.glb",
+        "format": "glb",
+        "fileSizeBytes": 12692740,
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "title": "FREE 1975 Porsche 911 (930) Turbo",
+        "author": "Lionsharp Studios (https://sketchfab.com/lionsharp)",
+        "source": "https://sketchfab.com/3d-models/free-1975-porsche-911-930-turbo-8568d9d14a994b9cae59499f0dbed21e",
+        "imageCount": 27,
+        "maxTexturePx": 1024,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "harley_custom_bike_v1.2",
+        "path": "public/assets/vehicles/harley_custom_bike_v1.2.glb",
+        "format": "glb",
+        "fileSizeBytes": 3887020,
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "title": "Harley custom bike v1.2",
+        "author": "3DWorkbench (https://sketchfab.com/3DWorkbench)",
+        "source": "https://sketchfab.com/3d-models/harley-custom-bike-v12-764e9f9fc38d47b78ef83a60e9084eb4",
+        "imageCount": 12,
+        "maxTexturePx": 1024,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "low_poly_japan_offroad_car",
+        "path": "public/assets/vehicles/low_poly_japan_offroad_car.glb",
+        "format": "glb",
+        "fileSizeBytes": 853412,
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "title": "Low poly Japan Offroad Car",
+        "author": "Han66st (https://sketchfab.com/Han66st)",
+        "source": "https://sketchfab.com/3d-models/low-poly-japan-offroad-car-5bde8c57de3d4be880ed6457f88636ad",
+        "imageCount": 0,
+        "maxTexturePx": 1024,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "porco_plane",
+        "path": "public/assets/vehicles/porco_plane.glb",
+        "format": "glb",
+        "fileSizeBytes": 2697380,
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "title": "Porco Plane",
+        "author": "Lucas Rollano (https://sketchfab.com/nightdoll)",
+        "source": "https://sketchfab.com/3d-models/porco-plane-a144904d325a4e8493089ef9ac7d0999",
+        "imageCount": 6,
+        "maxTexturePx": 1024,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "thunderbolt_96_interceptor_-_low_poly_model",
+        "path": "public/assets/vehicles/thunderbolt_96_interceptor_-_low_poly_model.glb",
+        "format": "glb",
+        "fileSizeBytes": 3673336,
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "title": "Thunderbolt '96 Interceptor - Low poly model",
+        "author": "Daniel Zhabotinsky (https://sketchfab.com/DanielZhabotinsky)",
+        "source": "https://sketchfab.com/3d-models/thunderbolt-96-interceptor-low-poly-model-caf7ea9fdf90462cbdc2b0edf872ead8",
+        "imageCount": 13,
+        "maxTexturePx": 1024,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "train_ride",
+        "path": "public/assets/vehicles/train_ride.glb",
+        "format": "glb",
+        "fileSizeBytes": 18013980,
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "title": "Train Ride",
+        "author": "Desant_Art (https://sketchfab.com/Desant_Art)",
+        "source": "https://sketchfab.com/3d-models/train-ride-afdc6230cfe24e3ea66a364ba93dec90",
+        "imageCount": 11,
+        "maxTexturePx": 1024,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      }
+    ],
+    "buildings": [
+      {
+        "id": "Apartment 2 by Gabriele Romagnoli - dtgO5dwwtkk",
+        "path": "public/assets/buildings/Apartment 2 by Gabriele Romagnoli - dtgO5dwwtkk.glb",
+        "format": "glb",
+        "fileSizeBytes": 894344,
+        "license": "Unspecified (no embedded license metadata in GLB)",
+        "title": "Apartment 2 by Gabriele Romagnoli - dtgO5dwwtkk",
+        "author": "",
+        "source": "",
+        "imageCount": 0,
+        "maxTexturePx": 1024,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "Dunes Path Tile by Google Data Arts Team - mfN1MSSF4E",
+        "path": "public/assets/buildings/Dunes Path Tile by Google Data Arts Team - mfN1MSSF4E.glb",
+        "format": "glb",
+        "fileSizeBytes": 361180,
+        "license": "Unspecified (no embedded license metadata in GLB)",
+        "title": "Dunes Path Tile by Google Data Arts Team - mfN1MSSF4E",
+        "author": "",
+        "source": "",
+        "imageCount": 0,
+        "maxTexturePx": 1024,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "buster_brown_shoe_store",
+        "path": "public/assets/buildings/buster_brown_shoe_store.glb",
+        "format": "glb",
+        "fileSizeBytes": 658952,
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "title": "Buster Brown Shoe Store",
+        "author": "novusod (https://sketchfab.com/novusod)",
+        "source": "https://sketchfab.com/3d-models/buster-brown-shoe-store-085c60034dc343e7a68714f36866b0a4",
+        "imageCount": 6,
+        "maxTexturePx": 1024,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "dae_final_assignment_milestone_house",
+        "path": "public/assets/buildings/dae_final_assignment_milestone_house.glb",
+        "format": "glb",
+        "fileSizeBytes": 2122420,
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "title": "[DAE] Final Assignment Milestone: House",
+        "author": "Joan Tieu (https://sketchfab.com/JoanTieu)",
+        "source": "https://sketchfab.com/3d-models/dae-final-assignment-milestone-house-58a9edfc71ab4adc869061d4e5e862d1",
+        "imageCount": 8,
+        "maxTexturePx": 1024,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "japan_street",
+        "path": "public/assets/buildings/japan_street.glb",
+        "format": "glb",
+        "fileSizeBytes": 6691700,
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "title": "Japan street",
+        "author": "abhayexe (https://sketchfab.com/abhayexe)",
+        "source": "https://sketchfab.com/3d-models/japan-street-e5cdc0a52c074d82af6b7d087043acba",
+        "imageCount": 17,
+        "maxTexturePx": 1024,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "japanese_house",
+        "path": "public/assets/buildings/japanese_house.glb",
+        "format": "glb",
+        "fileSizeBytes": 326932,
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "title": "Japanese house",
+        "author": "Tritec creation (https://sketchfab.com/Roodygen)",
+        "source": "https://sketchfab.com/3d-models/japanese-house-781ad5f4b96f4094840d5385cae8a609",
+        "imageCount": 1,
+        "maxTexturePx": 1024,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "japanese_restaurant_inakaya",
+        "path": "public/assets/buildings/japanese_restaurant_inakaya.glb",
+        "format": "glb",
+        "fileSizeBytes": 8460076,
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "title": "Japanese Restaurant \"Inakaya\"",
+        "author": "Jellepostma (https://sketchfab.com/Jellepostma)",
+        "source": "https://sketchfab.com/3d-models/japanese-restaurant-inakaya-97594e92c418491ab7f032ed2abbf596",
+        "imageCount": 4,
+        "maxTexturePx": 1024,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "low_road_-_2",
+        "path": "public/assets/buildings/low_road_-_2.glb",
+        "format": "glb",
+        "fileSizeBytes": 1541084,
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "title": "Low road - 2",
+        "author": "Yarelon (https://sketchfab.com/yarelon111)",
+        "source": "https://sketchfab.com/3d-models/low-road-2-7cc26be9fba04f4ca29a76454bfe5dbb",
+        "imageCount": 6,
+        "maxTexturePx": 1024,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "psx_japanese_house",
+        "path": "public/assets/buildings/psx_japanese_house.glb",
+        "format": "glb",
+        "fileSizeBytes": 515604,
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "title": "PSX Japanese House",
+        "author": "DeadFrame Studio (https://sketchfab.com/DeadFrame)",
+        "source": "https://sketchfab.com/3d-models/psx-japanese-house-1bb2ea4b2e344370997938d036d483b2",
+        "imageCount": 2,
+        "maxTexturePx": 1024,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "tokyo_japanese_house__casa_japonesa_low_poly",
+        "path": "public/assets/buildings/tokyo_japanese_house__casa_japonesa_low_poly.glb",
+        "format": "glb",
+        "fileSizeBytes": 937232,
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "title": "Tokyo Japanese House / Casa Japonesa [Low Poly]",
+        "author": "SitoNyaa (https://sketchfab.com/SitoNyaa)",
+        "source": "https://sketchfab.com/3d-models/tokyo-japanese-house-casa-japonesa-low-poly-05e04ee0c3d04ff9a2fe4c348b3c1bcd",
+        "imageCount": 0,
+        "maxTexturePx": 1024,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "train_track",
+        "path": "public/assets/buildings/train_track.glb",
+        "format": "glb",
+        "fileSizeBytes": 20994060,
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "title": "Train Track",
+        "author": "timblewee (https://sketchfab.com/timblewee)",
+        "source": "https://sketchfab.com/3d-models/train-track-bbfcc6c769434911ad704ef42eb4d2fb",
+        "imageCount": 0,
+        "maxTexturePx": 1024,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      }
+    ],
+    "props": [
+      {
+        "id": "Animated Pistol by Quaternius - gmR2e0hWSF",
+        "path": "public/assets/props/Animated Pistol by Quaternius - gmR2e0hWSF.glb",
+        "format": "glb",
+        "fileSizeBytes": 153956,
+        "license": "Unspecified (no embedded license metadata in GLB)",
+        "title": "Animated Pistol by Quaternius - gmR2e0hWSF",
+        "author": "",
+        "source": "",
+        "imageCount": 0,
+        "maxTexturePx": 1024,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "Camping Stuff by Don Carson - 3GSiSGRuyfT",
+        "path": "public/assets/props/Camping Stuff by Don Carson - 3GSiSGRuyfT.glb",
+        "format": "glb",
+        "fileSizeBytes": 170368,
+        "license": "Unspecified (no embedded license metadata in GLB)",
+        "title": "Camping Stuff by Don Carson - 3GSiSGRuyfT",
+        "author": "",
+        "source": "",
+        "imageCount": 0,
+        "maxTexturePx": 1024,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "Cubone by Tipatat Chennavasin - cc7gCdKaQYU",
+        "path": "public/assets/props/Cubone by Tipatat Chennavasin - cc7gCdKaQYU.glb",
+        "format": "glb",
+        "fileSizeBytes": 57456,
+        "license": "Unspecified (no embedded license metadata in GLB)",
+        "title": "Cubone by Tipatat Chennavasin - cc7gCdKaQYU",
+        "author": "",
+        "source": "",
+        "imageCount": 0,
+        "maxTexturePx": 1024,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "Grandpa by scaranto - mED3MPaQ6i",
+        "path": "public/assets/props/Grandpa by scaranto - mED3MPaQ6i.glb",
+        "format": "glb",
+        "fileSizeBytes": 70428,
+        "license": "Unspecified (no embedded license metadata in GLB)",
+        "title": "Grandpa by scaranto - mED3MPaQ6i",
+        "author": "",
+        "source": "",
+        "imageCount": 0,
+        "maxTexturePx": 1024,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "Rigged robot by joney_lol - BwjA6Thdzd",
+        "path": "public/assets/props/Rigged robot by joney_lol - BwjA6Thdzd.glb",
+        "format": "glb",
+        "fileSizeBytes": 1551944,
+        "license": "Unspecified (no embedded license metadata in GLB)",
+        "title": "Rigged robot by joney_lol - BwjA6Thdzd",
+        "author": "",
+        "source": "",
+        "imageCount": 0,
+        "maxTexturePx": 1024,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "dog",
+        "path": "public/assets/props/dog.glb",
+        "format": "glb",
+        "fileSizeBytes": 3222888,
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "title": "dog",
+        "author": "neighbor (https://sketchfab.com/kylekip)",
+        "source": "https://sketchfab.com/3d-models/dog-e395f26615ca445ab32f01ded17ff3bf",
+        "imageCount": 2,
+        "maxTexturePx": 1024,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "japanese_inspired_vending_machines",
+        "path": "public/assets/props/japanese_inspired_vending_machines.glb",
+        "format": "glb",
+        "fileSizeBytes": 1520924,
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "title": "Japanese Inspired Vending Machines",
+        "author": "Spookyghostboo (https://sketchfab.com/spookyghostboo)",
+        "source": "https://sketchfab.com/3d-models/japanese-inspired-vending-machines-2b3638c2c2a64633a3e11d473152c909",
+        "imageCount": 6,
+        "maxTexturePx": 1024,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      }
     ]
   }
 }
