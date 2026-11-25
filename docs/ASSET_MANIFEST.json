@@ -1,0 +1,1723 @@
+{
+  "schemaVersion": "1.1.0",
+  "taskId": "0-C",
+  "targetDevice": "iPad Air (5th gen, Apple M1 / 8GB RAM)",
+  "summary": {
+    "totalAssets": 34,
+    "approvedCount": 25,
+    "holdCount": 9,
+    "dracoCompressedCount": 4,
+    "byCategory": {
+      "characters": 1,
+      "buildings": 14,
+      "vehicles": 11,
+      "props": 8
+    }
+  },
+  "assets": {
+    "characters": [
+      {
+        "id": "player",
+        "category": "characters",
+        "path": "public/assets/characters/player.glb",
+        "format": "glb",
+        "fileSizeBytes": 3551236,
+        "title": "player",
+        "author": "",
+        "license": "Mixamo (Adobe Mixamo)",
+        "source": "",
+        "placementStatus": "approved",
+        "hasDracoCompression": false,
+        "extensionsUsed": [],
+        "geometry": {
+          "vertices": 5107,
+          "triangles": 8054,
+          "bboxDimensionsMeters": {
+            "x": 1.507,
+            "y": 1.7,
+            "z": 0.539,
+            "min": [
+              -0.754,
+              0,
+              -0.297
+            ],
+            "max": [
+              0.754,
+              1.7,
+              0.242
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 4,
+          "maxTexturePx": 2048,
+          "resolutions": [
+            "1024x1024",
+            "2048x2048"
+          ]
+        },
+        "animationCount": 15,
+        "verification": {
+          "rank": "D",
+          "note": "glTF 2.0バイナリ検証およびヘッドレスChromium(Three.js r160 / WebGL2)でのメッシュ・テクスチャ表示および全15アニメーション再生を確認済み（状態D）。iPad Air 第5世代実機検証（状態E）は未実施。"
+        },
+        "animations": [
+          {
+            "name": "Idle",
+            "sourceFbx": "Player_Idle.fbx",
+            "durationSec": 1.967,
+            "loopRecommended": true,
+            "inPlaceApplied": false,
+            "inPlaceNote": "元データ時点でIn Place済み（Hips XZ変位なし）"
+          },
+          {
+            "name": "Walking",
+            "sourceFbx": "Player_Walking.fbx",
+            "durationSec": 1.033,
+            "loopRecommended": true,
+            "inPlaceApplied": false,
+            "inPlaceNote": "元データ時点でIn Place済み（始点・終点XZ一致、自然な骨盤揺れのみ）"
+          },
+          {
+            "name": "Running",
+            "sourceFbx": "Player_running.fbx",
+            "durationSec": 0.7,
+            "loopRecommended": true,
+            "inPlaceApplied": false,
+            "inPlaceNote": "元データ時点でIn Place済み（始点・終点XZ一致、自然な骨盤揺れのみ）"
+          },
+          {
+            "name": "StartWalking",
+            "sourceFbx": "Player_Start Walking.fbx",
+            "durationSec": 2.933,
+            "loopRecommended": false,
+            "inPlaceApplied": true,
+            "inPlaceNote": "元データに+Z方向約1.55m（スケール後1.42m）の水平移動があったため、HipsのX・Z座標を始点フレームに固定してIn Place化"
+          },
+          {
+            "name": "RunningUpStairs",
+            "sourceFbx": "Player_Running Up Stairs.fbx",
+            "durationSec": 0.6,
+            "loopRecommended": true,
+            "inPlaceApplied": false,
+            "inPlaceNote": "水平方向（X・Z）は元データ時点でIn Place済み（階段上昇のY軸上昇のみ保持）"
+          },
+          {
+            "name": "Jumping",
+            "sourceFbx": "Player_Jumping.fbx",
+            "durationSec": 1.9,
+            "loopRecommended": false,
+            "inPlaceApplied": false,
+            "inPlaceNote": "その場ジャンプ（始点・終点XZ一致）"
+          },
+          {
+            "name": "FallingToLanding",
+            "sourceFbx": "Player_Falling To Landing.fbx",
+            "durationSec": 1.067,
+            "loopRecommended": false,
+            "inPlaceApplied": false,
+            "inPlaceNote": "着地モーション（原点へ着地）"
+          },
+          {
+            "name": "FallingDown",
+            "sourceFbx": "Player_Falling Down.fbx",
+            "durationSec": 2.267,
+            "loopRecommended": false,
+            "inPlaceApplied": false,
+            "inPlaceNote": "非ループの転倒アクションのため元の軌道を保持"
+          },
+          {
+            "name": "Sitting",
+            "sourceFbx": "Player_Sitting.fbx",
+            "duplicateRemovedFbx": "Player＿Sitting.fbx",
+            "durationSec": 4.433,
+            "loopRecommended": false,
+            "inPlaceApplied": false,
+            "inPlaceNote": "非ループの着座アクション（全角アンダースコア版の重複FBXを統合・重複排除）"
+          },
+          {
+            "name": "StandUp",
+            "sourceFbx": "Player_Stand Up.fbx",
+            "durationSec": 4.833,
+            "loopRecommended": false,
+            "inPlaceApplied": false,
+            "inPlaceNote": "非ループの立ち上がりアクション（着座からの起立）"
+          },
+          {
+            "name": "StandingUp",
+            "sourceFbx": "Player_Standing Up.fbx",
+            "durationSec": 11.4,
+            "loopRecommended": false,
+            "inPlaceApplied": false,
+            "inPlaceNote": "非ループの起き上がりアクション（仰臥からの起立）"
+          },
+          {
+            "name": "SleepingIdle",
+            "sourceFbx": "Player_Sleeping Idle.fbx",
+            "durationSec": 6.867,
+            "loopRecommended": true,
+            "inPlaceApplied": false,
+            "inPlaceNote": "元データ時点でIn Place済み"
+          },
+          {
+            "name": "EnteringCar",
+            "sourceFbx": "Player_Entering Car.fbx",
+            "durationSec": 5.467,
+            "loopRecommended": false,
+            "inPlaceApplied": false,
+            "inPlaceNote": "非ループの乗車アクションのため座席方向への移動軌道を保持"
+          },
+          {
+            "name": "Driving",
+            "sourceFbx": "Player_Driving.fbx",
+            "durationSec": 5.0,
+            "loopRecommended": true,
+            "inPlaceApplied": false,
+            "inPlaceNote": "元データ時点でIn Place済み"
+          },
+          {
+            "name": "ZombieStandUp",
+            "sourceFbx": "Player_Zombie Stand Up.fbx",
+            "durationSec": 3.1,
+            "loopRecommended": false,
+            "inPlaceApplied": false,
+            "inPlaceNote": "非ループの起き上がりアクション"
+          }
+        ],
+        "heightMeters": 1.7,
+        "facingAxis": "+Z",
+        "groundedY": 0.0
+      }
+    ],
+    "buildings": [
+      {
+        "id": "Apartment 2 by Gabriele Romagnoli - dtgO5dwwtkk",
+        "category": "buildings",
+        "path": "public/assets/buildings/Apartment 2 by Gabriele Romagnoli - dtgO5dwwtkk.glb",
+        "format": "glb",
+        "fileSizeBytes": 894344,
+        "title": "Apartment 2 by Gabriele Romagnoli - dtgO5dwwtkk",
+        "author": "",
+        "license": "Unspecified (no embedded license metadata in GLB)",
+        "source": "",
+        "placementStatus": "保留",
+        "hasDracoCompression": false,
+        "extensionsUsed": [],
+        "geometry": {
+          "vertices": 20292,
+          "triangles": 9878,
+          "bboxDimensionsMeters": {
+            "x": 1.67,
+            "y": 0.42,
+            "z": 1.68,
+            "min": [
+              -0.955,
+              -0.157,
+              -0.637
+            ],
+            "max": [
+              0.715,
+              0.263,
+              1.043
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 0,
+          "maxTexturePx": 0,
+          "resolutions": []
+        },
+        "animationCount": 0,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        },
+        "holdReason": "ライセンス不明またはEditorialのため配置対象外（保留）"
+      },
+      {
+        "id": "Dunes Path Tile by Google Data Arts Team - mfN1MSSF4E",
+        "category": "buildings",
+        "path": "public/assets/buildings/Dunes Path Tile by Google Data Arts Team - mfN1MSSF4E.glb",
+        "format": "glb",
+        "fileSizeBytes": 361180,
+        "title": "Dunes Path Tile by Google Data Arts Team - mfN1MSSF4E",
+        "author": "",
+        "license": "Unspecified (no embedded license metadata in GLB)",
+        "source": "",
+        "placementStatus": "保留",
+        "hasDracoCompression": false,
+        "extensionsUsed": [],
+        "geometry": {
+          "vertices": 13572,
+          "triangles": 5218,
+          "bboxDimensionsMeters": {
+            "x": 30000.199,
+            "y": 30000.199,
+            "z": 20296.153,
+            "min": [
+              -15000.1,
+              -15000.1,
+              -327.753
+            ],
+            "max": [
+              15000.1,
+              15000.1,
+              19968.4
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 0,
+          "maxTexturePx": 0,
+          "resolutions": []
+        },
+        "animationCount": 0,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        },
+        "holdReason": "ライセンス不明またはEditorialのため配置対象外（保留）"
+      },
+      {
+        "id": "buster_brown_shoe_store",
+        "category": "buildings",
+        "path": "public/assets/buildings/buster_brown_shoe_store.glb",
+        "format": "glb",
+        "fileSizeBytes": 658952,
+        "title": "Buster Brown Shoe Store",
+        "author": "novusod (https://sketchfab.com/novusod)",
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "source": "https://sketchfab.com/3d-models/buster-brown-shoe-store-085c60034dc343e7a68714f36866b0a4",
+        "placementStatus": "approved",
+        "hasDracoCompression": false,
+        "extensionsUsed": [],
+        "geometry": {
+          "vertices": 7543,
+          "triangles": 4020,
+          "bboxDimensionsMeters": {
+            "x": 28.839,
+            "y": 8.098,
+            "z": 41.761,
+            "min": [
+              -14.336,
+              -4.196,
+              -26.764
+            ],
+            "max": [
+              14.504,
+              3.901,
+              14.996
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 6,
+          "maxTexturePx": 1024,
+          "resolutions": [
+            "1024x1024",
+            "128x128",
+            "512x512"
+          ]
+        },
+        "animationCount": 0,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "dae_final_assignment_milestone_house",
+        "category": "buildings",
+        "path": "public/assets/buildings/dae_final_assignment_milestone_house.glb",
+        "format": "glb",
+        "fileSizeBytes": 2122420,
+        "title": "[DAE] Final Assignment Milestone: House",
+        "author": "Joan Tieu (https://sketchfab.com/JoanTieu)",
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "source": "https://sketchfab.com/3d-models/dae-final-assignment-milestone-house-58a9edfc71ab4adc869061d4e5e862d1",
+        "placementStatus": "approved",
+        "hasDracoCompression": false,
+        "extensionsUsed": [],
+        "geometry": {
+          "vertices": 6520,
+          "triangles": 5411,
+          "bboxDimensionsMeters": {
+            "x": 1520.191,
+            "y": 828.589,
+            "z": 1071.035,
+            "min": [
+              -857.602,
+              -14.983,
+              -773.475
+            ],
+            "max": [
+              662.589,
+              813.605,
+              297.56
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 8,
+          "maxTexturePx": 1024,
+          "resolutions": [
+            "1024x1024",
+            "256x256",
+            "512x512"
+          ]
+        },
+        "animationCount": 0,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "japan_street",
+        "category": "buildings",
+        "path": "public/assets/buildings/japan_street.glb",
+        "format": "glb",
+        "fileSizeBytes": 6691700,
+        "title": "Japan street",
+        "author": "abhayexe (https://sketchfab.com/abhayexe)",
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "source": "https://sketchfab.com/3d-models/japan-street-e5cdc0a52c074d82af6b7d087043acba",
+        "placementStatus": "approved",
+        "hasDracoCompression": false,
+        "extensionsUsed": [
+          "KHR_materials_specular"
+        ],
+        "geometry": {
+          "vertices": 76775,
+          "triangles": 71916,
+          "bboxDimensionsMeters": {
+            "x": 2421.159,
+            "y": 1137.199,
+            "z": 169.434,
+            "min": [
+              -520.716,
+              -249.055,
+              -95.002
+            ],
+            "max": [
+              1900.443,
+              888.144,
+              74.432
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 17,
+          "maxTexturePx": 1024,
+          "resolutions": [
+            "1024x1024",
+            "512x1024"
+          ]
+        },
+        "animationCount": 0,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "japanese_house",
+        "category": "buildings",
+        "path": "public/assets/buildings/japanese_house.glb",
+        "format": "glb",
+        "fileSizeBytes": 326932,
+        "title": "Japanese house",
+        "author": "Tritec creation (https://sketchfab.com/Roodygen)",
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "source": "https://sketchfab.com/3d-models/japanese-house-781ad5f4b96f4094840d5385cae8a609",
+        "placementStatus": "approved",
+        "hasDracoCompression": false,
+        "extensionsUsed": [],
+        "geometry": {
+          "vertices": 4874,
+          "triangles": 4014,
+          "bboxDimensionsMeters": {
+            "x": 2.395,
+            "y": 2.821,
+            "z": 2.945,
+            "min": [
+              -1.026,
+              -1.394,
+              -0.078
+            ],
+            "max": [
+              1.37,
+              1.428,
+              2.867
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 1,
+          "maxTexturePx": 1024,
+          "resolutions": [
+            "1024x1024"
+          ]
+        },
+        "animationCount": 0,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "japanese_restaurant_inakaya",
+        "category": "buildings",
+        "path": "public/assets/buildings/japanese_restaurant_inakaya.glb",
+        "format": "glb",
+        "fileSizeBytes": 8460076,
+        "title": "Japanese Restaurant \"Inakaya\"",
+        "author": "Jellepostma (https://sketchfab.com/Jellepostma)",
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "source": "https://sketchfab.com/3d-models/japanese-restaurant-inakaya-97594e92c418491ab7f032ed2abbf596",
+        "placementStatus": "approved",
+        "hasDracoCompression": false,
+        "extensionsUsed": [
+          "KHR_materials_specular",
+          "KHR_materials_emissive_strength"
+        ],
+        "geometry": {
+          "vertices": 127867,
+          "triangles": 100904,
+          "bboxDimensionsMeters": {
+            "x": 62.971,
+            "y": 39.521,
+            "z": 29.791,
+            "min": [
+              -40.692,
+              -32.301,
+              -13.809
+            ],
+            "max": [
+              22.279,
+              7.22,
+              15.982
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 4,
+          "maxTexturePx": 1024,
+          "resolutions": [
+            "1024x1024"
+          ]
+        },
+        "animationCount": 0,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "low_road_-_2",
+        "category": "buildings",
+        "path": "public/assets/buildings/low_road_-_2.glb",
+        "format": "glb",
+        "fileSizeBytes": 1541084,
+        "title": "Low road - 2",
+        "author": "Yarelon (https://sketchfab.com/yarelon111)",
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "source": "https://sketchfab.com/3d-models/low-road-2-7cc26be9fba04f4ca29a76454bfe5dbb",
+        "placementStatus": "approved",
+        "hasDracoCompression": false,
+        "extensionsUsed": [],
+        "geometry": {
+          "vertices": 88,
+          "triangles": 44,
+          "bboxDimensionsMeters": {
+            "x": 2.0,
+            "y": 2.0,
+            "z": 0.133,
+            "min": [
+              -1.0,
+              -1.0,
+              0.0
+            ],
+            "max": [
+              1.0,
+              1.0,
+              0.133
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 6,
+          "maxTexturePx": 1024,
+          "resolutions": [
+            "1024x1024",
+            "1024x512"
+          ]
+        },
+        "animationCount": 0,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "night_city_japan",
+        "category": "buildings",
+        "path": "public/assets/buildings/night_city_japan.glb",
+        "format": "glb",
+        "fileSizeBytes": 3259424,
+        "title": "NIGHT CITY JAPAN",
+        "author": "Nikitos & 3130 (https://sketchfab.com/vrcityphoto)",
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "source": "https://sketchfab.com/3d-models/night-city-japan-32bdbc1bdf8f43eaa4df6f4d25723d1d",
+        "placementStatus": "approved",
+        "hasDracoCompression": true,
+        "extensionsUsed": [
+          "KHR_draco_mesh_compression",
+          "KHR_materials_unlit"
+        ],
+        "geometry": {
+          "vertices": 353719,
+          "triangles": 650489,
+          "bboxDimensionsMeters": {
+            "x": 8834.323,
+            "y": 7671.646,
+            "z": 5214.367,
+            "min": [
+              -4789.397,
+              102.967,
+              -1980.588
+            ],
+            "max": [
+              4044.926,
+              7774.613,
+              3233.779
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 3,
+          "maxTexturePx": 1024,
+          "resolutions": [
+            "1024x1024"
+          ]
+        },
+        "animationCount": 0,
+        "verification": {
+          "rank": "B",
+          "note": "GLBメタデータ・ポリゴン数・解像度・バウンディングボックス・Draco圧縮有無を検証し用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "psx_japanese_house",
+        "category": "buildings",
+        "path": "public/assets/buildings/psx_japanese_house.glb",
+        "format": "glb",
+        "fileSizeBytes": 515604,
+        "title": "PSX Japanese House",
+        "author": "DeadFrame Studio (https://sketchfab.com/DeadFrame)",
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "source": "https://sketchfab.com/3d-models/psx-japanese-house-1bb2ea4b2e344370997938d036d483b2",
+        "placementStatus": "approved",
+        "hasDracoCompression": false,
+        "extensionsUsed": [],
+        "geometry": {
+          "vertices": 936,
+          "triangles": 563,
+          "bboxDimensionsMeters": {
+            "x": 71.405,
+            "y": 16.804,
+            "z": 11.618,
+            "min": [
+              -68.491,
+              -12.073,
+              -2.065
+            ],
+            "max": [
+              2.914,
+              4.731,
+              9.553
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 2,
+          "maxTexturePx": 1024,
+          "resolutions": [
+            "1024x1024"
+          ]
+        },
+        "animationCount": 0,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "stylized_little_japanese_town_street",
+        "category": "buildings",
+        "path": "public/assets/buildings/stylized_little_japanese_town_street.glb",
+        "format": "glb",
+        "fileSizeBytes": 22813676,
+        "title": "Stylized Little Japanese Town Street",
+        "author": "Michał Solarek (https://sketchfab.com/misiek13)",
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "source": "https://sketchfab.com/3d-models/stylized-little-japanese-town-street-200fc33b8a2b4da98e71590feeb255a8",
+        "placementStatus": "approved",
+        "hasDracoCompression": true,
+        "extensionsUsed": [
+          "KHR_draco_mesh_compression"
+        ],
+        "geometry": {
+          "vertices": 289983,
+          "triangles": 210718,
+          "bboxDimensionsMeters": {
+            "x": 502.932,
+            "y": 733.577,
+            "z": 563.384,
+            "min": [
+              -277.725,
+              -463.725,
+              -266.025
+            ],
+            "max": [
+              225.207,
+              269.852,
+              297.359
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 26,
+          "maxTexturePx": 1024,
+          "resolutions": [
+            "1024x1024"
+          ]
+        },
+        "animationCount": 0,
+        "verification": {
+          "rank": "B",
+          "note": "GLBメタデータ・ポリゴン数・解像度・バウンディングボックス・Draco圧縮有無を検証し用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "tokyo_japanese_house__casa_japonesa_low_poly",
+        "category": "buildings",
+        "path": "public/assets/buildings/tokyo_japanese_house__casa_japonesa_low_poly.glb",
+        "format": "glb",
+        "fileSizeBytes": 937232,
+        "title": "Tokyo Japanese House / Casa Japonesa [Low Poly]",
+        "author": "SitoNyaa (https://sketchfab.com/SitoNyaa)",
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "source": "https://sketchfab.com/3d-models/tokyo-japanese-house-casa-japonesa-low-poly-05e04ee0c3d04ff9a2fe4c348b3c1bcd",
+        "placementStatus": "approved",
+        "hasDracoCompression": false,
+        "extensionsUsed": [],
+        "geometry": {
+          "vertices": 13537,
+          "triangles": 9337,
+          "bboxDimensionsMeters": {
+            "x": 192.167,
+            "y": 2020.283,
+            "z": 112.546,
+            "min": [
+              -27.048,
+              -2004.709,
+              -99.1
+            ],
+            "max": [
+              165.119,
+              15.574,
+              13.446
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 0,
+          "maxTexturePx": 0,
+          "resolutions": []
+        },
+        "animationCount": 0,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "train_track",
+        "category": "buildings",
+        "path": "public/assets/buildings/train_track.glb",
+        "format": "glb",
+        "fileSizeBytes": 20994060,
+        "title": "Train Track",
+        "author": "timblewee (https://sketchfab.com/timblewee)",
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "source": "https://sketchfab.com/3d-models/train-track-bbfcc6c769434911ad704ef42eb4d2fb",
+        "placementStatus": "approved",
+        "hasDracoCompression": false,
+        "extensionsUsed": [],
+        "geometry": {
+          "vertices": 409896,
+          "triangles": 655776,
+          "bboxDimensionsMeters": {
+            "x": 2.475,
+            "y": 0.448,
+            "z": 34.589,
+            "min": [
+              -1.238,
+              -0.447,
+              -3.163
+            ],
+            "max": [
+              1.238,
+              0.001,
+              31.425
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 0,
+          "maxTexturePx": 0,
+          "resolutions": []
+        },
+        "animationCount": 0,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "vancouver_police_-_cambie_st._vancouver_bc_ca",
+        "category": "buildings",
+        "path": "public/assets/buildings/vancouver_police_-_cambie_st._vancouver_bc_ca.glb",
+        "format": "glb",
+        "fileSizeBytes": 6121520,
+        "title": "Vancouver Police - Cambie St., Vancouver, BC, CA",
+        "author": "Brian Trepanier (https://sketchfab.com/CMBC)",
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "source": "https://sketchfab.com/3d-models/vancouver-police-cambie-st-vancouver-bc-ca-fcc219322a7148f782d21178c3f18d5a",
+        "placementStatus": "approved",
+        "hasDracoCompression": true,
+        "extensionsUsed": [
+          "KHR_draco_mesh_compression"
+        ],
+        "geometry": {
+          "vertices": 1674744,
+          "triangles": 558248,
+          "bboxDimensionsMeters": {
+            "x": 26.879,
+            "y": 26.032,
+            "z": 3.969,
+            "min": [
+              -12.722,
+              -18.475,
+              -3.02
+            ],
+            "max": [
+              14.157,
+              7.557,
+              0.95
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 1,
+          "maxTexturePx": 1024,
+          "resolutions": [
+            "1024x1024"
+          ]
+        },
+        "animationCount": 0,
+        "verification": {
+          "rank": "B",
+          "note": "GLBメタデータ・ポリゴン数・解像度・バウンディングボックス・Draco圧縮有無を検証し用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      }
+    ],
+    "vehicles": [
+      {
+        "id": "2008__mazda_furai",
+        "category": "vehicles",
+        "path": "public/assets/vehicles/2008__mazda_furai.glb",
+        "format": "glb",
+        "fileSizeBytes": 6461816,
+        "title": "2008 | Mazda furai",
+        "author": "kevin (ケビン) (https://sketchfab.com/sohyalebret)",
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "source": "https://sketchfab.com/3d-models/2008-mazda-furai-6d19395599fd490eab73ae28d30663b2",
+        "placementStatus": "approved",
+        "hasDracoCompression": false,
+        "extensionsUsed": [
+          "KHR_materials_clearcoat",
+          "KHR_materials_emissive_strength"
+        ],
+        "geometry": {
+          "vertices": 120519,
+          "triangles": 144143,
+          "bboxDimensionsMeters": {
+            "x": 1.947,
+            "y": 4.593,
+            "z": 1.069,
+            "min": [
+              -0.974,
+              -2.333,
+              -0.002
+            ],
+            "max": [
+              0.974,
+              2.26,
+              1.067
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 11,
+          "maxTexturePx": 1024,
+          "resolutions": [
+            "1024x1024",
+            "256x256",
+            "512x256",
+            "512x512"
+          ]
+        },
+        "animationCount": 0,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "2011_-_13_toyota_kijang_innova_2.0_g_tgn40",
+        "category": "vehicles",
+        "path": "public/assets/vehicles/2011_-_13_toyota_kijang_innova_2.0_g_tgn40.glb",
+        "format": "glb",
+        "fileSizeBytes": 6548972,
+        "title": "2011 - 13 Toyota Kijang Innova 2.0 G [TGN40]",
+        "author": "boiled fish (https://sketchfab.com/iwak.rebus)",
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "source": "https://sketchfab.com/3d-models/2011-13-toyota-kijang-innova-20-g-tgn40-3069bcbb3ee843a0bd2aa148c7a43130",
+        "placementStatus": "approved",
+        "hasDracoCompression": false,
+        "extensionsUsed": [
+          "KHR_materials_clearcoat"
+        ],
+        "geometry": {
+          "vertices": 160101,
+          "triangles": 90503,
+          "bboxDimensionsMeters": {
+            "x": 257.606,
+            "y": 414.472,
+            "z": 288.424,
+            "min": [
+              -88.869,
+              -377.896,
+              -56.183
+            ],
+            "max": [
+              168.737,
+              36.576,
+              232.241
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 3,
+          "maxTexturePx": 1024,
+          "resolutions": [
+            "1024x1024",
+            "1024x256",
+            "256x256"
+          ]
+        },
+        "animationCount": 0,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "2012_sea-doo_gti_se_130",
+        "category": "vehicles",
+        "path": "public/assets/vehicles/2012_sea-doo_gti_se_130.glb",
+        "format": "glb",
+        "fileSizeBytes": 6444032,
+        "title": "2012 Sea-Doo GTI SE 130",
+        "author": "BoatUS Foundation (https://sketchfab.com/boatusfoundation)",
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "source": "https://sketchfab.com/3d-models/2012-sea-doo-gti-se-130-d7b3e903d7dc43a694720bd347f4fadf",
+        "placementStatus": "approved",
+        "hasDracoCompression": false,
+        "extensionsUsed": [],
+        "geometry": {
+          "vertices": 65877,
+          "triangles": 107960,
+          "bboxDimensionsMeters": {
+            "x": 1.308,
+            "y": 1.159,
+            "z": 3.47,
+            "min": [
+              -0.654,
+              0.002,
+              -1.735
+            ],
+            "max": [
+              0.654,
+              1.161,
+              1.735
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 8,
+          "maxTexturePx": 1024,
+          "resolutions": [
+            "1024x1024"
+          ]
+        },
+        "animationCount": 1,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "M939 Truck by J-Toastie - y8lBpvMlim",
+        "category": "vehicles",
+        "path": "public/assets/vehicles/M939 Truck by J-Toastie - y8lBpvMlim.glb",
+        "format": "glb",
+        "fileSizeBytes": 685984,
+        "title": "M939 Truck by J-Toastie - y8lBpvMlim",
+        "author": "",
+        "license": "Unspecified (no embedded license metadata in GLB)",
+        "source": "",
+        "placementStatus": "保留",
+        "hasDracoCompression": false,
+        "extensionsUsed": [],
+        "geometry": {
+          "vertices": 18666,
+          "triangles": 9938,
+          "bboxDimensionsMeters": {
+            "x": 0.175,
+            "y": 0.064,
+            "z": 0.069,
+            "min": [
+              -0.038,
+              -0.033,
+              -0.02
+            ],
+            "max": [
+              0.137,
+              0.032,
+              0.048
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 0,
+          "maxTexturePx": 0,
+          "resolutions": []
+        },
+        "animationCount": 0,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        },
+        "holdReason": "ライセンス不明またはEditorialのため配置対象外（保留）"
+      },
+      {
+        "id": "Tank by Quaternius - jWS1CLA0RO",
+        "category": "vehicles",
+        "path": "public/assets/vehicles/Tank by Quaternius - jWS1CLA0RO.glb",
+        "format": "glb",
+        "fileSizeBytes": 836728,
+        "title": "Tank by Quaternius - jWS1CLA0RO",
+        "author": "",
+        "license": "Unspecified (no embedded license metadata in GLB)",
+        "source": "",
+        "placementStatus": "保留",
+        "hasDracoCompression": false,
+        "extensionsUsed": [],
+        "geometry": {
+          "vertices": 11126,
+          "triangles": 6064,
+          "bboxDimensionsMeters": {
+            "x": 0.167,
+            "y": 0.101,
+            "z": 0.051,
+            "min": [
+              -0.093,
+              -0.05,
+              -0.013
+            ],
+            "max": [
+              0.074,
+              0.05,
+              0.037
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 0,
+          "maxTexturePx": 0,
+          "resolutions": []
+        },
+        "animationCount": 4,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        },
+        "holdReason": "ライセンス不明またはEditorialのため配置対象外（保留）"
+      },
+      {
+        "id": "free_1975_porsche_911_930_turbo",
+        "category": "vehicles",
+        "path": "public/assets/vehicles/free_1975_porsche_911_930_turbo.glb",
+        "format": "glb",
+        "fileSizeBytes": 12692740,
+        "title": "FREE 1975 Porsche 911 (930) Turbo",
+        "author": "Lionsharp Studios (https://sketchfab.com/lionsharp)",
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "source": "https://sketchfab.com/3d-models/free-1975-porsche-911-930-turbo-8568d9d14a994b9cae59499f0dbed21e",
+        "placementStatus": "approved",
+        "hasDracoCompression": false,
+        "extensionsUsed": [
+          "KHR_materials_specular",
+          "KHR_materials_clearcoat",
+          "KHR_materials_transmission"
+        ],
+        "geometry": {
+          "vertices": 156299,
+          "triangles": 241260,
+          "bboxDimensionsMeters": {
+            "x": 155.653,
+            "y": 150.916,
+            "z": 298.841,
+            "min": [
+              -22.495,
+              -31.373,
+              -56.244
+            ],
+            "max": [
+              133.158,
+              119.543,
+              242.597
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 27,
+          "maxTexturePx": 1024,
+          "resolutions": [
+            "1024x1024",
+            "512x1024",
+            "512x128",
+            "512x512"
+          ]
+        },
+        "animationCount": 0,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "harley_custom_bike_v1.2",
+        "category": "vehicles",
+        "path": "public/assets/vehicles/harley_custom_bike_v1.2.glb",
+        "format": "glb",
+        "fileSizeBytes": 3887020,
+        "title": "Harley custom bike v1.2",
+        "author": "3DWorkbench (https://sketchfab.com/3DWorkbench)",
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "source": "https://sketchfab.com/3d-models/harley-custom-bike-v12-764e9f9fc38d47b78ef83a60e9084eb4",
+        "placementStatus": "approved",
+        "hasDracoCompression": false,
+        "extensionsUsed": [],
+        "geometry": {
+          "vertices": 51513,
+          "triangles": 47684,
+          "bboxDimensionsMeters": {
+            "x": 1355.236,
+            "y": 2280.004,
+            "z": 3320.294,
+            "min": [
+              -750.292,
+              -1166.199,
+              -1842.115
+            ],
+            "max": [
+              604.944,
+              1113.805,
+              1478.18
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 12,
+          "maxTexturePx": 1024,
+          "resolutions": [
+            "1024x1024"
+          ]
+        },
+        "animationCount": 0,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "low_poly_japan_offroad_car",
+        "category": "vehicles",
+        "path": "public/assets/vehicles/low_poly_japan_offroad_car.glb",
+        "format": "glb",
+        "fileSizeBytes": 853412,
+        "title": "Low poly Japan Offroad Car",
+        "author": "Han66st (https://sketchfab.com/Han66st)",
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "source": "https://sketchfab.com/3d-models/low-poly-japan-offroad-car-5bde8c57de3d4be880ed6457f88636ad",
+        "placementStatus": "approved",
+        "hasDracoCompression": false,
+        "extensionsUsed": [
+          "KHR_materials_clearcoat",
+          "KHR_materials_specular"
+        ],
+        "geometry": {
+          "vertices": 18165,
+          "triangles": 18516,
+          "bboxDimensionsMeters": {
+            "x": 41.819,
+            "y": 4.828,
+            "z": 75.351,
+            "min": [
+              -1.665,
+              -2.414,
+              -72.855
+            ],
+            "max": [
+              40.154,
+              2.414,
+              2.496
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 0,
+          "maxTexturePx": 0,
+          "resolutions": []
+        },
+        "animationCount": 0,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "porco_plane",
+        "category": "vehicles",
+        "path": "public/assets/vehicles/porco_plane.glb",
+        "format": "glb",
+        "fileSizeBytes": 2697380,
+        "title": "Porco Plane",
+        "author": "Lucas Rollano (https://sketchfab.com/nightdoll)",
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "source": "https://sketchfab.com/3d-models/porco-plane-a144904d325a4e8493089ef9ac7d0999",
+        "placementStatus": "approved",
+        "hasDracoCompression": false,
+        "extensionsUsed": [],
+        "geometry": {
+          "vertices": 19222,
+          "triangles": 30035,
+          "bboxDimensionsMeters": {
+            "x": 381.142,
+            "y": 255.148,
+            "z": 97.878,
+            "min": [
+              -216.871,
+              -105.309,
+              -1.749
+            ],
+            "max": [
+              164.271,
+              149.839,
+              96.13
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 6,
+          "maxTexturePx": 1024,
+          "resolutions": [
+            "1024x1024"
+          ]
+        },
+        "animationCount": 0,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "thunderbolt_96_interceptor_-_low_poly_model",
+        "category": "vehicles",
+        "path": "public/assets/vehicles/thunderbolt_96_interceptor_-_low_poly_model.glb",
+        "format": "glb",
+        "fileSizeBytes": 3673336,
+        "title": "Thunderbolt '96 Interceptor - Low poly model",
+        "author": "Daniel Zhabotinsky (https://sketchfab.com/DanielZhabotinsky)",
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "source": "https://sketchfab.com/3d-models/thunderbolt-96-interceptor-low-poly-model-caf7ea9fdf90462cbdc2b0edf872ead8",
+        "placementStatus": "approved",
+        "hasDracoCompression": false,
+        "extensionsUsed": [
+          "KHR_texture_transform",
+          "KHR_materials_clearcoat",
+          "KHR_materials_specular"
+        ],
+        "geometry": {
+          "vertices": 19219,
+          "triangles": 20096,
+          "bboxDimensionsMeters": {
+            "x": 5.784,
+            "y": 6.75,
+            "z": 2.602,
+            "min": [
+              -3.192,
+              -4.199,
+              -1.307
+            ],
+            "max": [
+              2.592,
+              2.551,
+              1.294
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 13,
+          "maxTexturePx": 1024,
+          "resolutions": [
+            "1024x1024",
+            "512x512"
+          ]
+        },
+        "animationCount": 0,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "train_ride",
+        "category": "vehicles",
+        "path": "public/assets/vehicles/train_ride.glb",
+        "format": "glb",
+        "fileSizeBytes": 18013980,
+        "title": "Train Ride",
+        "author": "Desant_Art (https://sketchfab.com/Desant_Art)",
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "source": "https://sketchfab.com/3d-models/train-ride-afdc6230cfe24e3ea66a364ba93dec90",
+        "placementStatus": "approved",
+        "hasDracoCompression": false,
+        "extensionsUsed": [
+          "KHR_materials_emissive_strength"
+        ],
+        "geometry": {
+          "vertices": 224984,
+          "triangles": 191852,
+          "bboxDimensionsMeters": {
+            "x": 22.206,
+            "y": 124.56,
+            "z": 14.701,
+            "min": [
+              -12.583,
+              -41.489,
+              -5.568
+            ],
+            "max": [
+              9.623,
+              83.07,
+              9.133
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 11,
+          "maxTexturePx": 1024,
+          "resolutions": [
+            "1024x1024",
+            "512x512"
+          ]
+        },
+        "animationCount": 0,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      }
+    ],
+    "props": [
+      {
+        "id": "Animated Pistol by Quaternius - gmR2e0hWSF",
+        "category": "props",
+        "path": "public/assets/props/Animated Pistol by Quaternius - gmR2e0hWSF.glb",
+        "format": "glb",
+        "fileSizeBytes": 153956,
+        "title": "Animated Pistol by Quaternius - gmR2e0hWSF",
+        "author": "",
+        "license": "Unspecified (no embedded license metadata in GLB)",
+        "source": "",
+        "placementStatus": "保留",
+        "hasDracoCompression": false,
+        "extensionsUsed": [],
+        "geometry": {
+          "vertices": 2717,
+          "triangles": 1491,
+          "bboxDimensionsMeters": {
+            "x": 0.097,
+            "y": 0.015,
+            "z": 0.063,
+            "min": [
+              -0.095,
+              -0.008,
+              -0.057
+            ],
+            "max": [
+              0.003,
+              0.008,
+              0.007
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 0,
+          "maxTexturePx": 0,
+          "resolutions": []
+        },
+        "animationCount": 3,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        },
+        "holdReason": "ライセンス不明またはEditorialのため配置対象外（保留）"
+      },
+      {
+        "id": "Camping Stuff by Don Carson - 3GSiSGRuyfT",
+        "category": "props",
+        "path": "public/assets/props/Camping Stuff by Don Carson - 3GSiSGRuyfT.glb",
+        "format": "glb",
+        "fileSizeBytes": 170368,
+        "title": "Camping Stuff by Don Carson - 3GSiSGRuyfT",
+        "author": "",
+        "license": "Unspecified (no embedded license metadata in GLB)",
+        "source": "",
+        "placementStatus": "保留",
+        "hasDracoCompression": false,
+        "extensionsUsed": [],
+        "geometry": {
+          "vertices": 5902,
+          "triangles": 2944,
+          "bboxDimensionsMeters": {
+            "x": 0.789,
+            "y": 1.036,
+            "z": 1.417,
+            "min": [
+              -0.426,
+              -0.469,
+              -0.901
+            ],
+            "max": [
+              0.363,
+              0.567,
+              0.516
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 0,
+          "maxTexturePx": 0,
+          "resolutions": []
+        },
+        "animationCount": 0,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        },
+        "holdReason": "ライセンス不明またはEditorialのため配置対象外（保留）"
+      },
+      {
+        "id": "Cubone by Tipatat Chennavasin - cc7gCdKaQYU",
+        "category": "props",
+        "path": "public/assets/props/Cubone by Tipatat Chennavasin - cc7gCdKaQYU.glb",
+        "format": "glb",
+        "fileSizeBytes": 57456,
+        "title": "Cubone by Tipatat Chennavasin - cc7gCdKaQYU",
+        "author": "",
+        "license": "Unspecified (no embedded license metadata in GLB)",
+        "source": "",
+        "placementStatus": "保留",
+        "hasDracoCompression": false,
+        "extensionsUsed": [],
+        "geometry": {
+          "vertices": 1262,
+          "triangles": 634,
+          "bboxDimensionsMeters": {
+            "x": 0.536,
+            "y": 0.699,
+            "z": 0.658,
+            "min": [
+              -0.325,
+              -0.431,
+              -0.207
+            ],
+            "max": [
+              0.211,
+              0.268,
+              0.452
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 0,
+          "maxTexturePx": 0,
+          "resolutions": []
+        },
+        "animationCount": 0,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        },
+        "holdReason": "ライセンス不明またはEditorialのため配置対象外（保留）"
+      },
+      {
+        "id": "Grandpa by scaranto - mED3MPaQ6i",
+        "category": "props",
+        "path": "public/assets/props/Grandpa by scaranto - mED3MPaQ6i.glb",
+        "format": "glb",
+        "fileSizeBytes": 70428,
+        "title": "Grandpa by scaranto - mED3MPaQ6i",
+        "author": "",
+        "license": "Unspecified (no embedded license metadata in GLB)",
+        "source": "",
+        "placementStatus": "保留",
+        "hasDracoCompression": false,
+        "extensionsUsed": [],
+        "geometry": {
+          "vertices": 1434,
+          "triangles": 768,
+          "bboxDimensionsMeters": {
+            "x": 0.28,
+            "y": 0.044,
+            "z": 0.406,
+            "min": [
+              -0.05,
+              -0.024,
+              -0.135
+            ],
+            "max": [
+              0.229,
+              0.02,
+              0.27
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 0,
+          "maxTexturePx": 0,
+          "resolutions": []
+        },
+        "animationCount": 0,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        },
+        "holdReason": "ライセンス不明またはEditorialのため配置対象外（保留）"
+      },
+      {
+        "id": "Rigged robot by joney_lol - BwjA6Thdzd",
+        "category": "props",
+        "path": "public/assets/props/Rigged robot by joney_lol - BwjA6Thdzd.glb",
+        "format": "glb",
+        "fileSizeBytes": 1551944,
+        "title": "Rigged robot by joney_lol - BwjA6Thdzd",
+        "author": "",
+        "license": "Unspecified (no embedded license metadata in GLB)",
+        "source": "",
+        "placementStatus": "保留",
+        "hasDracoCompression": false,
+        "extensionsUsed": [],
+        "geometry": {
+          "vertices": 19590,
+          "triangles": 18299,
+          "bboxDimensionsMeters": {
+            "x": 0.059,
+            "y": 0.049,
+            "z": 0.125,
+            "min": [
+              -0.029,
+              -0.014,
+              0.001
+            ],
+            "max": [
+              0.029,
+              0.035,
+              0.126
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 0,
+          "maxTexturePx": 0,
+          "resolutions": []
+        },
+        "animationCount": 0,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        },
+        "holdReason": "ライセンス不明またはEditorialのため配置対象外（保留）"
+      },
+      {
+        "id": "dog",
+        "category": "props",
+        "path": "public/assets/props/dog.glb",
+        "format": "glb",
+        "fileSizeBytes": 3222888,
+        "title": "dog",
+        "author": "neighbor (https://sketchfab.com/kylekip)",
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "source": "https://sketchfab.com/3d-models/dog-e395f26615ca445ab32f01ded17ff3bf",
+        "placementStatus": "approved",
+        "hasDracoCompression": false,
+        "extensionsUsed": [
+          "KHR_materials_pbrSpecularGlossiness"
+        ],
+        "geometry": {
+          "vertices": 29624,
+          "triangles": 52847,
+          "bboxDimensionsMeters": {
+            "x": 2.348,
+            "y": 5.499,
+            "z": 10.02,
+            "min": [
+              -1.174,
+              -0.039,
+              -5.141
+            ],
+            "max": [
+              1.174,
+              5.46,
+              4.879
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 2,
+          "maxTexturePx": 1024,
+          "resolutions": [
+            "1024x1024"
+          ]
+        },
+        "animationCount": 0,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "japanese_inspired_vending_machines",
+        "category": "props",
+        "path": "public/assets/props/japanese_inspired_vending_machines.glb",
+        "format": "glb",
+        "fileSizeBytes": 1520924,
+        "title": "Japanese Inspired Vending Machines",
+        "author": "Spookyghostboo (https://sketchfab.com/spookyghostboo)",
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "source": "https://sketchfab.com/3d-models/japanese-inspired-vending-machines-2b3638c2c2a64633a3e11d473152c909",
+        "placementStatus": "approved",
+        "hasDracoCompression": false,
+        "extensionsUsed": [
+          "KHR_materials_specular"
+        ],
+        "geometry": {
+          "vertices": 11119,
+          "triangles": 14006,
+          "bboxDimensionsMeters": {
+            "x": 2.155,
+            "y": 1.686,
+            "z": 4.071,
+            "min": [
+              -1.078,
+              -0.901,
+              -0.0
+            ],
+            "max": [
+              1.078,
+              0.785,
+              4.071
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 6,
+          "maxTexturePx": 1024,
+          "resolutions": [
+            "1024x1024"
+          ]
+        },
+        "animationCount": 0,
+        "verification": {
+          "rank": "B",
+          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      },
+      {
+        "id": "road_pack_not_including_the_road",
+        "category": "props",
+        "path": "public/assets/props/road_pack_not_including_the_road.glb",
+        "format": "glb",
+        "fileSizeBytes": 23850708,
+        "title": "Road pack (not including the road)",
+        "author": "drcrazzie (https://sketchfab.com/drcrazzie)",
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "source": "https://sketchfab.com/3d-models/road-pack-not-including-the-road-021707f910d04907ab576c856a749628",
+        "placementStatus": "approved",
+        "hasDracoCompression": true,
+        "extensionsUsed": [
+          "EXT_mesh_gpu_instancing",
+          "KHR_draco_mesh_compression",
+          "KHR_materials_emissive_strength"
+        ],
+        "geometry": {
+          "vertices": 23720,
+          "triangles": 27635,
+          "bboxDimensionsMeters": {
+            "x": 24.794,
+            "y": 26.073,
+            "z": 8.602,
+            "min": [
+              -18.249,
+              -11.093,
+              -0.542
+            ],
+            "max": [
+              6.545,
+              14.981,
+              8.06
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 39,
+          "maxTexturePx": 1024,
+          "resolutions": [
+            "1024x1024"
+          ]
+        },
+        "animationCount": 0,
+        "verification": {
+          "rank": "B",
+          "note": "GLBメタデータ・ポリゴン数・解像度・バウンディングボックス・Draco圧縮有無を検証し用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+        }
+      }
+    ]
+  }
+}
