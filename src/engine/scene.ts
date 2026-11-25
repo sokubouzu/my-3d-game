@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { RENDER_CONFIG } from './config';
 import { createWebGL2Renderer, type RendererBundle } from './renderer';
 import { getGltfLoader, disposeLoaders } from './loaders';
@@ -10,6 +9,15 @@ import {
   type PlayerLocomotionState,
 } from '../player/playerController';
 import { ThirdPersonCamera } from '../camera/thirdPersonCamera';
+import { CITY_METRICS, CollisionWorld } from '../world/collisionWorld';
+import {
+  createCityEnvironment,
+  type EnvironmentStatus,
+} from '../world/environment';
+import {
+  buildJapaneseCity,
+  type CityBuildProgress,
+} from '../world/cityBuilder';
 
 export interface EngineStatus {
   isWebGL2: boolean;
@@ -24,6 +32,11 @@ export interface EngineStatus {
   animationName: string;
   speed: number;
   position: { x: number; y: number; z: number };
+  cityLoadedCount: number;
+  cityTotalCount: number;
+  cityFailedCount: number;
+  colliderCount: number;
+  envStatus: EnvironmentStatus;
 }
 
 export interface GameEngineHandle {
@@ -34,10 +47,9 @@ export interface GameEngineHandle {
   dispose: () => void;
 }
 
-const WORLD_HALF_EXTENT = 48;
-
 /**
- * 1-B / 1-C: WebGL2 基盤 + プレイヤー表示 + 徒歩移動・TPSカメラ・タッチ/PC入力統合
+ * 1-D / 1-E: WebGL2 基盤 + プレイヤー操作 + 160m四方の日本の街区（承認済みGLB全24種配置＆OBB衝突判定）
+ * + Poly Haven 1K PBR・HDRI 環境仕上げ
  */
 export function startGameEngine(
   canvas: HTMLCanvasElement,
@@ -45,27 +57,19 @@ export function startGameEngine(
 ): GameEngineHandle {
   const rendererBundle: RendererBundle = createWebGL2Renderer(canvas);
   const { renderer, isWebGL2 } = rendererBundle;
+  let currentDpr = rendererBundle.dpr;
 
   // DRACOLoader 初期化確認
   const gltfLoader = getGltfLoader();
   const dracoReady = Boolean(gltfLoader);
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x87a8c4);
-  scene.fog = new THREE.Fog(0x87a8c4, 38, 160);
-
-  // 軽量 PBR 環境光 (外部 HDRI なしの軽量 PMREM)
-  const pmremGenerator = new THREE.PMREMGenerator(renderer);
-  const roomEnv = new RoomEnvironment();
-  const envRenderTarget = pmremGenerator.fromScene(roomEnv, 0.04);
-  scene.environment = envRenderTarget.texture;
-  roomEnv.dispose();
 
   const camera = new THREE.PerspectiveCamera(
     55,
     window.innerWidth / window.innerHeight,
     0.1,
-    250,
+    260,
   );
   const tpsCamera = new ThirdPersonCamera(camera, {
     initialDistance: 4.2,
@@ -73,22 +77,22 @@ export function startGameEngine(
     targetHeight: 1.42,
   });
 
-  // 軽量ライティング (ポストプロセス SSR/SSAO/DoF は無効)
-  const hemiLight = new THREE.HemisphereLight(0xdceeff, 0x4b515c, 0.75);
+  // 1-E: 軽量ライティング (M1 iPad Air 最適化: シャドウマップ 1024px、SSR/SSAO/DoF 無効)
+  const hemiLight = new THREE.HemisphereLight(0xdceeff, 0x5c6068, 0.72);
   scene.add(hemiLight);
 
-  const dirLight = new THREE.DirectionalLight(0xfff5e4, 1.5);
-  dirLight.position.set(12, 20, 10);
+  const dirLight = new THREE.DirectionalLight(0xfff4e0, 1.55);
+  dirLight.position.set(18, 30, 14);
   dirLight.castShadow = true;
   dirLight.shadow.mapSize.set(
     RENDER_CONFIG.shadowMapSize,
     RENDER_CONFIG.shadowMapSize,
   );
   dirLight.shadow.bias = -0.0005;
-  dirLight.shadow.normalBias = 0.02;
+  dirLight.shadow.normalBias = 0.025;
   dirLight.shadow.camera.near = 1;
-  dirLight.shadow.camera.far = 60;
-  const shadowExtent = 12;
+  dirLight.shadow.camera.far = 90;
+  const shadowExtent = 24;
   dirLight.shadow.camera.left = -shadowExtent;
   dirLight.shadow.camera.right = shadowExtent;
   dirLight.shadow.camera.top = shadowExtent;
@@ -96,28 +100,8 @@ export function startGameEngine(
   scene.add(dirLight);
   scene.add(dirLight.target);
 
-  // 開発用デバッググリッド（1mマス）＋接地シャドウ受けプレーン（Y=0）
-  const gridHelper = new THREE.GridHelper(
-    WORLD_HALF_EXTENT * 2,
-    WORLD_HALF_EXTENT * 2,
-    0x3b4d63,
-    0x273545,
-  );
-  gridHelper.position.y = 0.002;
-  scene.add(gridHelper);
-
-  const shadowPlaneGeo = new THREE.PlaneGeometry(
-    WORLD_HALF_EXTENT * 2,
-    WORLD_HALF_EXTENT * 2,
-  );
-  const shadowPlaneMat = new THREE.ShadowMaterial({ opacity: 0.34 });
-  const shadowPlane = new THREE.Mesh(shadowPlaneGeo, shadowPlaneMat);
-  shadowPlane.rotation.x = -Math.PI / 2;
-  shadowPlane.position.y = 0;
-  shadowPlane.receiveShadow = true;
-  scene.add(shadowPlane);
-
-  const inputManager = new InputManager(canvas);
+  // 1-D: 衝突判定ワールド (160m x 160m 街区 + 歩道段差 + 建物/車両/小物 OBB)
+  const collisionWorld = new CollisionWorld(CITY_METRICS.worldHalfExtent);
 
   let isDisposed = false;
   let loadedPlayer: LoadedPlayerModel | null = null;
@@ -125,11 +109,74 @@ export function startGameEngine(
   let playerError: string | null = null;
   const playerPos = new THREE.Vector3(0, 0, 0);
 
-  // 初期カメラ位置を原点プレイヤー位置に合わせる
-  tpsCamera.update(0.016, playerPos, 0);
+  let cityProgress: CityBuildProgress = {
+    loadedCount: 0,
+    totalCount: 0,
+    failedCount: 0,
+    colliderCount: 0,
+  };
+  let envStatus: EnvironmentStatus = {
+    asphalt: 'procedural',
+    pavement: 'procedural',
+    sky: 'procedural',
+  };
 
-  // 1-B: player.glb 非同期ロード
+  let rafId = 0;
+  let frameCount = 0;
+  let lastFrameTime = performance.now();
+  let lastFpsTime = lastFrameTime;
+  let lastHudUpdateTime = lastFrameTime;
+  let lastDprAdjustTime = lastFrameTime;
+  let currentFps = 0;
+
+  const emitStatus = () => {
+    if (isDisposed) return;
+    const telemetry = playerController?.getTelemetry();
+    onStatusUpdate({
+      isWebGL2,
+      dpr: currentDpr,
+      dracoReady,
+      fps: currentFps,
+      playerLoaded: loadedPlayer !== null,
+      playerError,
+      playerHeight: loadedPlayer?.info.heightMeters ?? 0,
+      jointCount: loadedPlayer?.info.jointCount ?? 0,
+      playerState: telemetry?.state ?? 'idle',
+      animationName: telemetry?.animationName ?? 'Loading...',
+      speed: telemetry?.speed ?? 0,
+      position: telemetry?.position ?? { x: 0, y: 0, z: 0 },
+      cityLoadedCount: cityProgress.loadedCount,
+      cityTotalCount: cityProgress.totalCount,
+      cityFailedCount: cityProgress.failedCount,
+      colliderCount: cityProgress.colliderCount,
+      envStatus,
+    });
+  };
+
+  // 1-E: Poly Haven 1K PBR (asphalt_01 / concrete_pavement / HDRI) + 日本の街区地面・交差点
+  const cityEnv = createCityEnvironment(scene, renderer, (nextEnvStatus) => {
+    envStatus = nextEnvStatus;
+    emitStatus();
+  });
+
+  // 1-D: 承認済み全24 GLBモデルの街区配置 & OBB コライダー構築
   const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
+  const cityBuilder = buildJapaneseCity(
+    scene,
+    collisionWorld,
+    maxAnisotropy,
+    (progress) => {
+      cityProgress = progress;
+      emitStatus();
+    },
+  );
+
+  const inputManager = new InputManager(canvas);
+
+  // 初期カメラ位置を中央交差点のプレイヤー位置に合わせる
+  tpsCamera.update(0.016, playerPos, collisionWorld.getGroundHeight(0, 0));
+
+  // 1-B / 1-C: player.glb 非同期ロード（既存徒歩移動・アニメーション・コリジョン連携）
   loadPlayerModel(maxAnisotropy)
     .then((playerModel) => {
       if (isDisposed) {
@@ -139,16 +186,29 @@ export function startGameEngine(
       loadedPlayer = playerModel;
       scene.add(playerModel.root);
       playerController = new PlayerController(playerModel, {
-        getGroundHeight: () => 0,
-        worldHalfExtent: WORLD_HALF_EXTENT,
+        getGroundHeight: (x, z) => collisionWorld.getGroundHeight(x, z),
+        worldHalfExtent: collisionWorld.worldHalfExtent,
+        resolveHorizontalCollision: (x, y, z, radius, playerHeight) =>
+          collisionWorld.resolveHorizontalCollision(
+            x,
+            y,
+            z,
+            radius,
+            playerHeight,
+          ),
       });
       playerController.getPosition(playerPos);
-      tpsCamera.update(0.016, playerPos, 0);
+      tpsCamera.update(
+        0.016,
+        playerPos,
+        collisionWorld.getGroundHeight(playerPos.x, playerPos.z),
+      );
       emitStatus();
     })
     .catch((err: unknown) => {
       if (isDisposed) return;
-      playerError = err instanceof Error ? err.message : 'Failed to load player.glb';
+      playerError =
+        err instanceof Error ? err.message : 'Failed to load player.glb';
       emitStatus();
     });
 
@@ -160,31 +220,6 @@ export function startGameEngine(
     rendererBundle.resize(w, h);
   };
   window.addEventListener('resize', handleResize);
-
-  let rafId = 0;
-  let frameCount = 0;
-  let lastFrameTime = performance.now();
-  let lastFpsTime = lastFrameTime;
-  let lastHudUpdateTime = lastFrameTime;
-  let currentFps = 0;
-
-  const emitStatus = () => {
-    const telemetry = playerController?.getTelemetry();
-    onStatusUpdate({
-      isWebGL2,
-      dpr: rendererBundle.dpr,
-      dracoReady,
-      fps: currentFps,
-      playerLoaded: loadedPlayer !== null,
-      playerError,
-      playerHeight: loadedPlayer?.info.heightMeters ?? 0,
-      jointCount: loadedPlayer?.info.jointCount ?? 0,
-      playerState: telemetry?.state ?? 'idle',
-      animationName: telemetry?.animationName ?? 'Loading...',
-      speed: telemetry?.speed ?? 0,
-      position: telemetry?.position ?? { x: 0, y: 0, z: 0 },
-    });
-  };
 
   emitStatus();
 
@@ -204,10 +239,11 @@ export function startGameEngine(
       playerController.getPosition(playerPos);
     }
 
-    tpsCamera.update(dt, playerPos, 0);
+    const groundY = collisionWorld.getGroundHeight(playerPos.x, playerPos.z);
+    tpsCamera.update(dt, playerPos, groundY);
 
     // リアルタイムシャドウカメラをプレイヤー周囲へ追従させる
-    dirLight.position.set(playerPos.x + 12, playerPos.y + 20, playerPos.z + 10);
+    dirLight.position.set(playerPos.x + 18, playerPos.y + 30, playerPos.z + 14);
     dirLight.target.position.copy(playerPos);
     dirLight.target.updateMatrixWorld();
 
@@ -219,6 +255,26 @@ export function startGameEngine(
       currentFps = Math.round((frameCount * 1000) / fpsElapsed);
       frameCount = 0;
       lastFpsTime = now;
+
+      // M1 iPad Air 最適化: 負荷に応じた動的 DPR 調整 (0.75〜1.25、標準 1.0)
+      if (now - lastDprAdjustTime >= 2500 && currentFps > 0) {
+        const nativeCap = Math.min(
+          window.devicePixelRatio || 1,
+          RENDER_CONFIG.maxDpr,
+        );
+        if (currentFps < RENDER_CONFIG.targetFps - 2 && currentDpr > RENDER_CONFIG.minDpr) {
+          currentDpr = Math.max(RENDER_CONFIG.minDpr, Number((currentDpr - 0.1).toFixed(2)));
+          rendererBundle.setDpr(currentDpr);
+          lastDprAdjustTime = now;
+        } else if (
+          currentFps >= RENDER_CONFIG.idealFps - 4 &&
+          currentDpr < nativeCap
+        ) {
+          currentDpr = Math.min(nativeCap, Number((currentDpr + 0.05).toFixed(2)));
+          rendererBundle.setDpr(currentDpr);
+          lastDprAdjustTime = now;
+        }
+      }
     }
 
     if (now - lastHudUpdateTime >= 250) {
@@ -255,16 +311,8 @@ export function startGameEngine(
       }
       playerController = null;
 
-      gridHelper.geometry.dispose();
-      if (Array.isArray(gridHelper.material)) {
-        gridHelper.material.forEach((m) => m.dispose());
-      } else {
-        gridHelper.material.dispose();
-      }
-      shadowPlaneGeo.dispose();
-      shadowPlaneMat.dispose();
-      envRenderTarget.dispose();
-      pmremGenerator.dispose();
+      cityBuilder.dispose();
+      cityEnv.dispose();
       rendererBundle.dispose();
       disposeLoaders();
     },

@@ -17,8 +17,17 @@ export interface GroundCollisionProvider {
   getGroundHeight: (x: number, z: number) => number;
   /** 移動可能領域の半径（m） */
   worldHalfExtent: number;
+  /** 建物・車両等の水平押し出し衝突解決（任意） */
+  resolveHorizontalCollision?: (
+    x: number,
+    y: number,
+    z: number,
+    radius: number,
+    playerHeight: number,
+  ) => { x: number; z: number; collided: boolean };
 }
 
+const PLAYER_COLLISION_RADIUS = 0.38; // m
 const WALK_SPEED = 1.85; // m/s
 const RUN_SPEED = 4.8; // m/s
 const ACCELERATION = 14.0; // m/s^2
@@ -160,6 +169,19 @@ export class PlayerController {
     pos.x += this.velocity.x * clampedDt;
     pos.z += this.velocity.z * clampedDt;
     pos.y += this.verticalVelocity * clampedDt;
+
+    // 建物・車両・小物との水平押し出し衝突解決（壁ずり対応）
+    if (this.ground.resolveHorizontalCollision) {
+      const resolved = this.ground.resolveHorizontalCollision(
+        pos.x,
+        pos.y,
+        pos.z,
+        PLAYER_COLLISION_RADIUS,
+        this.player.info.heightMeters || 1.7,
+      );
+      pos.x = resolved.x;
+      pos.z = resolved.z;
+    }
 
     // ワールド基本境界クランプ
     const limit = this.ground.worldHalfExtent;

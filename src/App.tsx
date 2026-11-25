@@ -20,6 +20,15 @@ const INITIAL_STATUS: EngineStatus = {
   animationName: 'Loading...',
   speed: 0,
   position: { x: 0, y: 0, z: 0 },
+  cityLoadedCount: 0,
+  cityTotalCount: 0,
+  cityFailedCount: 0,
+  colliderCount: 0,
+  envStatus: {
+    asphalt: 'procedural',
+    pavement: 'procedural',
+    sky: 'procedural',
+  },
 };
 
 export function App() {

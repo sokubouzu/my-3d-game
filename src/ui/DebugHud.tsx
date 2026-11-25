@@ -29,7 +29,7 @@ export function DebugHud({ status }: DebugHudProps) {
 
       {expanded && (
         <div className="hud-details">
-          <div className="hud-title">my-3d-game (Phase 1-B / 1-C)</div>
+          <div className="hud-title">my-3d-game (Phase 1-D / 1-E)</div>
           <div>
             API: {status.isWebGL2 ? 'WebGL2' : 'WebGL1'} | DPR:{' '}
             {status.dpr.toFixed(2)}
@@ -42,6 +42,16 @@ export function DebugHud({ status }: DebugHudProps) {
               : status.playerError
                 ? `Error: ${status.playerError}`
                 : 'Loading...'}
+          </div>
+          <div>
+            City: {status.cityLoadedCount}/{status.cityTotalCount} GLB
+            {status.cityFailedCount > 0
+              ? ` (${status.cityFailedCount} err)`
+              : ''}{' '}
+            | Colliders: {status.colliderCount}
+          </div>
+          <div>
+            Env: Sky={status.envStatus.sky} / Road={status.envStatus.asphalt}
           </div>
           <div>
             Anim: {status.animationName} ({status.speed.toFixed(2)} m/s)
