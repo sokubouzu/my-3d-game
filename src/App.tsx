@@ -1,34 +1,69 @@
-import { useEffect, useRef, useState } from 'react';
-import { startMinimalEngine, type EngineStatus } from './engine/scene';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  startGameEngine,
+  type EngineStatus,
+  type GameEngineHandle,
+} from './engine/scene';
+import { DebugHud } from './ui/DebugHud';
+import { TouchControls } from './ui/TouchControls';
+
+const INITIAL_STATUS: EngineStatus = {
+  isWebGL2: false,
+  dpr: 1.0,
+  dracoReady: false,
+  fps: 0,
+  playerLoaded: false,
+  playerError: null,
+  playerHeight: 0,
+  jointCount: 0,
+  playerState: 'idle',
+  animationName: 'Loading...',
+  speed: 0,
+  position: { x: 0, y: 0, z: 0 },
+};
 
 export function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [status, setStatus] = useState<EngineStatus>({
-    isWebGL2: false,
-    dpr: 1.0,
-    dracoReady: false,
-    fps: 0,
-  });
+  const engineRef = useRef<GameEngineHandle | null>(null);
+  const [status, setStatus] = useState<EngineStatus>(INITIAL_STATUS);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const handle = startMinimalEngine(canvas, setStatus);
+    const handle = startGameEngine(canvas, setStatus);
+    engineRef.current = handle;
     return () => {
+      engineRef.current = null;
       handle.dispose();
     };
+  }, []);
+
+  const handleMoveChange = useCallback((x: number, y: number) => {
+    engineRef.current?.setTouchMove(x, y);
+  }, []);
+
+  const handleLookDelta = useCallback((dx: number, dy: number) => {
+    engineRef.current?.addLookDelta(dx, dy);
+  }, []);
+
+  const handleSprintChange = useCallback((active: boolean) => {
+    engineRef.current?.setTouchSprint(active);
+  }, []);
+
+  const handleJump = useCallback(() => {
+    engineRef.current?.triggerJump();
   }, []);
 
   return (
     <div className="viewport-root">
       <canvas ref={canvasRef} className="webgl-canvas" />
-      <aside className="hud-status" aria-label="Engine Status">
-        <div className="hud-title">my-3d-game (Phase 1-A Bootstrap)</div>
-        <div>API: {status.isWebGL2 ? 'WebGL2' : 'WebGL1 (Fallback)'}</div>
-        <div>DPR: {status.dpr.toFixed(2)}</div>
-        <div>DRACOLoader: {status.dracoReady ? 'Ready (CDN)' : 'Init...'}</div>
-        <div>FPS: {status.fps || '--'}</div>
-      </aside>
+      <TouchControls
+        onMoveChange={handleMoveChange}
+        onLookDelta={handleLookDelta}
+        onSprintChange={handleSprintChange}
+        onJump={handleJump}
+      />
+      <DebugHud status={status} />
     </div>
   );
 }

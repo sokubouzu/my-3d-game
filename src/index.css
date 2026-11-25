@@ -10,6 +10,7 @@ body,
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-touch-callout: none;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
@@ -17,6 +18,7 @@ body,
   position: relative;
   width: 100%;
   height: 100%;
+  overflow: hidden;
 }
 
 .webgl-canvas {
@@ -25,23 +27,191 @@ body,
   height: 100%;
 }
 
-.hud-status {
+/* --- 左上: 開閉可能な軽量 FPS・状態表示 HUD --- */
+.hud-container {
   position: absolute;
-  top: env(safe-area-inset-top, 12px);
-  left: env(safe-area-inset-left, 12px);
-  margin: 12px;
-  padding: 10px 14px;
-  border-radius: 8px;
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  left: calc(env(safe-area-inset-left, 0px) + 12px);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.hud-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 999px;
   background: rgba(15, 23, 42, 0.72);
   color: #f8fafc;
   font-size: 12px;
-  line-height: 1.5;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.hud-badge-fps {
+  color: #7dd3fc;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-badge-state {
+  color: #cbd5e1;
+  font-size: 11px;
+}
+
+.hud-toggle-icon {
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.hud-details {
+  padding: 10px 14px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.78);
+  color: #f8fafc;
+  font-size: 12px;
+  line-height: 1.55;
+  font-variant-numeric: tabular-nums;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   pointer-events: none;
-  backdrop-filter: blur(4px);
 }
 
 .hud-title {
   font-weight: 700;
   margin-bottom: 4px;
   color: #7dd3fc;
+}
+
+.hud-hint {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+/* --- iPad 横画面向けマルチタッチ操作レイヤー --- */
+.touch-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+}
+
+/* 画面右半分ドラッグ: カメラ回転 */
+.camera-drag-zone {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 50%;
+  height: 100%;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+/* 画面左下: 移動バーチャルスティック */
+.virtual-stick-base {
+  position: absolute;
+  left: calc(env(safe-area-inset-left, 0px) + 28px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 28px);
+  width: 132px;
+  height: 132px;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.34);
+  border: 2px solid rgba(248, 250, 252, 0.28);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  touch-action: none;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.virtual-stick-base.is-active {
+  background: rgba(15, 23, 42, 0.48);
+  border-color: rgba(125, 211, 252, 0.72);
+}
+
+.virtual-stick-ring {
+  position: absolute;
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  border: 1px dashed rgba(248, 250, 252, 0.22);
+  pointer-events: none;
+}
+
+.virtual-stick-knob {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 35% 35%,
+    rgba(248, 250, 252, 0.88),
+    rgba(148, 163, 184, 0.65)
+  );
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  will-change: transform;
+}
+
+/* 画面右下: ダッシュ・ジャンプボタン */
+.action-buttons {
+  position: absolute;
+  right: calc(env(safe-area-inset-right, 0px) + 28px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 28px);
+  display: flex;
+  align-items: flex-end;
+  gap: 18px;
+  pointer-events: none;
+}
+
+.action-btn {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  border: 2px solid rgba(248, 250, 252, 0.38);
+  background: rgba(15, 23, 42, 0.45);
+  color: #f8fafc;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  touch-action: none;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transition: transform 0.08s ease, background-color 0.12s ease, border-color 0.12s ease;
+}
+
+.action-btn-sprint {
+  margin-bottom: 10px;
+}
+
+.action-btn-jump {
+  width: 84px;
+  height: 84px;
+}
+
+.action-btn.is-pressed {
+  transform: scale(0.92);
+  background: rgba(56, 189, 248, 0.55);
+  border-color: rgba(186, 230, 253, 0.95);
+}
+
+.action-btn-label {
+  pointer-events: none;
 }
