@@ -1,0 +1,179 @@
+{
+  "schemaVersion": "1.0.0",
+  "targetDevice": "iPad Air (5th gen, Apple M1 / 8GB RAM)",
+  "assets": {
+    "characters": [
+      {
+        "id": "player",
+        "path": "public/assets/characters/player.glb",
+        "format": "glb",
+        "license": "Mixamo (Adobe Mixamo)",
+        "fileSizeBytes": 3551236,
+        "heightMeters": 1.7,
+        "facingAxis": "+Z",
+        "groundedY": 0.0,
+        "geometry": {
+          "meshes": [
+            "Boy01_Body_Geo",
+            "Boy01_Mouth_Geo",
+            "Boy01_Eyes_Geo",
+            "Boy01_Brows_Geo"
+          ],
+          "vertices": 5107,
+          "triangles": 8054,
+          "bones": 83,
+          "rootBone": "mixamorig:Hips"
+        },
+        "textures": [
+          {
+            "name": "body_basecolor.jpg",
+            "usage": "baseColor",
+            "resolution": "2048x2048"
+          },
+          {
+            "name": "body_normal.jpg",
+            "usage": "normal",
+            "resolution": "2048x2048"
+          },
+          {
+            "name": "body_mr.jpg",
+            "usage": "metallicRoughness",
+            "resolution": "1024x1024"
+          },
+          {
+            "name": "facial_rgba.png",
+            "usage": "baseColorAlphaBlend (shared: Mouth/Eyes/Brows)",
+            "resolution": "2048x2048"
+          }
+        ],
+        "animations": [
+          {
+            "name": "Idle",
+            "sourceFbx": "Player_Idle.fbx",
+            "durationSec": 1.967,
+            "loopRecommended": true,
+            "inPlaceApplied": false,
+            "inPlaceNote": "元データ時点でIn Place済み（Hips XZ変位なし）"
+          },
+          {
+            "name": "Walking",
+            "sourceFbx": "Player_Walking.fbx",
+            "durationSec": 1.033,
+            "loopRecommended": true,
+            "inPlaceApplied": false,
+            "inPlaceNote": "元データ時点でIn Place済み（始点・終点XZ一致、自然な骨盤揺れのみ）"
+          },
+          {
+            "name": "Running",
+            "sourceFbx": "Player_running.fbx",
+            "durationSec": 0.7,
+            "loopRecommended": true,
+            "inPlaceApplied": false,
+            "inPlaceNote": "元データ時点でIn Place済み（始点・終点XZ一致、自然な骨盤揺れのみ）"
+          },
+          {
+            "name": "StartWalking",
+            "sourceFbx": "Player_Start Walking.fbx",
+            "durationSec": 2.933,
+            "loopRecommended": false,
+            "inPlaceApplied": true,
+            "inPlaceNote": "元データに+Z方向約1.55m（スケール後1.42m）の水平移動があったため、HipsのX・Z座標を始点フレームに固定してIn Place化"
+          },
+          {
+            "name": "RunningUpStairs",
+            "sourceFbx": "Player_Running Up Stairs.fbx",
+            "durationSec": 0.6,
+            "loopRecommended": true,
+            "inPlaceApplied": false,
+            "inPlaceNote": "水平方向（X・Z）は元データ時点でIn Place済み（階段上昇のY軸上昇のみ保持）"
+          },
+          {
+            "name": "Jumping",
+            "sourceFbx": "Player_Jumping.fbx",
+            "durationSec": 1.9,
+            "loopRecommended": false,
+            "inPlaceApplied": false,
+            "inPlaceNote": "その場ジャンプ（始点・終点XZ一致）"
+          },
+          {
+            "name": "FallingToLanding",
+            "sourceFbx": "Player_Falling To Landing.fbx",
+            "durationSec": 1.067,
+            "loopRecommended": false,
+            "inPlaceApplied": false,
+            "inPlaceNote": "着地モーション（原点へ着地）"
+          },
+          {
+            "name": "FallingDown",
+            "sourceFbx": "Player_Falling Down.fbx",
+            "durationSec": 2.267,
+            "loopRecommended": false,
+            "inPlaceApplied": false,
+            "inPlaceNote": "非ループの転倒アクションのため元の軌道を保持"
+          },
+          {
+            "name": "Sitting",
+            "sourceFbx": "Player_Sitting.fbx",
+            "duplicateRemovedFbx": "Player＿Sitting.fbx",
+            "durationSec": 4.433,
+            "loopRecommended": false,
+            "inPlaceApplied": false,
+            "inPlaceNote": "非ループの着座アクション（全角アンダースコア版の重複FBXを統合・重複排除）"
+          },
+          {
+            "name": "StandUp",
+            "sourceFbx": "Player_Stand Up.fbx",
+            "durationSec": 4.833,
+            "loopRecommended": false,
+            "inPlaceApplied": false,
+            "inPlaceNote": "非ループの立ち上がりアクション（着座からの起立）"
+          },
+          {
+            "name": "StandingUp",
+            "sourceFbx": "Player_Standing Up.fbx",
+            "durationSec": 11.4,
+            "loopRecommended": false,
+            "inPlaceApplied": false,
+            "inPlaceNote": "非ループの起き上がりアクション（仰臥からの起立）"
+          },
+          {
+            "name": "SleepingIdle",
+            "sourceFbx": "Player_Sleeping Idle.fbx",
+            "durationSec": 6.867,
+            "loopRecommended": true,
+            "inPlaceApplied": false,
+            "inPlaceNote": "元データ時点でIn Place済み"
+          },
+          {
+            "name": "EnteringCar",
+            "sourceFbx": "Player_Entering Car.fbx",
+            "durationSec": 5.467,
+            "loopRecommended": false,
+            "inPlaceApplied": false,
+            "inPlaceNote": "非ループの乗車アクションのため座席方向への移動軌道を保持"
+          },
+          {
+            "name": "Driving",
+            "sourceFbx": "Player_Driving.fbx",
+            "durationSec": 5.0,
+            "loopRecommended": true,
+            "inPlaceApplied": false,
+            "inPlaceNote": "元データ時点でIn Place済み"
+          },
+          {
+            "name": "ZombieStandUp",
+            "sourceFbx": "Player_Zombie Stand Up.fbx",
+            "durationSec": 3.1,
+            "loopRecommended": false,
+            "inPlaceApplied": false,
+            "inPlaceNote": "非ループの起き上がりアクション"
+          }
+        ],
+        "verification": {
+          "rank": "D",
+          "note": "glTF 2.0バイナリ検証およびヘッドレスChromium(Three.js r160 / WebGL2)でのメッシュ・テクスチャ表示および全15アニメーション再生を確認済み（状態D）。iPad Air 第5世代実機検証（状態E）は未実施。"
+        }
+      }
+    ]
+  }
+}
