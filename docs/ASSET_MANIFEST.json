@@ -1,6 +1,6 @@
 {
-  "schemaVersion": "1.1.0",
-  "taskId": "0-C",
+  "schemaVersion": "1.2.0",
+  "taskId": "1-D / 1-E",
   "targetDevice": "iPad Air (5th gen, Apple M1 / 8GB RAM)",
   "summary": {
     "totalAssets": 34,
@@ -12,7 +12,9 @@
       "buildings": 14,
       "vehicles": 11,
       "props": 8
-    }
+    },
+    "placedApprovedCount": 24,
+    "placedInstanceCount": 28
   },
   "assets": {
     "characters": [
@@ -429,7 +431,33 @@
         "animationCount": 0,
         "verification": {
           "rank": "B",
-          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+          "note": "GLBバイナリ検証・用途別配置済み、および1-D街区コード配置・CIビルド＆GitHub Pagesデプロイ成功（状態B）。実ブラウザでの描画確認（状態C）・衝突/動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
+        },
+        "cityPlacement": {
+          "taskId": "1-D",
+          "instanceCount": 2,
+          "instances": [
+            {
+              "instanceId": "nw_shoe_store",
+              "positionXZ": [
+                -34.0,
+                -18.0
+              ],
+              "fitMode": "height",
+              "targetSizeMeters": 7.4,
+              "hasCollision": true
+            },
+            {
+              "instanceId": "sw_shoe_store_clone",
+              "positionXZ": [
+                -34.0,
+                18.0
+              ],
+              "fitMode": "height",
+              "targetSizeMeters": 7.4,
+              "hasCollision": true
+            }
+          ]
         }
       },
       {
@@ -476,7 +504,23 @@
         "animationCount": 0,
         "verification": {
           "rank": "B",
-          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+          "note": "GLBバイナリ検証・用途別配置済み、および1-D街区コード配置・CIビルド＆GitHub Pagesデプロイ成功（状態B）。実ブラウザでの描画確認（状態C）・衝突/動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
+        },
+        "cityPlacement": {
+          "taskId": "1-D",
+          "instanceCount": 1,
+          "instances": [
+            {
+              "instanceId": "ne_milestone_house",
+              "positionXZ": [
+                36.0,
+                -36.0
+              ],
+              "fitMode": "height",
+              "targetSizeMeters": 7.2,
+              "hasCollision": true
+            }
+          ]
         }
       },
       {
@@ -524,7 +568,23 @@
         "animationCount": 0,
         "verification": {
           "rank": "B",
-          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+          "note": "GLBバイナリ検証・用途別配置済み、および1-D街区コード配置・CIビルド＆GitHub Pagesデプロイ成功（状態B）。実ブラウザでの描画確認（状態C）・衝突/動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
+        },
+        "cityPlacement": {
+          "taskId": "1-D",
+          "instanceCount": 1,
+          "instances": [
+            {
+              "instanceId": "nw_japan_street",
+              "positionXZ": [
+                -22.0,
+                -40.0
+              ],
+              "fitMode": "height",
+              "targetSizeMeters": 10.5,
+              "hasCollision": true
+            }
+          ]
         }
       },
       {
@@ -569,7 +629,43 @@
         "animationCount": 0,
         "verification": {
           "rank": "B",
-          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+          "note": "GLBバイナリ検証・用途別配置済み、および1-D街区コード配置・CIビルド＆GitHub Pagesデプロイ成功（状態B）。実ブラウザでの描画確認（状態C）・衝突/動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
+        },
+        "cityPlacement": {
+          "taskId": "1-D",
+          "instanceCount": 3,
+          "instances": [
+            {
+              "instanceId": "ne_japanese_house_1",
+              "positionXZ": [
+                18.0,
+                -18.0
+              ],
+              "fitMode": "height",
+              "targetSizeMeters": 6.8,
+              "hasCollision": true
+            },
+            {
+              "instanceId": "sw_japanese_house_clone",
+              "positionXZ": [
+                -18.0,
+                34.0
+              ],
+              "fitMode": "height",
+              "targetSizeMeters": 6.8,
+              "hasCollision": true
+            },
+            {
+              "instanceId": "se_japanese_house_clone",
+              "positionXZ": [
+                20.0,
+                60.0
+              ],
+              "fitMode": "height",
+              "targetSizeMeters": 6.8,
+              "hasCollision": true
+            }
+          ]
         }
       },
       {
@@ -617,7 +713,23 @@
         "animationCount": 0,
         "verification": {
           "rank": "B",
-          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+          "note": "GLBバイナリ検証・用途別配置済み、および1-D街区コード配置・CIビルド＆GitHub Pagesデプロイ成功（状態B）。実ブラウザでの描画確認（状態C）・衝突/動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
+        },
+        "cityPlacement": {
+          "taskId": "1-D",
+          "instanceCount": 1,
+          "instances": [
+            {
+              "instanceId": "nw_inakaya_restaurant",
+              "positionXZ": [
+                -18.0,
+                -18.0
+              ],
+              "fitMode": "height",
+              "targetSizeMeters": 8.4,
+              "hasCollision": true
+            }
+          ]
         }
       },
       {
@@ -663,7 +775,23 @@
         "animationCount": 0,
         "verification": {
           "rank": "B",
-          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+          "note": "GLBバイナリ検証・用途別配置済み、および1-D街区コード配置・CIビルド＆GitHub Pagesデプロイ成功（状態B）。実ブラウザでの描画確認（状態C）・衝突/動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
+        },
+        "cityPlacement": {
+          "taskId": "1-D",
+          "instanceCount": 1,
+          "instances": [
+            {
+              "instanceId": "sw_low_road_section",
+              "positionXZ": [
+                -18.0,
+                18.0
+              ],
+              "fitMode": "length",
+              "targetSizeMeters": 10.0,
+              "hasCollision": false
+            }
+          ]
         }
       },
       {
@@ -711,7 +839,23 @@
         "animationCount": 0,
         "verification": {
           "rank": "B",
-          "note": "GLBメタデータ・ポリゴン数・解像度・バウンディングボックス・Draco圧縮有無を検証し用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+          "note": "GLBバイナリ検証・用途別配置済み、および1-D街区コード配置・CIビルド＆GitHub Pagesデプロイ成功（状態B）。実ブラウザでの描画確認（状態C）・衝突/動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
+        },
+        "cityPlacement": {
+          "taskId": "1-D",
+          "instanceCount": 1,
+          "instances": [
+            {
+              "instanceId": "sw_night_city_japan",
+              "positionXZ": [
+                -44.0,
+                42.0
+              ],
+              "fitMode": "height",
+              "targetSizeMeters": 16.0,
+              "hasCollision": true
+            }
+          ]
         }
       },
       {
@@ -756,7 +900,23 @@
         "animationCount": 0,
         "verification": {
           "rank": "B",
-          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+          "note": "GLBバイナリ検証・用途別配置済み、および1-D街区コード配置・CIビルド＆GitHub Pagesデプロイ成功（状態B）。実ブラウザでの描画確認（状態C）・衝突/動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
+        },
+        "cityPlacement": {
+          "taskId": "1-D",
+          "instanceCount": 1,
+          "instances": [
+            {
+              "instanceId": "ne_psx_japanese_house",
+              "positionXZ": [
+                33.0,
+                -18.0
+              ],
+              "fitMode": "height",
+              "targetSizeMeters": 6.2,
+              "hasCollision": true
+            }
+          ]
         }
       },
       {
@@ -803,7 +963,23 @@
         "animationCount": 0,
         "verification": {
           "rank": "B",
-          "note": "GLBメタデータ・ポリゴン数・解像度・バウンディングボックス・Draco圧縮有無を検証し用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+          "note": "GLBバイナリ検証・用途別配置済み、および1-D街区コード配置・CIビルド＆GitHub Pagesデプロイ成功（状態B）。実ブラウザでの描画確認（状態C）・衝突/動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
+        },
+        "cityPlacement": {
+          "taskId": "1-D",
+          "instanceCount": 1,
+          "instances": [
+            {
+              "instanceId": "nw_stylized_town",
+              "positionXZ": [
+                -52.0,
+                -42.0
+              ],
+              "fitMode": "height",
+              "targetSizeMeters": 11.0,
+              "hasCollision": true
+            }
+          ]
         }
       },
       {
@@ -846,7 +1022,23 @@
         "animationCount": 0,
         "verification": {
           "rank": "B",
-          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+          "note": "GLBバイナリ検証・用途別配置済み、および1-D街区コード配置・CIビルド＆GitHub Pagesデプロイ成功（状態B）。実ブラウザでの描画確認（状態C）・衝突/動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
+        },
+        "cityPlacement": {
+          "taskId": "1-D",
+          "instanceCount": 1,
+          "instances": [
+            {
+              "instanceId": "ne_tokyo_house",
+              "positionXZ": [
+                19.0,
+                -35.0
+              ],
+              "fitMode": "height",
+              "targetSizeMeters": 7.5,
+              "hasCollision": true
+            }
+          ]
         }
       },
       {
@@ -889,7 +1081,23 @@
         "animationCount": 0,
         "verification": {
           "rank": "B",
-          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+          "note": "GLBバイナリ検証・用途別配置済み、および1-D街区コード配置・CIビルド＆GitHub Pagesデプロイ成功（状態B）。実ブラウザでの描画確認（状態C）・衝突/動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
+        },
+        "cityPlacement": {
+          "taskId": "1-D",
+          "instanceCount": 1,
+          "instances": [
+            {
+              "instanceId": "se_train_track",
+              "positionXZ": [
+                46.0,
+                34.0
+              ],
+              "fitMode": "length",
+              "targetSizeMeters": 34.0,
+              "hasCollision": false
+            }
+          ]
         }
       },
       {
@@ -936,7 +1144,23 @@
         "animationCount": 0,
         "verification": {
           "rank": "B",
-          "note": "GLBメタデータ・ポリゴン数・解像度・バウンディングボックス・Draco圧縮有無を検証し用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+          "note": "GLBバイナリ検証・用途別配置済み、および1-D街区コード配置・CIビルド＆GitHub Pagesデプロイ成功（状態B）。実ブラウザでの描画確認（状態C）・衝突/動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
+        },
+        "cityPlacement": {
+          "taskId": "1-D",
+          "instanceCount": 1,
+          "instances": [
+            {
+              "instanceId": "ne_police_building",
+              "positionXZ": [
+                56.0,
+                -26.0
+              ],
+              "fitMode": "height",
+              "targetSizeMeters": 12.5,
+              "hasCollision": true
+            }
+          ]
         }
       }
     ],
@@ -989,7 +1213,23 @@
         "animationCount": 0,
         "verification": {
           "rank": "B",
-          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+          "note": "GLBバイナリ検証・用途別配置済み、および1-D街区コード配置・CIビルド＆GitHub Pagesデプロイ成功（状態B）。実ブラウザでの描画確認（状態C）・衝突/動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
+        },
+        "cityPlacement": {
+          "taskId": "1-D",
+          "instanceCount": 1,
+          "instances": [
+            {
+              "instanceId": "veh_mazda_furai_east",
+              "positionXZ": [
+                18.0,
+                3.6
+              ],
+              "fitMode": "length",
+              "targetSizeMeters": 4.6,
+              "hasCollision": true
+            }
+          ]
         }
       },
       {
@@ -1038,7 +1278,23 @@
         "animationCount": 0,
         "verification": {
           "rank": "B",
-          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+          "note": "GLBバイナリ検証・用途別配置済み、および1-D街区コード配置・CIビルド＆GitHub Pagesデプロイ成功（状態B）。実ブラウザでの描画確認（状態C）・衝突/動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
+        },
+        "cityPlacement": {
+          "taskId": "1-D",
+          "instanceCount": 1,
+          "instances": [
+            {
+              "instanceId": "veh_innova_north",
+              "positionXZ": [
+                3.6,
+                -16.0
+              ],
+              "fitMode": "length",
+              "targetSizeMeters": 4.6,
+              "hasCollision": true
+            }
+          ]
         }
       },
       {
@@ -1083,7 +1339,23 @@
         "animationCount": 1,
         "verification": {
           "rank": "B",
-          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+          "note": "GLBバイナリ検証・用途別配置済み、および1-D街区コード配置・CIビルド＆GitHub Pagesデプロイ成功（状態B）。実ブラウザでの描画確認（状態C）・衝突/動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
+        },
+        "cityPlacement": {
+          "taskId": "1-D",
+          "instanceCount": 1,
+          "instances": [
+            {
+              "instanceId": "se_seadoo_display",
+              "positionXZ": [
+                18.0,
+                22.0
+              ],
+              "fitMode": "length",
+              "targetSizeMeters": 3.3,
+              "hasCollision": true
+            }
+          ]
         }
       },
       {
@@ -1223,7 +1495,23 @@
         "animationCount": 0,
         "verification": {
           "rank": "B",
-          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+          "note": "GLBバイナリ検証・用途別配置済み、および1-D街区コード配置・CIビルド＆GitHub Pagesデプロイ成功（状態B）。実ブラウザでの描画確認（状態C）・衝突/動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
+        },
+        "cityPlacement": {
+          "taskId": "1-D",
+          "instanceCount": 1,
+          "instances": [
+            {
+              "instanceId": "veh_porsche_north",
+              "positionXZ": [
+                -3.6,
+                -22.0
+              ],
+              "fitMode": "length",
+              "targetSizeMeters": 4.3,
+              "hasCollision": true
+            }
+          ]
         }
       },
       {
@@ -1268,7 +1556,23 @@
         "animationCount": 0,
         "verification": {
           "rank": "B",
-          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+          "note": "GLBバイナリ検証・用途別配置済み、および1-D街区コード配置・CIビルド＆GitHub Pagesデプロイ成功（状態B）。実ブラウザでの描画確認（状態C）・衝突/動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
+        },
+        "cityPlacement": {
+          "taskId": "1-D",
+          "instanceCount": 1,
+          "instances": [
+            {
+              "instanceId": "veh_harley_bike",
+              "positionXZ": [
+                7.8,
+                -13.0
+              ],
+              "fitMode": "length",
+              "targetSizeMeters": 2.3,
+              "hasCollision": true
+            }
+          ]
         }
       },
       {
@@ -1314,7 +1618,23 @@
         "animationCount": 0,
         "verification": {
           "rank": "B",
-          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+          "note": "GLBバイナリ検証・用途別配置済み、および1-D街区コード配置・CIビルド＆GitHub Pagesデプロイ成功（状態B）。実ブラウザでの描画確認（状態C）・衝突/動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
+        },
+        "cityPlacement": {
+          "taskId": "1-D",
+          "instanceCount": 1,
+          "instances": [
+            {
+              "instanceId": "veh_japan_offroad_west",
+              "positionXZ": [
+                -20.0,
+                -3.6
+              ],
+              "fitMode": "length",
+              "targetSizeMeters": 4.4,
+              "hasCollision": true
+            }
+          ]
         }
       },
       {
@@ -1359,7 +1679,23 @@
         "animationCount": 0,
         "verification": {
           "rank": "B",
-          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+          "note": "GLBバイナリ検証・用途別配置済み、および1-D街区コード配置・CIビルド＆GitHub Pagesデプロイ成功（状態B）。実ブラウザでの描画確認（状態C）・衝突/動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
+        },
+        "cityPlacement": {
+          "taskId": "1-D",
+          "instanceCount": 1,
+          "instances": [
+            {
+              "instanceId": "se_porco_plane",
+              "positionXZ": [
+                24.0,
+                44.0
+              ],
+              "fitMode": "length",
+              "targetSizeMeters": 7.8,
+              "hasCollision": true
+            }
+          ]
         }
       },
       {
@@ -1409,7 +1745,23 @@
         "animationCount": 0,
         "verification": {
           "rank": "B",
-          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+          "note": "GLBバイナリ検証・用途別配置済み、および1-D街区コード配置・CIビルド＆GitHub Pagesデプロイ成功（状態B）。実ブラウザでの描画確認（状態C）・衝突/動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
+        },
+        "cityPlacement": {
+          "taskId": "1-D",
+          "instanceCount": 1,
+          "instances": [
+            {
+              "instanceId": "veh_thunderbolt_south",
+              "positionXZ": [
+                -3.6,
+                18.0
+              ],
+              "fitMode": "length",
+              "targetSizeMeters": 4.7,
+              "hasCollision": true
+            }
+          ]
         }
       },
       {
@@ -1457,7 +1809,23 @@
         "animationCount": 0,
         "verification": {
           "rank": "B",
-          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+          "note": "GLBバイナリ検証・用途別配置済み、および1-D街区コード配置・CIビルド＆GitHub Pagesデプロイ成功（状態B）。実ブラウザでの描画確認（状態C）・衝突/動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
+        },
+        "cityPlacement": {
+          "taskId": "1-D",
+          "instanceCount": 1,
+          "instances": [
+            {
+              "instanceId": "se_train_ride",
+              "positionXZ": [
+                46.0,
+                34.0
+              ],
+              "fitMode": "length",
+              "targetSizeMeters": 18.0,
+              "hasCollision": true
+            }
+          ]
         }
       }
     ],
@@ -1726,7 +2094,23 @@
         "animationCount": 0,
         "verification": {
           "rank": "B",
-          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+          "note": "GLBバイナリ検証・用途別配置済み、および1-D街区コード配置・CIビルド＆GitHub Pagesデプロイ成功（状態B）。実ブラウザでの描画確認（状態C）・衝突/動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
+        },
+        "cityPlacement": {
+          "taskId": "1-D",
+          "instanceCount": 1,
+          "instances": [
+            {
+              "instanceId": "prop_dog_ne",
+              "positionXZ": [
+                7.8,
+                -17.0
+              ],
+              "fitMode": "height",
+              "targetSizeMeters": 0.68,
+              "hasCollision": true
+            }
+          ]
         }
       },
       {
@@ -1773,7 +2157,33 @@
         "animationCount": 0,
         "verification": {
           "rank": "B",
-          "note": "テクスチャ最大1024px軽量化・GLBバイナリ検証・用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+          "note": "GLBバイナリ検証・用途別配置済み、および1-D街区コード配置・CIビルド＆GitHub Pagesデプロイ成功（状態B）。実ブラウザでの描画確認（状態C）・衝突/動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
+        },
+        "cityPlacement": {
+          "taskId": "1-D",
+          "instanceCount": 2,
+          "instances": [
+            {
+              "instanceId": "prop_vending_nw",
+              "positionXZ": [
+                -8.2,
+                -14.0
+              ],
+              "fitMode": "height",
+              "targetSizeMeters": 1.95,
+              "hasCollision": true
+            },
+            {
+              "instanceId": "prop_vending_se",
+              "positionXZ": [
+                8.2,
+                14.0
+              ],
+              "fitMode": "height",
+              "targetSizeMeters": 1.95,
+              "hasCollision": true
+            }
+          ]
         }
       },
       {
@@ -1822,9 +2232,63 @@
         "animationCount": 0,
         "verification": {
           "rank": "B",
-          "note": "GLBメタデータ・ポリゴン数・解像度・バウンディングボックス・Draco圧縮有無を検証し用途別配置済み（状態B）。ゲーム内表示（状態C）以降は未検証。"
+          "note": "GLBバイナリ検証・用途別配置済み、および1-D街区コード配置・CIビルド＆GitHub Pagesデプロイ成功（状態B）。実ブラウザでの描画確認（状態C）・衝突/動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
+        },
+        "cityPlacement": {
+          "taskId": "1-D",
+          "instanceCount": 1,
+          "instances": [
+            {
+              "instanceId": "prop_road_pack_nw",
+              "positionXZ": [
+                -11.5,
+                -11.5
+              ],
+              "fitMode": "height",
+              "targetSizeMeters": 4.2,
+              "hasCollision": true
+            }
+          ]
         }
       }
     ]
-  }
+  },
+  "environmentAssets": [
+    {
+      "id": "asphalt_01",
+      "source": "https://polyhaven.com/a/asphalt_01",
+      "license": "CC0",
+      "resolution": "1K",
+      "usage": "road_asphalt",
+      "deliveryMode": "runtime_polyhaven_api_with_procedural_pbr_fallback",
+      "verification": {
+        "rank": "A",
+        "note": "Poly Haven公式CC0 1K素材としてランタイム取得＆プロシージャルPBRフォールバック実装済み（CIビルド＆Pagesデプロイ成功）。実ブラウザでの1Kテクスチャ適用表示確認（状態C）以降は未検証。"
+      }
+    },
+    {
+      "id": "concrete_pavement",
+      "source": "https://polyhaven.com/a/concrete_pavement",
+      "license": "CC0",
+      "resolution": "1K",
+      "usage": "sidewalk_pavement",
+      "deliveryMode": "runtime_polyhaven_api_with_procedural_pbr_fallback",
+      "verification": {
+        "rank": "A",
+        "note": "Poly Haven公式CC0 1K素材としてランタイム取得＆プロシージャルPBRフォールバック実装済み（CIビルド＆Pagesデプロイ成功）。実ブラウザでの1Kテクスチャ適用表示確認（状態C）以降は未検証。"
+      }
+    },
+    {
+      "id": "kloofendal_38d_partly_cloudy_puresky",
+      "source": "https://polyhaven.com/a/kloofendal_38d_partly_cloudy_puresky",
+      "license": "CC0",
+      "resolution": "1K",
+      "usage": "sky_hdri_pmrem",
+      "deliveryMode": "runtime_polyhaven_api_with_procedural_sky_and_room_env_fallback",
+      "verification": {
+        "rank": "A",
+        "note": "Poly Haven公式CC0 1K HDRIとしてランタイム取得＆プロシージャル青空＋RoomEnvironment PMREMフォールバック実装済み（CIビルド＆Pagesデプロイ成功）。実ブラウザでのHDRI表示確認（状態C）以降は未検証。"
+      }
+    }
+  ]
 }

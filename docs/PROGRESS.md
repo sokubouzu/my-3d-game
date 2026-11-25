@@ -1,13 +1,43 @@
 # 開発進捗記録（PROGRESS.md）
 
 ## 現在のステータス
-- **完了済み作業ID**: `0-C`（素材棚卸し）、`1-A`（最小起動基盤・GitHub Pages設定）、`1-B`（人物表示）、`1-C`（徒歩移動・三人称カメラ・iPadタッチ操作）
-- **次回作業ID**: `2-A`（実機確認後の次フェーズ）
-- **関連コミットID**: `abd08be`（1-B / 1-C 実装）、`0c5e527`（0-C / 1-A）
+- **完了済み作業ID**: `0-C`（素材棚卸し）、`1-A`（最小起動基盤・GitHub Pages設定）、`1-B`（人物表示）、`1-C`（徒歩移動・三人称カメラ・iPadタッチ操作）、`1-D`（日本の街区配置と衝突判定）、`1-E`（Poly Haven 1K PBR・HDRI・環境仕上げ）
+- **次回作業ID**: `2-A`（実機確認・状態C/D/E検証後の次フェーズ）
+- **関連コミットID**: `b5343ca`（1-D / 1-E 実装）、`abd08be`（1-B / 1-C 実装）、`0c5e527`（0-C / 1-A）
 
 ---
 
 ## 作業履歴
+
+### 作業ID: 1-D（日本の街区配置と衝突判定） & 1-E（Poly Haven 1K PBR・HDRI・環境仕上げ）
+- **実施日**: 2026-11-25
+- **コミットID**: `b5343ca`（`b5343cac3ca6197d5e892b27c6d1f043e1343fbd`）
+- **GitHub Actions Run ID**: `45721122622`（`Deploy to GitHub Pages`: `build` = `success`, `deploy` = `success`）
+
+#### 1. 日本の街区配置と衝突判定（1-D）— 検証ランク: 状態B（コード実装・CIビルド＆Pagesデプロイ成功／実画面描画＝状態C・実動作/衝突確認＝状態D・実機検証＝状態Eは未実施）
+- `src/world/cityLayout.ts`・`src/world/cityBuilder.ts` を新設し、`docs/ASSET_MANIFEST.json` の承認済み GLB 全24種（`buildings` 12種・`vehicles` 9種・`props` 3種、計28インスタンス）を **160m × 160m の日本の街区**（中央交差点・片側2車線相当の十字車道・歩道4街区・商業/住宅/繁華街/駅前線路区画・路肩駐車車両・街の小物）としてすべて最低1つ以上配置。保留9アセットおよび箱モデル代用は一切未使用。
+- 各 GLB はロード後に `Box3().setFromObject()` で実測バウンディングボックスを計測し、車は全長 `4.3〜4.7m` 前後（バイク `2.3m`・電車 `18m`）、建物は1階約 `3〜3.5m` 目安の現実的スケールへ自動調整、水平中心揃えおよび地面（車道 `Y = 0` / 歩道 `Y = 0.12`）への正確な接地を実施。
+- M1 iPad Air 最適化として同時ロード数を最大 3 並列に制限し、同一 GLB の複数配置はテンプレートキャッシュから `clone(true)` で共有、高ポリゴンモデル（>150k tri 級）の `castShadow = false` とテクスチャ異方性最大 4 を適用。
+- `src/world/collisionWorld.ts` を新設し、建物・車両・小物の 2D OBB コライダー（ロード前暫定登録→ロード後実測更新、壁ずり3回反復押し出し）と歩道縁石スロープ付き地面高さ判定を実装。`src/player/playerController.ts` へ非破壊で連携し、既存の徒歩移動・アニメーション・ジャンプ・TPSカメラ・iPadタッチ操作を維持。
+
+#### 2. Poly Haven 1K PBR・HDRI・環境仕上げ（1-E）— 検証ランク: コード実装・CIビルド＆Pagesデプロイ成功（実画面描画＝状態C・実機検証＝状態Eは未実施）
+- `src/world/environment.ts` を新設し、Poly Haven 公式 CC0 1K 素材（`asphalt_01`・`concrete_pavement`・`kloofendal_38d_partly_cloudy_puresky`）をランタイムで Poly Haven REST API / CDN から非同期取得して Diffuse / Normal / Roughness / PMREM 環境光＆背景へホットスワップ適用する仕組みを実装。
+- オフライン環境や取得失敗時・初期描画時でも破綻しないよう、高品質なプロシージャル Canvas PBR テクスチャ（アスファルト粒状＋凹凸、歩道コンクリートタイル＋目地）およびプロシージャル青空ドーム＋軽量 `RoomEnvironment` PMREM を即座に適用するフォールバックを併設。
+- 従来の仮デバッググリッドを撤去し、日本の道路標示（4方向横断歩道ゼブラ・停止線・中央線・車道外側線・歩道縁石）を構築。
+- M1 iPad Air 最適化（WebGL2、DPR 1.0 基準・負荷に応じた `0.75〜1.25` 動的調整、シャドウマップ `1024px`、SSR/SSAO/DoF 無効）を維持。
+
+#### 3. 変更ファイル一覧
+- `src/world/collisionWorld.ts`（新規作成）
+- `src/world/cityLayout.ts`（新規作成）
+- `src/world/cityBuilder.ts`（新規作成）
+- `src/world/environment.ts`（新規作成）
+- `src/player/playerController.ts`（水平 OBB 衝突解決フック連携）
+- `src/engine/scene.ts`（1-D / 1-E 統合、160m街区化、動的 DPR 調整）
+- `src/App.tsx`・`src/ui/DebugHud.tsx`（街区ロード進捗・コライダー数・Poly Haven 環境ソース表示追加）
+- `docs/ASSET_MANIFEST.json`（承認済み24アセットの配置情報および Poly Haven 1K 環境アセット記録を追記）
+- `docs/PROGRESS.md`（本記録を更新）
+
+---
 
 ### 作業ID: 1-B（人物表示） & 1-C（徒歩移動・三人称カメラ・iPadタッチ操作）
 - **実施日**: 2026-11-25
