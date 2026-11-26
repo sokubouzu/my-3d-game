@@ -1,4 +1,9 @@
-export type VehicleAudioProfile = 'standard' | 'sports';
+import {
+  VEHICLE_ENGINE_AUDIO_PROFILES,
+  type VehicleAudioProfile,
+} from '../vehicle/vehicleConfig';
+
+export type { VehicleAudioProfile };
 
 export interface VehicleAudioFrame {
   isDriving: boolean;
@@ -56,10 +61,16 @@ export class SoundManager {
   private engineOsc1: OscillatorNode | null = null;
   private engineOsc2: OscillatorNode | null = null;
   private engineHarmonicOsc: OscillatorNode | null = null;
+  private engineOsc1Mix: GainNode | null = null;
+  private engineOsc2Mix: GainNode | null = null;
+  private engineHarmonicMix: GainNode | null = null;
+  private engineHighpass: BiquadFilterNode | null = null;
+  private engineMidBoost: BiquadFilterNode | null = null;
   private enginePulseLfo: OscillatorNode | null = null;
   private enginePulseGain: GainNode | null = null;
   private engineFilter: BiquadFilterNode | null = null;
   private engineGain: GainNode | null = null;
+  private currentEngineProfile: VehicleAudioProfile | null = null;
 
   private roadSource: AudioBufferSourceNode | null = null;
   private roadFilter: BiquadFilterNode | null = null;
@@ -230,6 +241,11 @@ export class SoundManager {
       !this.engineOsc1 ||
       !this.engineOsc2 ||
       !this.engineHarmonicOsc ||
+      !this.engineOsc1Mix ||
+      !this.engineOsc2Mix ||
+      !this.engineHarmonicMix ||
+      !this.engineHighpass ||
+      !this.engineMidBoost ||
       !this.engineFilter ||
       !this.engineGain ||
       !this.enginePulseLfo ||
@@ -252,7 +268,21 @@ export class SoundManager {
       return;
     }
 
-    const isSports = frame.profile === 'sports';
+    const tuning = VEHICLE_ENGINE_AUDIO_PROFILES[frame.profile];
+
+    // 車種プロファイルが変わったときのみ波形・倍音ミックス・固定フィルター特性を切替
+    if (this.currentEngineProfile !== frame.profile) {
+      this.engineOsc1.type = tuning.osc1Type;
+      this.engineOsc2.type = tuning.osc2Type;
+      this.engineHarmonicOsc.type = tuning.harmonicOscType;
+      this.engineOsc1Mix.gain.setTargetAtTime(tuning.osc1Gain, now, 0.04);
+      this.engineOsc2Mix.gain.setTargetAtTime(tuning.osc2Gain, now, 0.04);
+      this.engineHarmonicMix.gain.setTargetAtTime(tuning.harmonicGain, now, 0.04);
+      this.engineHighpass.frequency.setTargetAtTime(tuning.highpassFreq, now, 0.05);
+      this.engineMidBoost.gain.setTargetAtTime(tuning.midBoostGainDb, now, 0.05);
+      this.currentEngineProfile = frame.profile;
+    }
+
     const maxKmh = Math.max(40, frame.maxSpeedKmh);
     const speedKmh = Math.max(0, frame.speedKmh);
     const speedNorm = Math.min(1, speedKmh / maxKmh);
@@ -260,56 +290,58 @@ export class SoundManager {
     const brake = Math.max(0, Math.min(1, frame.brake));
 
     // 擬似オートマチックの回転数カーブ（滑らかな上昇＋アクセル踏み込みによる負荷ブースト）
-    const revCurve = Math.pow(speedNorm, 0.78);
-    const throttleBoost = throttle * (isSports ? 0.18 : 0.12);
-    const revNorm = Math.min(1.12, revCurve + throttleBoost);
+    const revCurve = Math.pow(speedNorm, tuning.revExponent);
+    const throttleBoost = throttle * tuning.throttleBoost;
+    const revNorm = Math.min(tuning.maxRevNorm, revCurve + throttleBoost);
 
-    // 車種別の基本周波数＆iPad内蔵スピーカーで明確に聞こえる中音域（150Hz〜1200Hz）倍音設計
-    const idleFreq = isSports ? 86 : 68;
-    const maxFreq = isSports ? 295 : 215;
-    const baseFreq = idleFreq + (maxFreq - idleFreq) * revNorm;
-    const harmonic2Ratio = isSports ? 2.02 : 2.0;
-    const harmonic3Ratio = isSports ? 3.03 : 3.01;
-
-    const freqTau = isSports ? 0.045 : 0.065;
+    // 車種別の基本周波数＆倍音設計（standard: 静かな実用車 / sports: 高回転スポーツカー）
+    const baseFreq = tuning.idleFreq + (tuning.maxFreq - tuning.idleFreq) * revNorm;
+    const freqTau = tuning.freqTau;
     this.engineOsc1.frequency.setTargetAtTime(baseFreq, now, freqTau);
     this.engineOsc2.frequency.setTargetAtTime(
-      baseFreq * harmonic2Ratio,
+      baseFreq * tuning.harmonic2Ratio,
       now,
       freqTau,
     );
     this.engineHarmonicOsc.frequency.setTargetAtTime(
-      baseFreq * harmonic3Ratio,
+      baseFreq * tuning.harmonic3Ratio,
       now,
       freqTau,
     );
 
     // アイドリング時の低い鼓動感（低速ほど脈動、高速で滑らかに連続音へ）
-    const idlePulseRate = isSports ? 14 + speedNorm * 22 : 10 + speedNorm * 16;
+    const idlePulseRate =
+      tuning.idlePulseBaseRate + speedNorm * tuning.idlePulseSpeedScale;
     const idlePulseDepth =
-      (1 - Math.min(1, speedNorm * 2.5)) * (isSports ? 0.055 : 0.045);
+      (1 - Math.min(1, speedNorm * 2.5)) * tuning.idlePulseDepth;
     this.enginePulseLfo.frequency.setTargetAtTime(idlePulseRate, now, 0.08);
     this.enginePulseGain.gain.setTargetAtTime(idlePulseDepth, now, 0.08);
 
-    // ローパスフィルター開度（中音域の倍音をしっかり通す設定）
-    const filterMin = isSports ? 680 : 500;
-    const filterMax = isSports ? 2600 : 1800;
+    // ローパスフィルター開度（standard は 220Hz〜420Hz に抑制、sports は 680Hz〜2600Hz で伸びる）
+    const filterFactor = Math.min(
+      1,
+      revNorm * tuning.filterRevWeight + throttle * tuning.filterThrottleWeight,
+    );
     const targetFilterFreq =
-      filterMin +
-      (filterMax - filterMin) * Math.min(1, revNorm * 0.85 + throttle * 0.28);
+      tuning.filterMin + (tuning.filterMax - tuning.filterMin) * filterFactor;
     this.engineFilter.frequency.setTargetAtTime(targetFilterFreq, now, 0.06);
-    this.engineFilter.Q.setTargetAtTime(isSports ? 2.4 : 1.7, now, 0.08);
+    this.engineFilter.Q.setTargetAtTime(tuning.filterQ, now, 0.08);
 
-    // エンジン音量（通常の端末音量で明確に聞こえるレベル）
-    const baseEngineGain = isSports ? 0.3 : 0.26;
+    // エンジン音量（standard は全開時でも甲高く唸らず控えめに、sports は迫力維持）
     const targetEngineGain =
-      baseEngineGain + throttle * 0.15 + speedNorm * 0.11;
+      tuning.engineBaseGain +
+      throttle * tuning.engineThrottleGain +
+      speedNorm * tuning.engineSpeedGain;
     this.engineGain.gain.setTargetAtTime(targetEngineGain, now, 0.06);
 
-    // タイヤ走行音・風切りロードノイズ（中音域 480Hz〜1150Hz）
-    const roadNorm = Math.min(1, speedKmh / 120);
-    const targetRoadGain = roadNorm > 0.03 ? roadNorm * roadNorm * 0.24 : 0.0001;
-    const targetRoadFreq = 480 + roadNorm * 680;
+    // タイヤ走行音・風切りロードノイズ（standard では走行時の主体となるバランス）
+    const roadNorm = Math.min(1, speedKmh / tuning.roadSpeedRefKmh);
+    const targetRoadGain =
+      roadNorm > 0.03
+        ? Math.pow(roadNorm, tuning.roadExponent) * tuning.roadGainScale
+        : 0.0001;
+    const targetRoadFreq =
+      tuning.roadFreqMin + (tuning.roadFreqMax - tuning.roadFreqMin) * roadNorm;
     this.roadFilter.frequency.setTargetAtTime(targetRoadFreq, now, 0.08);
     this.roadGain.gain.setTargetAtTime(targetRoadGain, now, 0.09);
 
@@ -712,41 +744,49 @@ export class SoundManager {
     this.ambientSource = ambientSource;
     this.ambientLfo = ambientLfo;
 
-    // --- 2. 車両エンジン音（中音域倍音重視オシレーター3基 + 脈動LFO + フィルター） ---
+    // --- 2. 車両エンジン音（初期プロファイル: standard＝静かな実用車、sports 乗車時に動的切替） ---
+    const initialTuning = VEHICLE_ENGINE_AUDIO_PROFILES.standard;
+
     const engineOsc1 = ctx.createOscillator();
-    engineOsc1.type = 'sawtooth';
-    engineOsc1.frequency.setValueAtTime(68, now);
+    engineOsc1.type = initialTuning.osc1Type;
+    engineOsc1.frequency.setValueAtTime(initialTuning.idleFreq, now);
 
     const engineOsc2 = ctx.createOscillator();
-    engineOsc2.type = 'sawtooth';
-    engineOsc2.frequency.setValueAtTime(136, now);
+    engineOsc2.type = initialTuning.osc2Type;
+    engineOsc2.frequency.setValueAtTime(
+      initialTuning.idleFreq * initialTuning.harmonic2Ratio,
+      now,
+    );
 
     const engineHarmonicOsc = ctx.createOscillator();
-    engineHarmonicOsc.type = 'triangle';
-    engineHarmonicOsc.frequency.setValueAtTime(205, now);
+    engineHarmonicOsc.type = initialTuning.harmonicOscType;
+    engineHarmonicOsc.frequency.setValueAtTime(
+      initialTuning.idleFreq * initialTuning.harmonic3Ratio,
+      now,
+    );
 
     const osc1Mix = ctx.createGain();
-    osc1Mix.gain.setValueAtTime(0.5, now);
+    osc1Mix.gain.setValueAtTime(initialTuning.osc1Gain, now);
     const osc2Mix = ctx.createGain();
-    osc2Mix.gain.setValueAtTime(0.48, now);
+    osc2Mix.gain.setValueAtTime(initialTuning.osc2Gain, now);
     const harmonicMix = ctx.createGain();
-    harmonicMix.gain.setValueAtTime(0.36, now);
+    harmonicMix.gain.setValueAtTime(initialTuning.harmonicGain, now);
 
     const engineHighpass = ctx.createBiquadFilter();
     engineHighpass.type = 'highpass';
-    engineHighpass.frequency.setValueAtTime(105, now);
+    engineHighpass.frequency.setValueAtTime(initialTuning.highpassFreq, now);
     engineHighpass.Q.setValueAtTime(0.7, now);
 
     const engineFilter = ctx.createBiquadFilter();
     engineFilter.type = 'lowpass';
-    engineFilter.frequency.setValueAtTime(520, now);
-    engineFilter.Q.setValueAtTime(1.7, now);
+    engineFilter.frequency.setValueAtTime(initialTuning.filterMin, now);
+    engineFilter.Q.setValueAtTime(initialTuning.filterQ, now);
 
     const engineMidBoost = ctx.createBiquadFilter();
     engineMidBoost.type = 'peaking';
     engineMidBoost.frequency.setValueAtTime(420, now);
     engineMidBoost.Q.setValueAtTime(1.0, now);
-    engineMidBoost.gain.setValueAtTime(5.0, now);
+    engineMidBoost.gain.setValueAtTime(initialTuning.midBoostGainDb, now);
 
     const engineGain = ctx.createGain();
     engineGain.gain.setValueAtTime(0.0001, now);
@@ -754,7 +794,7 @@ export class SoundManager {
     // アイドリング時の鼓動感用 LFO
     const enginePulseLfo = ctx.createOscillator();
     enginePulseLfo.type = 'sine';
-    enginePulseLfo.frequency.setValueAtTime(11, now);
+    enginePulseLfo.frequency.setValueAtTime(initialTuning.idlePulseBaseRate, now);
     const enginePulseGain = ctx.createGain();
     enginePulseGain.gain.setValueAtTime(0.0, now);
     enginePulseLfo.connect(enginePulseGain);
@@ -779,10 +819,16 @@ export class SoundManager {
     this.engineOsc1 = engineOsc1;
     this.engineOsc2 = engineOsc2;
     this.engineHarmonicOsc = engineHarmonicOsc;
+    this.engineOsc1Mix = osc1Mix;
+    this.engineOsc2Mix = osc2Mix;
+    this.engineHarmonicMix = harmonicMix;
+    this.engineHighpass = engineHighpass;
+    this.engineMidBoost = engineMidBoost;
     this.enginePulseLfo = enginePulseLfo;
     this.enginePulseGain = enginePulseGain;
     this.engineFilter = engineFilter;
     this.engineGain = engineGain;
+    this.currentEngineProfile = 'standard';
 
     // --- 2b. 車両ロードノイズ（走行時のタイヤ・風切り音） ---
     const roadSource = ctx.createBufferSource();
@@ -791,7 +837,7 @@ export class SoundManager {
 
     const roadFilter = ctx.createBiquadFilter();
     roadFilter.type = 'bandpass';
-    roadFilter.frequency.setValueAtTime(520, now);
+    roadFilter.frequency.setValueAtTime(initialTuning.roadFreqMin, now);
     roadFilter.Q.setValueAtTime(0.9, now);
 
     const roadGain = ctx.createGain();

@@ -36,6 +36,133 @@ export interface VehicleHandlingSpec {
   wheelbaseMeters: number;
 }
 
+export type VehicleAudioProfile = 'standard' | 'sports';
+
+export interface VehicleEngineAudioProfileParams {
+  /** 基音オシレーター波形 */
+  osc1Type: OscillatorType;
+  /** 2倍音オシレーター波形 */
+  osc2Type: OscillatorType;
+  /** 3倍音（補助倍音）オシレーター波形 */
+  harmonicOscType: OscillatorType;
+  /** 各オシレーターのミックス音量 */
+  osc1Gain: number;
+  osc2Gain: number;
+  harmonicGain: number;
+  /** アイドリング〜最高速の基本周波数 (Hz) */
+  idleFreq: number;
+  maxFreq: number;
+  /** 2倍音・3倍音の周波数比 */
+  harmonic2Ratio: number;
+  harmonic3Ratio: number;
+  /** 回転数カーブの指数・アクセル踏み込みブースト・上限・追従時定数 */
+  revExponent: number;
+  throttleBoost: number;
+  maxRevNorm: number;
+  freqTau: number;
+  /** アイドリング脈動 LFO パラメータ */
+  idlePulseBaseRate: number;
+  idlePulseSpeedScale: number;
+  idlePulseDepth: number;
+  /** フィルター設定（ハイパス・ローパスカットオフ・Q・中音域ピーキング） */
+  highpassFreq: number;
+  filterMin: number;
+  filterMax: number;
+  filterQ: number;
+  filterRevWeight: number;
+  filterThrottleWeight: number;
+  midBoostGainDb: number;
+  /** エンジン音量バランス */
+  engineBaseGain: number;
+  engineThrottleGain: number;
+  engineSpeedGain: number;
+  /** ロードノイズ（タイヤ転がり音・風切り音）バランス */
+  roadSpeedRefKmh: number;
+  roadExponent: number;
+  roadGainScale: number;
+  roadFreqMin: number;
+  roadFreqMax: number;
+}
+
+/**
+ * 車種別エンジン音・ロードノイズチューニング定義。
+ * - standard: 静かな実用車・ミニバン向け（triangle/sine 中心、カットオフ 220Hz〜420Hz、低いエンジン音＋ロードノイズ主体）
+ * - sports: 高回転まで伸びるスポーツカー向け（sawtooth 倍音＋680Hz〜2600Hz フィルター開度で差別化）
+ */
+export const VEHICLE_ENGINE_AUDIO_PROFILES: Record<
+  VehicleAudioProfile,
+  VehicleEngineAudioProfileParams
+> = {
+  standard: {
+    osc1Type: 'triangle',
+    osc2Type: 'sine',
+    harmonicOscType: 'sine',
+    osc1Gain: 0.62,
+    osc2Gain: 0.34,
+    harmonicGain: 0.1,
+    idleFreq: 54,
+    maxFreq: 128,
+    harmonic2Ratio: 2.0,
+    harmonic3Ratio: 3.0,
+    revExponent: 0.9,
+    throttleBoost: 0.07,
+    maxRevNorm: 1.04,
+    freqTau: 0.095,
+    idlePulseBaseRate: 8.5,
+    idlePulseSpeedScale: 10,
+    idlePulseDepth: 0.025,
+    highpassFreq: 72,
+    filterMin: 220,
+    filterMax: 420,
+    filterQ: 0.85,
+    filterRevWeight: 0.78,
+    filterThrottleWeight: 0.22,
+    midBoostGainDb: 0.5,
+    engineBaseGain: 0.17,
+    engineThrottleGain: 0.055,
+    engineSpeedGain: 0.045,
+    roadSpeedRefKmh: 110,
+    roadExponent: 1.35,
+    roadGainScale: 0.32,
+    roadFreqMin: 380,
+    roadFreqMax: 920,
+  },
+  sports: {
+    osc1Type: 'sawtooth',
+    osc2Type: 'sawtooth',
+    harmonicOscType: 'triangle',
+    osc1Gain: 0.5,
+    osc2Gain: 0.48,
+    harmonicGain: 0.36,
+    idleFreq: 86,
+    maxFreq: 295,
+    harmonic2Ratio: 2.02,
+    harmonic3Ratio: 3.03,
+    revExponent: 0.78,
+    throttleBoost: 0.18,
+    maxRevNorm: 1.12,
+    freqTau: 0.045,
+    idlePulseBaseRate: 14,
+    idlePulseSpeedScale: 22,
+    idlePulseDepth: 0.055,
+    highpassFreq: 105,
+    filterMin: 680,
+    filterMax: 2600,
+    filterQ: 2.4,
+    filterRevWeight: 0.85,
+    filterThrottleWeight: 0.28,
+    midBoostGainDb: 5.0,
+    engineBaseGain: 0.3,
+    engineThrottleGain: 0.15,
+    engineSpeedGain: 0.11,
+    roadSpeedRefKmh: 120,
+    roadExponent: 2.0,
+    roadGainScale: 0.24,
+    roadFreqMin: 480,
+    roadFreqMax: 1160,
+  },
+};
+
 export interface HeroVehicleConfig {
   /** コライダー・シーン識別子 */
   id: string;
@@ -62,8 +189,8 @@ export interface HeroVehicleConfig {
   placeholderDimensions: { width: number; height: number; length: number };
   /** リアルタイムシャドウ投影の有無 */
   castShadow: boolean;
-  /** 3-D: エンジン音プロファイル（standard = 乗用車 / sports = スポーツカー） */
-  audioProfile: 'standard' | 'sports';
+  /** 3-D: エンジン音プロファイル（standard = 静かな実用車 / sports = スポーツカー） */
+  audioProfile: VehicleAudioProfile;
   /** 走行・操舵スペック */
   handling: VehicleHandlingSpec;
   /** 4輪の独立ノード定義 */
