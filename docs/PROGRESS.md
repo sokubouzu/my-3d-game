@@ -1,13 +1,45 @@
 # 開発進捗記録（PROGRESS.md）
 
 ## 現在のステータス
-- **完了済み作業ID**: `0-C`（素材棚卸し）、`1-A`（最小起動基盤・GitHub Pages設定）、`1-B`（人物表示）、`1-C`（徒歩移動・三人称カメラ・iPadタッチ操作）、`1-D`（日本の街区配置と衝突判定 + 単体厳選＆埋まり/浮き解消修正）、`1-E`（Poly Haven 1K PBR・HDRI・環境仕上げ）、**PHASE 1 実機検証完了**、`2-A`（運転可能な主役車両1台の表示・構造確認・`src/vehicle/` 土台）、**`2-B`（主役車両への乗降・運転物理・車輪回転・運転カメラ・iPad運転タッチUI + 3台セットミニチュア車両修正）**
-- **次回作業ID**: `2-C` 以降（iPad Air 第5世代実機での 2-B 乗降・運転・衝突・UI 検証完了後に進行）
-- **関連コミットID**: `7a16542`（2-B 運転物理・乗降・運転カメラ/UI・ミニチュア3台セット車両修正）、`460bdb6`（2-A 主役車両配置＆リグ土台・歩道境界つまづき修正）、`f3e12dc`（1-D ジオラマ除外＆単体Y=0厳密接地修正）、`6b8976b`（1-D 飛行機除外等）、`b5343ca`（1-D / 1-E 実装）、`abd08be`（1-B / 1-C 実装）、`0c5e527`（0-C / 1-A）
+- **完了済み作業ID**: `0-C`（素材棚卸し）、`1-A`（最小起動基盤・GitHub Pages設定）、`1-B`（人物表示）、`1-C`（徒歩移動・三人称カメラ・iPadタッチ操作）、`1-D`（日本の街区配置と衝突判定 + 単体厳選＆埋まり/浮き解消修正）、`1-E`（Poly Haven 1K PBR・HDRI・環境仕上げ）、**PHASE 1 実機検証完了**、`2-A`（運転可能な主役車両1台の表示・構造確認・`src/vehicle/` 土台）、`2-B`（主役車両への乗降・運転物理・車輪回転・運転カメラ・iPad運転タッチUI + 3台セットミニチュア車両修正）、**`2-C`（カメラの建物遮蔽回避・主役車両110km/h化・街区配置済みスポーツカーの運転車両化160km/h）**
+- **次回作業ID**: `2-D` 以降（iPad Air 第5世代実機での `2-C` カメラ遮蔽回避・高速走行・2台乗換検証完了後に進行）
+- **関連コミットID**: `2156aa0`（2-C カメラ遮蔽回避・110km/h化・Porsche 911 Turbo 運転車両化160km/h）、`7a16542`（2-B 運転物理・乗降・運転カメラ/UI・ミニチュア3台セット車両修正）、`460bdb6`（2-A 主役車両配置＆リグ土台・歩道境界つまづき修正）、`f3e12dc`（1-D ジオラマ除外＆単体Y=0厳密接地修正）、`6b8976b`（1-D 飛行機除外等）、`b5343ca`（1-D / 1-E 実装）、`abd08be`（1-B / 1-C 実装）、`0c5e527`（0-C / 1-A）
 
 ---
 
 ## 作業履歴
+
+### 作業ID: 2-C（カメラの建物遮蔽回避・走行速度向上・街区配置済みスポーツカーの運転車両化）
+- **実施日**: 2026-11-26
+- **コミットID**: `2156aa0`（`2156aa0e68e4793ad5864b70371b646ad9f336ab`）
+- **GitHub Actions Run ID**: `45740850455`（`Deploy to GitHub Pages`: `build` = `success`, `deploy` = `success`）
+- **検証ランク**: **状態B**（コード実装・CIビルド＆GitHub Pagesデプロイ成功／実ブラウザ・iPad Air 第5世代実機での描画＝状態C・カメラ遮蔽回避/高速走行/2台乗換動作＝状態D・実機検証＝状態Eは未実施）
+
+#### 実装内容
+1. **建物・障害物の裏に回り込んだ際のカメラ遮蔽回避（徒歩・運転共通）**:
+   - `src/world/collisionWorld.ts` に 3D Ray vs OBB スラブ法および街区外周壁交差判定を行う軽量ゼロアロケーションの `raycastCameraOcclusion` を実装（M1 iPad Air で高ポリゴンメッシュ総当たりを避けてフレームレートを維持）。
+   - `src/camera/thirdPersonCamera.ts` の徒歩カメラ（`update`）および運転カメラ（`updateDriving`、自車両コライダー ID 除外対応）の双方に遮蔽回避処理を統合。注視点とカメラの間に建物・壁・背の高い障害物が入った場合は手前マージン `0.42m` まで素早く距離を縮め、障害物から離れた際は滑らかに元の距離へ復帰するよう補間。
+2. **既存主役車両（1台目: Toyota Kijang Innova）の最高速アップ＆操作安定性調整**:
+   - `src/vehicle/vehicleConfig.ts` に車種別スペック定義 `VehicleHandlingSpec` を導入し、`HERO_VEHICLE_CONFIG` の最高前進速度を約 65km/h から **約 110km/h（`30.6 m/s`）** へ引き上げ。
+   - 速度比に応じた自然な加速カーブ（ベース加速度 `13.0 m/s²`）、強化ブレーキ（`24.5 m/s²` / 強ブレーキ `34.0 m/s²`）、および高速域でのステアリング切れ角制限（`0.56 rad → 0.15 rad`）を調整。
+3. **街区配置済みスポーツカー（1975 Porsche 911 930 Turbo）の運転可能車両化（2台目）**:
+   - 街区北側車道に静的配置されていた既存スポーツカー `veh_porsche_north`（`public/assets/vehicles/free_1975_porsche_911_930_turbo.glb`、`x: -3.6, z: -22.0, rotationY: Math.PI`, 全長 `4.3m`, `castShadow: false`）を特定。GLB 内部ノード解析により4輪すべての独立グループ（`Circle.051_37` + `Circle.048_52` / `Circle.037_2` / `Circle.050_51` / `Circle.038_1`）および前輪の初期ステア角（約 `-18.5°`）を特定。
+   - 多重配置を防ぐため `src/world/cityLayout.ts` から静的配置エントリを除外し、同一座標・同一向きのまま `SPORTS_CAR_VEHICLE_CONFIG`（**最高速 約 160km/h（`44.5 m/s`）・加速強化 `20.0 m/s²`・ブレーキ `32.0 m/s²`・前輪初期ステア直進補正 `+0.3236 rad`**）として `DRIVABLE_VEHICLES` へ統合。
+   - `src/engine/scene.ts` を複数車両管理へ拡張し、どちらの車両でもドア付近（車体外面から `2.4m` 以内 ≒ ドア中心から約 `3.0m` 以内）に近づくと車種名付き「乗る」ボタンが表示され、自由に乗車・運転・降車・乗換ができるように実装。
+
+#### 変更ファイル一覧
+- `src/world/collisionWorld.ts`（3D Ray vs OBB カメラ遮蔽レイキャスト `raycastCameraOcclusion` 追加）
+- `src/camera/thirdPersonCamera.ts`（徒歩・運転カメラ共通の遮蔽回避・滑らかな距離復帰処理追加）
+- `src/world/cityLayout.ts`（`veh_porsche_north` 静的配置を除外し重複配置を防止）
+- `src/vehicle/vehicleConfig.ts`（`VehicleHandlingSpec`・Innova 110km/h 化・Porsche 911 Turbo 160km/h 定義・`DRIVABLE_VEHICLES` 追加）
+- `src/vehicle/vehicleModel.ts`（前輪初期ステア直進補正 `initialYawCorrection` 対応・空ステアリングノード名ガード）
+- `src/vehicle/vehicleController.ts`（車種別ハンドリングスペック適用・高速ステア安定性調整・複数車両近接距離 API 追加）
+- `src/vehicle/index.ts`（`DRIVABLE_VEHICLES`・`SPORTS_CAR_VEHICLE_CONFIG`・`VehicleHandlingSpec` エクスポート追加）
+- `src/engine/scene.ts`（カメラ遮蔽レイキャスト接続・複数車両ロード＆自由乗換ループ実装）
+- `src/App.tsx`・`src/ui/TouchControls.tsx`・`src/ui/DebugHud.tsx`（近接車種名表示・Phase 2-C 複数車両ステータス表示追加）
+- `docs/ASSET_MANIFEST.json`・`docs/PROGRESS.md`（記録更新）
+
+---
 
 ### 作業ID: 2-B（主役車両への乗降・運転物理・車輪回転・運転カメラ・iPad運転タッチUI） & ミニチュア3台セット車両修正
 - **実施日**: 2026-11-26
