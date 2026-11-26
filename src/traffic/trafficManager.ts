@@ -1,11 +1,17 @@
 import * as THREE from 'three';
 import { getGltfLoader } from '../engine/loaders';
-import type { CollisionWorld } from '../world/collisionWorld';
+import {
+  computeObbObbSeparation,
+  type CollisionWorld,
+  type ObbBox2D,
+  type ObbSeparationResult,
+} from '../world/collisionWorld';
 import { createJapaneseRoadNetwork, type RoadSegment } from './roadNetwork';
 import {
   TRAFFIC_VEHICLE_CONFIGS,
   type TrafficVehicleConfig,
 } from './trafficConfig';
+import type { TrafficLightController } from './trafficLights';
 import { TrafficVehicle, type TrafficObstacle } from './trafficVehicle';
 
 export interface TrafficStatus {
@@ -15,7 +21,7 @@ export interface TrafficStatus {
 }
 
 /**
- * 3-A: 街区の AI 交通車両（4台）のロード・自動走行・衝突回避・破棄を統括するマネージャー。
+ * 3-A / 3-B: 街区の AI 交通車両（4台）のロード・自動走行・信号停止・衝突回避・OBB分離・破棄を統括するマネージャー。
  * - 同一 GLB は URL ごとに1回だけロードして clone(true) することで M1 iPad Air のメモリを最適化。
  */
 export class TrafficManager {
@@ -30,6 +36,37 @@ export class TrafficManager {
   private readonly loadingPromises = new Map<string, Promise<THREE.Object3D>>();
   private readonly vehicles: TrafficVehicle[] = [];
   private readonly obstacleBuffer: TrafficObstacle[] = [];
+  private readonly playerObstacle: TrafficObstacle = {
+    id: 'player_foot',
+    kind: 'player',
+    x: 0,
+    z: 0,
+    yaw: 0,
+    halfW: 0.45,
+    halfD: 0.45,
+  };
+  private readonly scratchObbA: ObbBox2D = {
+    cx: 0,
+    cz: 0,
+    halfW: 0.9,
+    halfD: 2.3,
+    cos: 1,
+    sin: 0,
+  };
+  private readonly scratchObbB: ObbBox2D = {
+    cx: 0,
+    cz: 0,
+    halfW: 0.9,
+    halfD: 2.3,
+    cos: 1,
+    sin: 0,
+  };
+  private readonly scratchSep: ObbSeparationResult = {
+    overlapped: false,
+    pushX: 0,
+    pushZ: 0,
+    penetration: 0,
+  };
 
   private failedCount = 0;
   private isDisposed = false;
@@ -57,6 +94,13 @@ export class TrafficManager {
       totalCount: this.configs.length,
       failedCount: this.failedCount,
     };
+  }
+
+  /** AI歩行者などが参照するための AI 交通車両スナップショットを out へ追記（ゼロアロケーション） */
+  public appendVehicleObstacles(out: TrafficObstacle[]): void {
+    for (let i = 0; i < this.vehicles.length; i += 1) {
+      out.push(this.vehicles[i].getObstacleSnapshot());
+    }
   }
 
   private emitStatus(): void {
@@ -111,39 +155,99 @@ export class TrafficManager {
 
   /**
    * 毎フレーム全 AI 交通車両を更新する。
-   * プレイヤー（徒歩時）・運転可能車両2台・他の AI 車両をすべて前方検知対象に含める。
+   * 1. プレイヤー・AI歩行者・運転可能車両2台・他のAI車両・信号をすべて前方検知対象に含める。
+   * 2. 更新後、万が一車体 OBB 同士が接触・重なりを起こした場合は SAT 最小侵入深度で確実に押し戻す。
    */
   public update(
     dt: number,
     playerPos: THREE.Vector3 | null,
     drivableVehicles: readonly TrafficObstacle[],
+    pedestrianObstacles?: readonly TrafficObstacle[],
+    trafficLights?: TrafficLightController,
   ): void {
     if (this.isDisposed || this.vehicles.length === 0) return;
 
     this.obstacleBuffer.length = 0;
 
     if (playerPos) {
-      this.obstacleBuffer.push({
-        id: 'player_foot',
-        kind: 'player',
-        x: playerPos.x,
-        z: playerPos.z,
-        yaw: 0,
-        halfW: 0.45,
-        halfD: 0.45,
-      });
+      this.playerObstacle.x = playerPos.x;
+      this.playerObstacle.z = playerPos.z;
+      this.obstacleBuffer.push(this.playerObstacle);
     }
 
-    for (const dv of drivableVehicles) {
-      this.obstacleBuffer.push(dv);
+    if (pedestrianObstacles) {
+      for (let i = 0; i < pedestrianObstacles.length; i += 1) {
+        this.obstacleBuffer.push(pedestrianObstacles[i]);
+      }
     }
 
-    for (const tv of this.vehicles) {
-      this.obstacleBuffer.push(tv.getObstacleSnapshot());
+    for (let i = 0; i < drivableVehicles.length; i += 1) {
+      this.obstacleBuffer.push(drivableVehicles[i]);
     }
 
-    for (const tv of this.vehicles) {
-      tv.update(dt, this.obstacleBuffer);
+    for (let i = 0; i < this.vehicles.length; i += 1) {
+      this.obstacleBuffer.push(this.vehicles[i].getObstacleSnapshot());
+    }
+
+    for (let i = 0; i < this.vehicles.length; i += 1) {
+      this.vehicles[i].update(dt, this.obstacleBuffer, trafficLights);
+    }
+
+    // 3-B: 車両同士のめり込み防止 — 2D OBB vs OBB SAT 最小侵入深度分離パス（最大3回反復）
+    this.resolveVehicleOverlaps(drivableVehicles);
+  }
+
+  private resolveVehicleOverlaps(
+    drivableVehicles: readonly TrafficObstacle[],
+  ): void {
+    const obbA = this.scratchObbA;
+    const obbB = this.scratchObbB;
+    const sep = this.scratchSep;
+    const safetyMargin = 0.08;
+
+    for (let iter = 0; iter < 3; iter += 1) {
+      let anySeparated = false;
+
+      // 1. AI 車両同士の OBB 重なり分離
+      for (let i = 0; i < this.vehicles.length; i += 1) {
+        const va = this.vehicles[i];
+        for (let j = i + 1; j < this.vehicles.length; j += 1) {
+          const vb = this.vehicles[j];
+          va.fillObb(obbA);
+          vb.fillObb(obbB);
+
+          if (computeObbObbSeparation(obbA, obbB, sep, safetyMargin)) {
+            const halfX = sep.pushX * 0.52;
+            const halfZ = sep.pushZ * 0.52;
+            va.applySeparationPush(halfX, halfZ, false);
+            vb.applySeparationPush(-halfX, -halfZ, false);
+            anySeparated = true;
+          }
+        }
+      }
+
+      // 2. AI 車両 vs 運転可能車両（自車含む）の OBB 重なり分離
+      for (let i = 0; i < this.vehicles.length; i += 1) {
+        const va = this.vehicles[i];
+        va.fillObb(obbA);
+        for (let d = 0; d < drivableVehicles.length; d += 1) {
+          const dv = drivableVehicles[d];
+          obbB.cx = dv.x;
+          obbB.cz = dv.z;
+          obbB.halfW = dv.halfW;
+          obbB.halfD = dv.halfD;
+          obbB.cos = Math.cos(dv.yaw);
+          obbB.sin = Math.sin(dv.yaw);
+
+          if (computeObbObbSeparation(obbA, obbB, sep, safetyMargin)) {
+            va.applySeparationPush(sep.pushX, sep.pushZ, true);
+            va.fillObb(obbA);
+            anySeparated = true;
+          }
+        }
+      }
+
+      if (!anySeparated) break;
     }
   }
 

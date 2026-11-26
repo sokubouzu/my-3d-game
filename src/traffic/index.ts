@@ -13,3 +13,10 @@ export {
 } from './trafficConfig';
 export { TrafficVehicle, type TrafficObstacle } from './trafficVehicle';
 export { TrafficManager, type TrafficStatus } from './trafficManager';
+export {
+  TrafficLightController,
+  type PedSignalState,
+  type SignalColor,
+  type TrafficAxis,
+  type TrafficLightSnapshot,
+} from './trafficLights';

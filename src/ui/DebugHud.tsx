@@ -32,7 +32,7 @@ export function DebugHud({ status }: DebugHudProps) {
 
       {expanded && (
         <div className="hud-details">
-          <div className="hud-title">my-3d-game (Phase 3-A)</div>
+          <div className="hud-title">my-3d-game (Phase 3-B)</div>
           <div>
             API: {status.isWebGL2 ? 'WebGL2' : 'WebGL1'} | DPR:{' '}
             {status.dpr.toFixed(2)}
@@ -65,8 +65,10 @@ export function DebugHud({ status }: DebugHudProps) {
           </div>
           <div>
             AI Traffic: {status.trafficLoadedCount}/{status.trafficTotalCount}{' '}
-            (Left-hand Japan)
+            | Pedestrians: {status.pedestrianLoadedCount}/
+            {status.pedestrianTotalCount}
           </div>
+          <div>Signal: {status.trafficLightLabel}</div>
           <div>
             City: {status.cityLoadedCount}/{status.cityTotalCount} GLB
             {status.cityFailedCount > 0

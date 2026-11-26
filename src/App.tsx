@@ -43,6 +43,9 @@ const INITIAL_STATUS: EngineStatus = {
   drivableVehicleTotal: 2,
   trafficLoadedCount: 0,
   trafficTotalCount: 4,
+  pedestrianLoadedCount: 0,
+  pedestrianTotalCount: 6,
+  trafficLightLabel: '南北:青 / 東西:赤',
 };
 
 export function App() {

@@ -34,6 +34,121 @@ export interface VehicleCollisionResult {
   normalZ: number;
 }
 
+export interface ObbBox2D {
+  cx: number;
+  cz: number;
+  halfW: number;
+  halfD: number;
+  cos: number;
+  sin: number;
+}
+
+export interface ObbSeparationResult {
+  overlapped: boolean;
+  /** boxA を boxB から引き離す最小押し出しベクトル X */
+  pushX: number;
+  /** boxA を boxB から引き離す最小押し出しベクトル Z */
+  pushZ: number;
+  /** 最小侵入深度 (m) */
+  penetration: number;
+}
+
+/**
+ * 2D OBB 同士の分離軸定理 (SAT) による最小侵入深度 (MTV) 計算（ゼロアロケーション）。
+ * 重なっている場合、boxA を boxB から引き離す最小押し出しベクトル (pushX, pushZ) を out へ書き込む。
+ */
+export function computeObbObbSeparation(
+  a: ObbBox2D,
+  b: ObbBox2D,
+  out: ObbSeparationResult,
+  extraMargin = 0,
+): boolean {
+  out.overlapped = false;
+  out.pushX = 0;
+  out.pushZ = 0;
+  out.penetration = 0;
+
+  // ブロードフェーズ（外接円半径チェック）
+  const aRad = Math.hypot(a.halfW, a.halfD) + extraMargin;
+  const bRad = Math.hypot(b.halfW, b.halfD);
+  const dx = a.cx - b.cx;
+  const dz = a.cz - b.cz;
+  const maxDist = aRad + bRad;
+  if (dx * dx + dz * dz >= maxDist * maxDist) {
+    return false;
+  }
+
+  // ローカル軸ベクトル: +X = (cos, -sin), +Z = (sin, cos)
+  const ax0 = a.cos;
+  const az0 = -a.sin;
+  const ax1 = a.sin;
+  const az1 = a.cos;
+
+  const bx0 = b.cos;
+  const bz0 = -b.sin;
+  const bx1 = b.sin;
+  const bz1 = b.cos;
+
+  const aHW = a.halfW + extraMargin;
+  const aHD = a.halfD + extraMargin;
+  const bHW = b.halfW;
+  const bHD = b.halfD;
+
+  let minOverlap = Infinity;
+  let bestAxisX = 0;
+  let bestAxisZ = 0;
+
+  // 4本の分離軸を検証（配列確保なし）
+  for (let i = 0; i < 4; i += 1) {
+    let axisX: number;
+    let axisZ: number;
+    if (i === 0) {
+      axisX = ax0;
+      axisZ = az0;
+    } else if (i === 1) {
+      axisX = ax1;
+      axisZ = az1;
+    } else if (i === 2) {
+      axisX = bx0;
+      axisZ = bz0;
+    } else {
+      axisX = bx1;
+      axisZ = bz1;
+    }
+
+    const projA =
+      aHW * Math.abs(ax0 * axisX + az0 * axisZ) +
+      aHD * Math.abs(ax1 * axisX + az1 * axisZ);
+    const projB =
+      bHW * Math.abs(bx0 * axisX + bz0 * axisZ) +
+      bHD * Math.abs(bx1 * axisX + bz1 * axisZ);
+    const centerDist = dx * axisX + dz * axisZ;
+    const overlap = projA + projB - Math.abs(centerDist);
+
+    if (overlap <= 0) {
+      return false;
+    }
+
+    if (overlap < minOverlap) {
+      minOverlap = overlap;
+      // boxB -> boxA 方向へ押し出す向きに揃える
+      if (centerDist < 0) {
+        bestAxisX = -axisX;
+        bestAxisZ = -axisZ;
+      } else {
+        bestAxisX = axisX;
+        bestAxisZ = axisZ;
+      }
+    }
+  }
+
+  out.overlapped = true;
+  out.penetration = minOverlap;
+  out.pushX = bestAxisX * minOverlap;
+  out.pushZ = bestAxisZ * minOverlap;
+  return true;
+}
+
 /** 街区レイアウトの道路・歩道定数 (160m x 160m 街区) */
 export const CITY_METRICS = {
   /** 街区全体の半幅 (160m 四方 -> 80m) */
@@ -56,6 +171,20 @@ export const CITY_METRICS = {
 export class CollisionWorld {
   private readonly colliders = new Map<string, ObbCollider>();
   public readonly worldHalfExtent: number;
+  private readonly scratchVehicleObb: ObbBox2D = {
+    cx: 0,
+    cz: 0,
+    halfW: 0.9,
+    halfD: 2.2,
+    cos: 1,
+    sin: 0,
+  };
+  private readonly scratchSep: ObbSeparationResult = {
+    overlapped: false,
+    pushX: 0,
+    pushZ: 0,
+    penetration: 0,
+  };
 
   constructor(worldHalfExtent: number = CITY_METRICS.worldHalfExtent) {
     this.worldHalfExtent = worldHalfExtent;
@@ -338,6 +467,38 @@ export class CollisionWorld {
       }
 
       if (!movedThisIter) break;
+    }
+
+    // 3-B: 車体 OBB 同士（自車 vs AI車両・駐車車両・建物）の角めり込みを防ぐ SAT 最小侵入深度分離パス
+    const vehObb = this.scratchVehicleObb;
+    vehObb.halfW = Math.max(0.4, width * 0.48);
+    vehObb.halfD = Math.max(0.4, length * 0.49);
+    vehObb.cos = fwdZ;
+    vehObb.sin = fwdX;
+    const sep = this.scratchSep;
+
+    for (let iter = 0; iter < 3; iter += 1) {
+      let separated = false;
+      vehObb.cx = cx;
+      vehObb.cz = cz;
+
+      for (const col of this.colliders.values()) {
+        if (ignoreId && col.id === ignoreId) continue;
+        if (col.maxY < 0.25) continue;
+
+        if (computeObbObbSeparation(vehObb, col, sep, 0.02)) {
+          cx += sep.pushX;
+          cz += sep.pushZ;
+          vehObb.cx = cx;
+          vehObb.cz = cz;
+          totalPushX += sep.pushX;
+          totalPushZ += sep.pushZ;
+          collided = true;
+          separated = true;
+        }
+      }
+
+      if (!separated) break;
     }
 
     const pushLen = Math.hypot(totalPushX, totalPushZ);

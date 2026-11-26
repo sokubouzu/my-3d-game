@@ -1,17 +1,19 @@
 import * as THREE from 'three';
 import type { WheelSlot } from '../vehicle/vehicleConfig';
 import type { VehicleDimensions, WheelRig } from '../vehicle/vehicleModel';
-import type { CollisionWorld } from '../world/collisionWorld';
+import type { CollisionWorld, ObbBox2D } from '../world/collisionWorld';
 import {
   sampleRoadSegment,
+  TRAFFIC_ROAD_METRICS,
   type RoadSample,
   type RoadSegment,
 } from './roadNetwork';
 import type { TrafficVehicleConfig } from './trafficConfig';
+import type { TrafficAxis, TrafficLightController } from './trafficLights';
 
 export interface TrafficObstacle {
   id: string;
-  kind: 'player' | 'drivable' | 'traffic';
+  kind: 'player' | 'pedestrian' | 'drivable' | 'traffic';
   x: number;
   z: number;
   yaw: number;
@@ -28,13 +30,25 @@ const WHEEL_SLOTS: readonly WheelSlot[] = [
   'rearRight',
 ];
 
-const DETECTION_RANGE_METERS = 16.5;
-const VEHICLE_STOP_GAP_METERS = 3.2;
-const PLAYER_STOP_GAP_METERS = 3.5;
-const ACCEL_RATE = 4.2;
-const DECEL_RATE = 9.5;
-const EMERGENCY_BRAKE_RATE = 16.5;
+/** バンパー先端基準の減速開始距離 (m) */
+const DETECTION_RANGE_METERS = 20.0;
+/** 車両同士のバンパー先端間・安全停止車間バッファ (m) — 最低 1.5m 以上を厳守 */
+const VEHICLE_STOP_GAP_METERS = 2.6;
+/** プレイヤー・AI歩行者に対するバンパー先端間・安全停止距離 (m) */
+const HUMAN_STOP_GAP_METERS = 3.2;
+/** 停止線位置 (交差点中心から 11.4m, セグメント終端 8.5m からの手前距離 = 2.9m) */
+const STOP_LINE_OFFSET_FROM_SEG_END =
+  11.4 - TRAFFIC_ROAD_METRICS.intersectionEdge;
+const STOP_LINE_BUFFER_METERS = 0.6;
+
+const ACCEL_RATE = 4.4;
+const DECEL_RATE = 10.5;
+const EMERGENCY_BRAKE_RATE = 20.0;
 const MAX_STEER_ANGLE = 0.48;
+
+/** ゼロアロケーション: 相手 OBB 9点サンプリング用スクラッチ配列 */
+const SAMPLE_PT_X = new Float64Array(9);
+const SAMPLE_PT_Z = new Float64Array(9);
 
 function normalizeAngle(rad: number): number {
   let a = rad;
@@ -43,10 +57,16 @@ function normalizeAngle(rad: number): number {
   return a;
 }
 
+function getApproachAxis(segmentId: string): TrafficAxis | null {
+  if (segmentId === 'N_IN' || segmentId === 'S_IN') return 'NS';
+  if (segmentId === 'W_IN' || segmentId === 'E_IN') return 'EW';
+  return null;
+}
+
 /**
- * 3-A: 道路ネットワーク上を日本の左側通行で自動走行する単体 AI 交通車両。
- * - 車輪回転・前輪ステアリング・前方障害物検知（プレイヤー/自車/他AI車）・車間距離維持
- * - CollisionWorld への OBB コライダー動的同期
+ * 3-A / 3-B: 道路ネットワーク上を日本の左側通行で自動走行する単体 AI 交通車両。
+ * - 車輪回転・前輪ステアリング・バンパー先端基準の前方障害物検知・信号サイクル停止
+ * - CollisionWorld への OBB コライダー動的同期および接触時 SAT 分離押し戻し対応
  */
 export class TrafficVehicle {
   public readonly config: TrafficVehicleConfig;
@@ -69,6 +89,9 @@ export class TrafficVehicle {
   private speed = 0;
   private currentSteerAngle = 0;
   private blockedTimer = 0;
+  /** 接触分離時に一時適用される横方向オフセット（滑らかにレーン復帰） */
+  private sepOffsetX = 0;
+  private sepOffsetZ = 0;
 
   private readonly sampleNow: RoadSample = {
     x: 0,
@@ -82,6 +105,7 @@ export class TrafficVehicle {
     yaw: 0,
     speedFactor: 1,
   };
+  private readonly obstacleSnapshot: TrafficObstacle;
 
   constructor(
     config: TrafficVehicleConfig,
@@ -178,11 +202,7 @@ export class TrafficVehicle {
     this.yaw = this.sampleNow.yaw;
     this.speed = config.cruiseSpeedMs * 0.6;
 
-    this.syncTransformAndCollider();
-  }
-
-  public getObstacleSnapshot(): TrafficObstacle {
-    return {
+    this.obstacleSnapshot = {
       id: this.config.id,
       kind: 'traffic',
       x: this.x,
@@ -192,13 +212,80 @@ export class TrafficVehicle {
       halfD: this.dimensions.length * 0.5,
       priority: this.priorityIndex,
     };
+
+    this.syncTransformAndCollider();
+  }
+
+  public getObstacleSnapshot(): TrafficObstacle {
+    this.obstacleSnapshot.x = this.x;
+    this.obstacleSnapshot.z = this.z;
+    this.obstacleSnapshot.yaw = this.yaw;
+    return this.obstacleSnapshot;
+  }
+
+  public fillObb(out: ObbBox2D): void {
+    out.cx = this.x;
+    out.cz = this.z;
+    out.halfW = this.dimensions.width * 0.5;
+    out.halfD = this.dimensions.length * 0.5;
+    out.cos = Math.cos(this.yaw);
+    out.sin = Math.sin(this.yaw);
+  }
+
+  /**
+   * 3-B: 車体 OBB 同士が万が一接触した際の最小侵入深度分離押し戻し。
+   * 押し戻し量に応じて位置・セグメント距離・速度を即時補正し、めり込みを確実に解消する。
+   */
+  public applySeparationPush(
+    pushX: number,
+    pushZ: number,
+    stopSpeed: boolean,
+  ): void {
+    this.x += pushX;
+    this.z += pushZ;
+
+    const fwdX = Math.sin(this.yaw);
+    const fwdZ = Math.cos(this.yaw);
+    const alongFwd = pushX * fwdX + pushZ * fwdZ;
+
+    // 進行方向と逆向きの押し戻しはセグメント距離も戻し、次フレームでの再突入を防ぐ
+    if (alongFwd < -1e-4) {
+      this.segmentDistance = Math.max(0, this.segmentDistance + alongFwd);
+      const latX = pushX - fwdX * alongFwd;
+      const latZ = pushZ - fwdZ * alongFwd;
+      this.sepOffsetX += latX;
+      this.sepOffsetZ += latZ;
+    } else {
+      this.sepOffsetX += pushX;
+      this.sepOffsetZ += pushZ;
+    }
+
+    // オフセットの上限クランプ（道路外へ飛び出しすぎないよう保護）
+    const offLen = Math.hypot(this.sepOffsetX, this.sepOffsetZ);
+    if (offLen > 2.2) {
+      const s = 2.2 / offLen;
+      this.sepOffsetX *= s;
+      this.sepOffsetZ *= s;
+    }
+
+    if (stopSpeed) {
+      this.speed = 0;
+    } else if (alongFwd < -0.01) {
+      this.speed = Math.min(this.speed, 0.5);
+    }
+
+    this.syncTransformAndCollider();
   }
 
   public getSpeedKmh(): number {
     return Math.round(this.speed * 3.6);
   }
 
-  public update(dt: number, obstacles: readonly TrafficObstacle[]): void {
+  public update(
+    dt: number,
+    obstacles: readonly TrafficObstacle[],
+    trafficLights?: TrafficLightController,
+  ): void {
     if (dt <= 0) return;
 
     // 1. 現在の目標巡航速度（カーブ・交差点で自然減速）
@@ -208,92 +295,128 @@ export class TrafficVehicle {
     let emergencyStop = false;
     let blockedOnlyByTraffic = false;
     let blockingTrafficHasHigherPriority = false;
+    let stoppedBySignal = false;
 
     const halfW = this.dimensions.width * 0.5;
     const halfL = this.dimensions.length * 0.5;
     const sinY = Math.sin(this.yaw);
     const cosY = Math.cos(this.yaw);
 
-    // 2. 前方障害物検知（歩行中プレイヤー・運転車両2台・他AI交通車両）
+    // 2. 前方障害物検知（バンパー先端基準＋安全車間バッファ >= 2.6m）
     let minGap = Infinity;
     let minStopGap = VEHICLE_STOP_GAP_METERS;
     let closestKind: TrafficObstacle['kind'] | null = null;
     let closestPriority = Infinity;
 
-    for (const obs of obstacles) {
+    for (let idx = 0; idx < obstacles.length; idx += 1) {
+      const obs = obstacles[idx];
       if (obs.id === this.config.id) continue;
 
       const dx = obs.x - this.x;
       const dz = obs.z - this.z;
       const approxDistSq = dx * dx + dz * dz;
-      const maxCheck = DETECTION_RANGE_METERS + halfL + obs.halfD + 2.0;
+      const maxCheck = DETECTION_RANGE_METERS + halfL + obs.halfD + 2.5;
       if (approxDistSq > maxCheck * maxCheck) continue;
 
-      const lateralMargin = obs.kind === 'player' ? 0.95 : 0.52;
+      const isHuman = obs.kind === 'player' || obs.kind === 'pedestrian';
+      const lateralMargin = isHuman ? 0.95 : 0.62;
       const corridorHalfW = halfW + lateralMargin;
 
-      // 相手 OBB の中心 + 4隅を自車ローカル座標系（+Z = 前方, +X = 左）へ変換
+      // 相手 OBB の 9 点（中心 + 4隅 + 前後左右4辺中点）をゼロアロケーションで算出
       const oCos = Math.cos(obs.yaw);
       const oSin = Math.sin(obs.yaw);
-      const cornersX = [
-        obs.x,
-        obs.x + obs.halfW * oCos + obs.halfD * oSin,
-        obs.x - obs.halfW * oCos + obs.halfD * oSin,
-        obs.x + obs.halfW * oCos - obs.halfD * oSin,
-        obs.x - obs.halfW * oCos - obs.halfD * oSin,
-      ];
-      const cornersZ = [
-        obs.z,
-        obs.z - obs.halfW * oSin + obs.halfD * oCos,
-        obs.z + obs.halfW * oSin + obs.halfD * oCos,
-        obs.z - obs.halfW * oSin - obs.halfD * oCos,
-        obs.z + obs.halfW * oSin - obs.halfD * oCos,
-      ];
+      const wx = obs.halfW * oCos;
+      const wz = -obs.halfW * oSin;
+      const fx = obs.halfD * oSin;
+      const fz = obs.halfD * oCos;
+
+      SAMPLE_PT_X[0] = obs.x;
+      SAMPLE_PT_Z[0] = obs.z;
+      SAMPLE_PT_X[1] = obs.x + wx + fx;
+      SAMPLE_PT_Z[1] = obs.z + wz + fz;
+      SAMPLE_PT_X[2] = obs.x - wx + fx;
+      SAMPLE_PT_Z[2] = obs.z - wz + fz;
+      SAMPLE_PT_X[3] = obs.x + wx - fx;
+      SAMPLE_PT_Z[3] = obs.z + wz - fz;
+      SAMPLE_PT_X[4] = obs.x - wx - fx;
+      SAMPLE_PT_Z[4] = obs.z - wz - fz;
+      SAMPLE_PT_X[5] = obs.x + fx;
+      SAMPLE_PT_Z[5] = obs.z + fz;
+      SAMPLE_PT_X[6] = obs.x - fx;
+      SAMPLE_PT_Z[6] = obs.z - fz;
+      SAMPLE_PT_X[7] = obs.x + wx;
+      SAMPLE_PT_Z[7] = obs.z + wz;
+      SAMPLE_PT_X[8] = obs.x - wx;
+      SAMPLE_PT_Z[8] = obs.z - wz;
 
       let bestLocalGap = Infinity;
-      for (let i = 0; i < 5; i += 1) {
-        const rx = cornersX[i] - this.x;
-        const rz = cornersZ[i] - this.z;
+      for (let i = 0; i < 9; i += 1) {
+        const rx = SAMPLE_PT_X[i] - this.x;
+        const rz = SAMPLE_PT_Z[i] - this.z;
         // 自車前方ベクトル (sinY, cosY) / 自車左ベクトル (cosY, -sinY)
         const forwardDist = rx * sinY + rz * cosY;
         const lateralDist = rx * cosY - rz * sinY;
 
-        if (Math.abs(lateralDist) <= corridorHalfW && forwardDist > 0.2) {
-          const gap = forwardDist - halfL;
-          if (gap < bestLocalGap) {
-            bestLocalGap = gap;
+        // 自車中心よりやや後方 (-halfL*0.4) まで許容し、バンパー接触・重なり直前を絶対に見落とさない
+        if (Math.abs(lateralDist) <= corridorHalfW && forwardDist > -halfL * 0.4) {
+          const bumperGap = forwardDist - halfL;
+          if (bumperGap < bestLocalGap) {
+            bestLocalGap = bumperGap;
           }
         }
       }
 
       if (bestLocalGap < DETECTION_RANGE_METERS && bestLocalGap < minGap) {
         minGap = bestLocalGap;
-        minStopGap =
-          obs.kind === 'player'
-            ? PLAYER_STOP_GAP_METERS
-            : VEHICLE_STOP_GAP_METERS;
+        minStopGap = isHuman ? HUMAN_STOP_GAP_METERS : VEHICLE_STOP_GAP_METERS;
         closestKind = obs.kind;
         closestPriority = obs.priority ?? Infinity;
       }
     }
 
-    // 3. 中央交差点への進入前譲り合い判定（交差方向に他車両が進入中なら停止線手前で待機）
+    // 3. 信号サイクル連動（赤信号・黄信号のときは交差点手前の停止線 11.4m で完全停止）
     const remaining = this.currentSegment.totalLength - this.segmentDistance;
-    if (
-      this.currentSegment.kind === 'straight' &&
-      this.currentSegment.id.endsWith('_IN') &&
-      remaining < 7.5
-    ) {
-      for (const obs of obstacles) {
-        if (obs.id === this.config.id) continue;
-        if (Math.abs(obs.x) < 6.8 && Math.abs(obs.z) < 6.8) {
-          // 既に交差点内にいる車両またはプレイヤーがいれば停止線手前で減速・停止
-          const stopLineGap = Math.max(0, remaining - halfL - 0.8);
-          if (stopLineGap < minGap) {
-            minGap = stopLineGap;
-            minStopGap = 1.2;
-            closestKind = obs.kind;
-            closestPriority = obs.priority ?? Infinity;
+    const approachAxis =
+      this.currentSegment.kind === 'straight'
+        ? getApproachAxis(this.currentSegment.id)
+        : null;
+
+    if (approachAxis && trafficLights) {
+      const signal = trafficLights.getVehicleSignal(approachAxis);
+      if (signal === 'red' || signal === 'yellow') {
+        // 前バンパー先端から停止線までの距離
+        const bumperToStopLine =
+          remaining - STOP_LINE_OFFSET_FROM_SEG_END - halfL;
+        // まだ停止線を越えていない場合のみ停止線手前で停止（進入済みはそのまま通過）
+        if (bumperToStopLine > -0.35 && bumperToStopLine < DETECTION_RANGE_METERS) {
+          const gap = Math.max(0, bumperToStopLine);
+          if (gap < minGap) {
+            minGap = gap;
+            minStopGap = STOP_LINE_BUFFER_METERS;
+            closestKind = null;
+            stoppedBySignal = true;
+          }
+        }
+      }
+    }
+
+    // 4. 中央交差点への進入前譲り合い判定（青でも交差点内に交差車両・歩行者が残っていれば待機）
+    if (approachAxis && remaining < 9.5) {
+      const bumperToStopLine =
+        remaining - STOP_LINE_OFFSET_FROM_SEG_END - halfL;
+      if (bumperToStopLine > -0.25) {
+        for (let idx = 0; idx < obstacles.length; idx += 1) {
+          const obs = obstacles[idx];
+          if (obs.id === this.config.id) continue;
+          if (Math.abs(obs.x) < 7.2 && Math.abs(obs.z) < 7.2) {
+            const stopLineGap = Math.max(0, bumperToStopLine);
+            if (stopLineGap < minGap) {
+              minGap = stopLineGap;
+              minStopGap = STOP_LINE_BUFFER_METERS;
+              closestKind = obs.kind;
+              closestPriority = obs.priority ?? Infinity;
+              stoppedBySignal = false;
+            }
           }
         }
       }
@@ -306,27 +429,38 @@ export class TrafficVehicle {
       } else {
         const ratio =
           (minGap - minStopGap) / (DETECTION_RANGE_METERS - minStopGap);
-        targetSpeed = Math.min(targetSpeed, baseTargetSpeed * ratio);
+        // 二次カーブ寄りの滑らかな減速（近距離で早めに速度を落とす）
+        const curved = ratio * (0.45 + 0.55 * ratio);
+        targetSpeed = Math.min(targetSpeed, baseTargetSpeed * curved);
+        if (minGap < minStopGap + 1.6) {
+          emergencyStop = true;
+        }
       }
 
-      if (closestKind === 'traffic') {
+      if (closestKind === 'traffic' && !stoppedBySignal) {
         blockedOnlyByTraffic = true;
         blockingTrafficHasHigherPriority = closestPriority < this.priorityIndex;
       }
     }
 
-    // 4. 交差点等での AI 同士デッドロック防止（プレイヤー・自車が前方にいない場合のみ）
-    if (targetSpeed < 0.3 && blockedOnlyByTraffic) {
+    // 5. 交差点等での AI 同士デッドロック防止
+    //    ※ 信号停止中や、バンパー間が安全車間以下のときは絶対に前進させない（めり込み防止）
+    if (
+      targetSpeed < 0.3 &&
+      blockedOnlyByTraffic &&
+      !stoppedBySignal &&
+      minGap > VEHICLE_STOP_GAP_METERS + 0.3
+    ) {
       this.blockedTimer += dt;
-      if (this.blockedTimer > 3.2 && !blockingTrafficHasHigherPriority) {
-        targetSpeed = baseTargetSpeed * 0.45;
+      if (this.blockedTimer > 3.5 && !blockingTrafficHasHigherPriority) {
+        targetSpeed = baseTargetSpeed * 0.4;
         emergencyStop = false;
       }
     } else {
       this.blockedTimer = 0;
     }
 
-    // 5. 滑らかな加減速
+    // 6. 滑らかな加減速
     if (this.speed < targetSpeed) {
       this.speed = Math.min(targetSpeed, this.speed + ACCEL_RATE * dt);
     } else if (this.speed > targetSpeed) {
@@ -334,16 +468,22 @@ export class TrafficVehicle {
       this.speed = Math.max(targetSpeed, this.speed - rate * dt);
     }
 
-    // 6. 道路セグメント上を前進・次セグメントへ遷移
+    // 7. 道路セグメント上を前進・次セグメントへ遷移
     const travel = this.speed * dt;
     if (travel > 1e-6) {
       this.advanceAlongNetwork(travel);
+      // 走行中に分離オフセットを滑らかにレーン中心へ復帰
+      const decay = Math.exp(-3.2 * dt);
+      this.sepOffsetX *= decay;
+      this.sepOffsetZ *= decay;
+      if (Math.abs(this.sepOffsetX) < 0.005) this.sepOffsetX = 0;
+      if (Math.abs(this.sepOffsetZ) < 0.005) this.sepOffsetZ = 0;
     }
 
-    // 7. 現在位置・向き・先読みステアリング角を更新
+    // 8. 現在位置・向き・先読みステアリング角を更新
     sampleRoadSegment(this.currentSegment, this.segmentDistance, this.sampleNow);
-    this.x = this.sampleNow.x;
-    this.z = this.sampleNow.z;
+    this.x = this.sampleNow.x + this.sepOffsetX;
+    this.z = this.sampleNow.z + this.sepOffsetZ;
 
     // 向きを滑らかに補間（セグメント継ぎ目の急変を防ぐ）
     const yawDiff = normalizeAngle(this.sampleNow.yaw - this.yaw);
@@ -361,7 +501,7 @@ export class TrafficVehicle {
     this.currentSteerAngle +=
       (targetSteer - this.currentSteerAngle) * Math.min(1, dt * 9.0);
 
-    // 8. 4輪回転＆前輪ステアリング反映
+    // 9. 4輪回転＆前輪ステアリング反映
     const spinDelta = travel / this.avgWheelRadius;
     for (const slot of WHEEL_SLOTS) {
       const w = this.wheels[slot];
@@ -372,7 +512,7 @@ export class TrafficVehicle {
       w.spinPivot.rotation.x += spinDelta;
     }
 
-    // 9. メッシュ Transform & OBB コライダー同期
+    // 10. メッシュ Transform & OBB コライダー同期
     this.syncTransformAndCollider();
   }
 

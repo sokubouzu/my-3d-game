@@ -27,10 +27,16 @@ import {
 } from '../vehicle';
 import {
   TRAFFIC_VEHICLE_CONFIGS,
+  TrafficLightController,
   TrafficManager,
   type TrafficObstacle,
   type TrafficStatus,
 } from '../traffic';
+import {
+  PEDESTRIAN_CONFIGS,
+  PedestrianManager,
+  type PedestrianStatus,
+} from '../pedestrians';
 
 export type ControlMode = 'foot' | 'vehicle';
 
@@ -66,6 +72,9 @@ export interface EngineStatus {
   drivableVehicleTotal: number;
   trafficLoadedCount: number;
   trafficTotalCount: number;
+  pedestrianLoadedCount: number;
+  pedestrianTotalCount: number;
+  trafficLightLabel: string;
 }
 
 export interface GameEngineHandle {
@@ -183,8 +192,19 @@ export function startGameEngine(
     totalCount: TRAFFIC_VEHICLE_CONFIGS.length,
     failedCount: 0,
   };
+  let pedestrianStatus: PedestrianStatus = {
+    loadedCount: 0,
+    totalCount: PEDESTRIAN_CONFIGS.length,
+    failed: false,
+  };
+  const drivableObstaclesPool: TrafficObstacle[] = [];
   const drivableObstacles: TrafficObstacle[] = [];
+  const pedestrianObstacles: TrafficObstacle[] = [];
+  const allVehicleObstacles: TrafficObstacle[] = [];
   const tempVehiclePos = new THREE.Vector3();
+
+  // 3-B: 日本式交差点信号機（4隅設置・青/黄/赤サイクル制御）
+  const trafficLights = new TrafficLightController(scene, collisionWorld);
 
   let rafId = 0;
   let frameCount = 0;
@@ -260,6 +280,9 @@ export function startGameEngine(
       drivableVehicleTotal: DRIVABLE_VEHICLES.length,
       trafficLoadedCount: trafficStatus.loadedCount,
       trafficTotalCount: trafficStatus.totalCount,
+      pedestrianLoadedCount: pedestrianStatus.loadedCount,
+      pedestrianTotalCount: pedestrianStatus.totalCount,
+      trafficLightLabel: trafficLights.getHudLabel(),
     });
   };
 
@@ -303,6 +326,15 @@ export function startGameEngine(
         loadedVehicles.push(vehicle);
         scene.add(vehicle.root);
         vehicleControllers.push(new VehicleController(vehicle, collisionWorld));
+        drivableObstaclesPool.push({
+          id: vehicleConfig.id,
+          kind: 'drivable',
+          x: vehicle.root.position.x,
+          z: vehicle.root.position.z,
+          yaw: vehicle.root.rotation.y,
+          halfW: vehicle.dimensions.width * 0.5,
+          halfD: vehicle.dimensions.length * 0.5,
+        });
         emitStatus();
       })
       .catch((err: unknown) => {
@@ -316,13 +348,24 @@ export function startGameEngine(
       });
   }
 
-  // 3-A: AI 交通車両4台（日本の左側通行・自動走行・前方衝突回避・OBBコライダー）
+  // 3-A / 3-B: AI 交通車両4台（左側通行・バンパー基準車間維持・信号停止・OBB分離）
   const trafficManager = new TrafficManager(
     scene,
     collisionWorld,
     maxAnisotropy,
     (nextTrafficStatus) => {
       trafficStatus = nextTrafficStatus;
+      emitStatus();
+    },
+  );
+
+  // 3-B: 歩道および横断歩道を歩く AI 歩行者6人（SkeletonUtils.clone + 独立 AnimationMixer + 信号連動）
+  const pedestrianManager = new PedestrianManager(
+    scene,
+    collisionWorld,
+    maxAnisotropy,
+    (nextPedStatus) => {
+      pedestrianStatus = nextPedStatus;
       emitStatus();
     },
   );
@@ -488,25 +531,52 @@ export function startGameEngine(
       }
     }
 
-    // 3-A: AI 交通車両の自動走行・前方検知（プレイヤー・運転車両2台・他AI車両）更新
+    // 3-B: 交差点信号サイクル更新（青 -> 黄 -> 赤）
+    trafficLights.update(dt);
+
+    // 3-A / 3-B: AI 交通車両・AI 歩行者の相互連携更新（ゼロアロケーション）
+    const footPlayerPos =
+      controlMode === 'foot' && playerController ? playerPos : null;
+
     drivableObstacles.length = 0;
-    for (const vc of vehicleControllers) {
+    for (let i = 0; i < vehicleControllers.length; i += 1) {
+      const vc = vehicleControllers[i];
       vc.getPosition(tempVehiclePos);
       const dims = vc.getDimensions();
-      drivableObstacles.push({
-        id: vc.getId(),
-        kind: 'drivable',
-        x: tempVehiclePos.x,
-        z: tempVehiclePos.z,
-        yaw: vc.getYaw(),
-        halfW: dims.width * 0.5,
-        halfD: dims.length * 0.5,
-      });
+      const slot = drivableObstaclesPool[i];
+      if (slot) {
+        slot.id = vc.getId();
+        slot.x = tempVehiclePos.x;
+        slot.z = tempVehiclePos.z;
+        slot.yaw = vc.getYaw();
+        slot.halfW = dims.width * 0.5;
+        slot.halfD = dims.length * 0.5;
+        drivableObstacles.push(slot);
+      }
     }
+
+    pedestrianObstacles.length = 0;
+    pedestrianManager.appendPedestrianObstacles(pedestrianObstacles);
+
     trafficManager.update(
       dt,
-      controlMode === 'foot' && playerController ? playerPos : null,
+      footPlayerPos,
       drivableObstacles,
+      pedestrianObstacles,
+      trafficLights,
+    );
+
+    allVehicleObstacles.length = 0;
+    for (let i = 0; i < drivableObstacles.length; i += 1) {
+      allVehicleObstacles.push(drivableObstacles[i]);
+    }
+    trafficManager.appendVehicleObstacles(allVehicleObstacles);
+
+    pedestrianManager.update(
+      dt,
+      footPlayerPos,
+      allVehicleObstacles,
+      trafficLights,
     );
 
     // リアルタイムシャドウカメラを操作対象（プレイヤーまたは運転中の車両）周囲へ追従させる
@@ -591,7 +661,9 @@ export function startGameEngine(
       }
       playerController = null;
 
+      pedestrianManager.dispose();
       trafficManager.dispose();
+      trafficLights.dispose();
 
       for (const vcConfig of DRIVABLE_VEHICLES) {
         collisionWorld.removeCollider(vcConfig.id);
@@ -602,6 +674,7 @@ export function startGameEngine(
       }
       loadedVehicles.length = 0;
       vehicleControllers.length = 0;
+      drivableObstaclesPool.length = 0;
       activeVehicle = null;
       nearbyVehicle = null;
 
