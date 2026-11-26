@@ -18,6 +18,11 @@ import {
   buildJapaneseCity,
   type CityBuildProgress,
 } from '../world/cityBuilder';
+import { StreetLightSystem } from '../world/streetLights';
+import {
+  TimeOfDayController,
+  type TimeOfDayMode,
+} from '../world/timeOfDay';
 import {
   DRIVABLE_VEHICLES,
   VehicleController,
@@ -85,6 +90,7 @@ export interface EngineStatus {
   trafficLightLabel: string;
   audioMuted: boolean;
   audioUnlocked: boolean;
+  timeOfDay: TimeOfDayMode;
 }
 
 export interface GameEngineHandle {
@@ -97,6 +103,7 @@ export interface GameEngineHandle {
   setTouchVehicleThrottle: (throttle: number) => void;
   setTouchVehicleBrake: (brake: number) => void;
   cycleVehicleSpeedMode: () => DriveSpeedMode | null;
+  cycleTimeOfDay: () => TimeOfDayMode;
   getMinimapSnapshot: (out: MinimapSnapshot) => void;
   unlockAudio: () => void;
   toggleAudioMute: () => boolean;
@@ -220,6 +227,27 @@ export function startGameEngine(
   // 3-B: 日本式交差点信号機（4隅設置・青/黄/赤サイクル制御）
   const trafficLights = new TrafficLightController(scene, collisionWorld);
 
+  // 3-G: 街灯システム（14基＋中央交差点代表光源1基、castShadow=false）
+  const streetLights = new StreetLightSystem(scene, collisionWorld);
+
+  // 3-G: プレイヤー運転車両の前方路面照射用 SpotLight（常設・影オフ・強度0で消灯しシェーダ再コンパイル回避）
+  const playerHeadlightSpot = new THREE.SpotLight(
+    0xfff4dd,
+    0,
+    46,
+    Math.PI * 0.25,
+    0.62,
+    1.5,
+  );
+  playerHeadlightSpot.castShadow = false;
+  scene.add(playerHeadlightSpot);
+  scene.add(playerHeadlightSpot.target);
+
+  const sunOffsetScratch = new THREE.Vector3(18, 30, 14);
+  const headlightOriginScratch = new THREE.Vector3();
+  const headlightTargetScratch = new THREE.Vector3();
+  let timeOfDayController: TimeOfDayController | null = null;
+
   // 3-D: iPad Safari 対応 Web Audio 音響エンジン（ゼロアロケーション更新用フレームを事前確保）
   const vehicleAudioFrame: VehicleAudioFrame = {
     isDriving: false,
@@ -320,14 +348,24 @@ export function startGameEngine(
       trafficLightLabel: trafficLights.getHudLabel(),
       audioMuted,
       audioUnlocked,
+      timeOfDay: timeOfDayController?.getMode() ?? 'day',
     });
   };
 
   // 1-E: Poly Haven 1K PBR (asphalt_01 / concrete_pavement / HDRI) + 日本の街区地面・交差点
   const cityEnv = createCityEnvironment(scene, renderer, (nextEnvStatus) => {
     envStatus = nextEnvStatus;
+    timeOfDayController?.syncBackgroundVisibility(cityEnv.hasLoadedHdri());
     emitStatus();
   });
+
+  // 3-G: 昼・夕方・夜の時間帯切替コントローラー
+  timeOfDayController = new TimeOfDayController(scene, dirLight, hemiLight, {
+    setDayHdriBackgroundVisible: (visible) => {
+      cityEnv.setDayHdriBackgroundVisible(visible);
+    },
+  });
+  timeOfDayController.syncBackgroundVisibility(cityEnv.hasLoadedHdri());
 
   // 1-D: 承認済み単体 GLB モデルの街区配置 & OBB コライダー構築
   const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
@@ -341,7 +379,7 @@ export function startGameEngine(
     },
   );
 
-  // 2-A / 2-B / 2-C: 運転可能な全車両（Innova + Porsche 911 Turbo）をロード＆ OBB コライダー・VehicleController 構築
+  // 2-A / 2-B / 2-C: 運転可能な全車両（Innova + Porsche 911 Turbo + Harley Bike）をロード＆ OBB コライダー・VehicleController 構築
   for (const vehicleConfig of DRIVABLE_VEHICLES) {
     collisionWorld.upsertCollider(
       vehicleConfig.id,
@@ -362,7 +400,9 @@ export function startGameEngine(
         }
         loadedVehicles.push(vehicle);
         scene.add(vehicle.root);
-        vehicleControllers.push(new VehicleController(vehicle, collisionWorld));
+        const vc = new VehicleController(vehicle, collisionWorld);
+        vc.setLightsIntensity(timeOfDayController?.getHeadlightFactor() ?? 0);
+        vehicleControllers.push(vc);
         drivableObstaclesPool.push({
           id: vehicleConfig.id,
           kind: 'drivable',
@@ -677,8 +717,61 @@ export function startGameEngine(
       trafficLights,
     );
 
+    // 3-G: 時間帯トランジション・街灯・信号・建物窓・車両ヘッドライト＆前方SpotLight更新
+    if (timeOfDayController) {
+      timeOfDayController.update(dt, camera.position);
+      const nightFactor = timeOfDayController.getNightFactor();
+      const headlightFactor = timeOfDayController.getHeadlightFactor();
+
+      streetLights.setNightFactor(nightFactor);
+      trafficLights.setNightFactor(nightFactor);
+      cityBuilder.setNightFactor(nightFactor);
+      trafficManager.setLightsIntensity(headlightFactor);
+      for (let i = 0; i < vehicleControllers.length; i += 1) {
+        vehicleControllers[i].setLightsIntensity(headlightFactor);
+      }
+
+      if (
+        controlMode === 'vehicle' &&
+        activeVehicle &&
+        headlightFactor > 0.01
+      ) {
+        const dims = activeVehicle.getDimensions();
+        const isBike = activeVehicle.getType() === 'bike';
+        const bodyGroup = activeVehicle.getBodyGroup();
+        bodyGroup.updateMatrixWorld();
+
+        headlightOriginScratch.set(
+          0,
+          isBike ? dims.height * 0.65 : dims.height * 0.45,
+          isBike ? dims.length * 0.42 : dims.length * 0.49,
+        );
+        bodyGroup.localToWorld(headlightOriginScratch);
+
+        headlightTargetScratch.set(
+          0,
+          0.08,
+          dims.length * 0.5 + (isBike ? 14 : 17),
+        );
+        bodyGroup.localToWorld(headlightTargetScratch);
+
+        playerHeadlightSpot.position.copy(headlightOriginScratch);
+        playerHeadlightSpot.target.position.copy(headlightTargetScratch);
+        playerHeadlightSpot.target.updateMatrixWorld();
+        playerHeadlightSpot.intensity = headlightFactor * (isBike ? 48 : 74);
+      } else {
+        playerHeadlightSpot.intensity = 0;
+      }
+
+      timeOfDayController.getSunOffset(sunOffsetScratch);
+    }
+
     // リアルタイムシャドウカメラを操作対象（プレイヤーまたは運転中の車両）周囲へ追従させる
-    dirLight.position.set(focusPos.x + 18, focusPos.y + 30, focusPos.z + 14);
+    dirLight.position.set(
+      focusPos.x + sunOffsetScratch.x,
+      focusPos.y + sunOffsetScratch.y,
+      focusPos.z + sunOffsetScratch.z,
+    );
     dirLight.target.position.copy(focusPos);
     dirLight.target.updateMatrixWorld();
 
@@ -757,6 +850,11 @@ export function startGameEngine(
       emitStatus();
       return next;
     },
+    cycleTimeOfDay: () => {
+      const next = timeOfDayController?.cycleMode() ?? 'day';
+      emitStatus();
+      return next;
+    },
     getMinimapSnapshot: (out: MinimapSnapshot) => {
       if (controlMode === 'vehicle' && activeVehicle) {
         activeVehicle.getPosition(minimapPosScratch);
@@ -826,6 +924,11 @@ export function startGameEngine(
       pedestrianManager.dispose();
       trafficManager.dispose();
       trafficLights.dispose();
+      streetLights.dispose();
+      timeOfDayController?.dispose();
+      timeOfDayController = null;
+      scene.remove(playerHeadlightSpot);
+      scene.remove(playerHeadlightSpot.target);
 
       for (const vcConfig of DRIVABLE_VEHICLES) {
         collisionWorld.removeCollider(vcConfig.id);

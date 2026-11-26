@@ -5,6 +5,7 @@ import {
   type HeroVehicleConfig,
   type WheelSlot,
 } from './vehicleConfig';
+import { createVehicleLightRig } from './vehicleLights';
 
 export interface WheelRig {
   slot: WheelSlot;
@@ -55,6 +56,8 @@ export interface LoadedHeroVehicle {
   addWheelSpin: (deltaRadians: number) => void;
   /** 車体のロール角（バンク演出、rad: 負=左傾き / 正=右傾き）を更新 */
   setLeanRoll: (radians: number) => void;
+  /** ヘッドライト・テールランプの発光強度を更新（0=消灯, 0.8=夕方, 1.0=夜） */
+  setLightsIntensity: (factor: number) => void;
   /** リソース破棄 */
   dispose: () => void;
 }
@@ -148,6 +151,10 @@ export async function loadHeroVehicle(
     length: scaledSize.z,
   };
 
+  // 3-G: ヘッドライト・テールランプ発光リグ（bodyGroup にアタッチしてバイクバンクにも追従）
+  const lightRig = createVehicleLightRig(config.type, dimensions);
+  bodyGroup.add(lightRig.group);
+
   const tempSteerQuat = new THREE.Quaternion();
 
   const setSteerAngle = (radians: number): void => {
@@ -181,7 +188,14 @@ export async function loadHeroVehicle(
     bodyGroup.rotation.z = radians;
   };
 
+  const setLightsIntensity = (factor: number): void => {
+    lightRig.setIntensity(factor);
+  };
+
   const dispose = (): void => {
+    bodyGroup.remove(lightRig.group);
+    lightRig.dispose();
+
     const disposedGeometries = new Set<THREE.BufferGeometry>();
     const disposedMaterials = new Set<THREE.Material>();
     const disposedTextures = new Set<THREE.Texture>();
@@ -227,6 +241,7 @@ export async function loadHeroVehicle(
     setSteerAngle,
     addWheelSpin,
     setLeanRoll,
+    setLightsIntensity,
     dispose,
   };
 }

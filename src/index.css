@@ -364,6 +364,61 @@ body,
   pointer-events: none;
 }
 
+/* --- 3-G: 画面上部（スピーカーボタン左隣）ワンタップ時間帯切替ボタン --- */
+.time-of-day-btn {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  right: calc(env(safe-area-inset-right, 0px) + 218px);
+  z-index: 32;
+  height: 44px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(148, 163, 184, 0.55);
+  background: rgba(15, 23, 42, 0.76);
+  color: #f8fafc;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.36);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition: transform 0.08s ease, background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+
+.time-of-day-btn:active {
+  transform: scale(0.93);
+}
+
+.time-of-day-btn.is-time-day {
+  background: rgba(14, 116, 144, 0.78);
+  border-color: rgba(125, 211, 252, 0.82);
+  color: #fef3c7;
+}
+
+.time-of-day-btn.is-time-sunset {
+  background: rgba(154, 52, 18, 0.8);
+  border-color: rgba(251, 146, 60, 0.88);
+  color: #ffedd5;
+}
+
+.time-of-day-btn.is-time-night {
+  background: rgba(30, 27, 75, 0.84);
+  border-color: rgba(129, 140, 248, 0.85);
+  color: #e0e7ff;
+}
+
+.time-of-day-label {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  pointer-events: none;
+}
+
 /* --- 3-D: 画面上部（ミニマップ左隣）ワンタップ音声ミュートボタン --- */
 .audio-mute-btn {
   position: fixed;

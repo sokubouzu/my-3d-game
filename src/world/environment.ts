@@ -13,6 +13,8 @@ export interface EnvironmentStatus {
 
 export interface CityEnvironmentHandle {
   status: EnvironmentStatus;
+  setDayHdriBackgroundVisible: (visible: boolean) => void;
+  hasLoadedHdri: () => boolean;
   dispose: () => void;
 }
 
@@ -75,11 +77,15 @@ export function createCityEnvironment(
     0.04,
   );
   roomEnv.dispose();
+  let loadedHdriTexture: THREE.Texture | null = null;
+  let allowDayHdriBg = true;
+  const fallbackBgColor = new THREE.Color(0x9ec4e6);
+
   scene.environment = currentEnvTarget.texture;
-  scene.background = new THREE.Color(0x9ec4e6);
+  scene.background = fallbackBgColor;
   scene.fog = new THREE.Fog(0xb8d4eb, 55, 195);
 
-  // プロシージャル青空スカイドーム (HDRI ロード前または失敗時の自然な空)
+  // プロシージャル青空スカイドーム (TimeOfDayController 側でシェーダ空を描画するため初期非表示)
   const skyDomeGeo = new THREE.SphereGeometry(185, 24, 16);
   const skyDomeTex = createProceduralSkyTexture();
   const skyDomeMat = new THREE.MeshBasicMaterial({
@@ -89,6 +95,7 @@ export function createCityEnvironment(
     fog: false,
   });
   const skyDome = new THREE.Mesh(skyDomeGeo, skyDomeMat);
+  skyDome.visible = false;
   envGroup.add(skyDome);
   disposableGeometries.push(skyDomeGeo);
   disposableMaterials.push(skyDomeMat);
@@ -308,8 +315,11 @@ export function createCityEnvironment(
       const prevEnvTarget = currentEnvTarget;
       currentEnvTarget = nextEnvTarget;
 
+      loadedHdriTexture = hdrTexture;
       scene.environment = currentEnvTarget.texture;
-      scene.background = hdrTexture;
+      if (allowDayHdriBg) {
+        scene.background = hdrTexture;
+      }
       skyDome.visible = false;
 
       disposableTextures.push(hdrTexture);
@@ -326,8 +336,16 @@ export function createCityEnvironment(
 
   return {
     status,
+    setDayHdriBackgroundVisible: (visible: boolean) => {
+      allowDayHdriBg = visible;
+      if (visible && loadedHdriTexture) {
+        scene.background = loadedHdriTexture;
+      }
+    },
+    hasLoadedHdri: () => loadedHdriTexture !== null,
     dispose: () => {
       isDisposed = true;
+      loadedHdriTexture = null;
       scene.remove(envGroup);
       currentEnvTarget.dispose();
       pmremGenerator.dispose();

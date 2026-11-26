@@ -107,6 +107,14 @@ export class VehicleController {
     return this.vehicle.riderAnchor;
   }
 
+  public getBodyGroup(): THREE.Group {
+    return this.vehicle.bodyGroup;
+  }
+
+  public setLightsIntensity(factor: number): void {
+    this.vehicle.setLightsIntensity(factor);
+  }
+
   public getRiderMount(): BikeRiderMountConfig | null {
     return this.vehicle.config.riderMount ?? null;
   }

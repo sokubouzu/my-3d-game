@@ -70,6 +70,7 @@ export class TrafficManager {
 
   private failedCount = 0;
   private isDisposed = false;
+  private currentLightFactor = 0;
 
   constructor(
     scene: THREE.Scene,
@@ -94,6 +95,15 @@ export class TrafficManager {
       totalCount: this.configs.length,
       failedCount: this.failedCount,
     };
+  }
+
+  public setLightsIntensity(factor: number): void {
+    const clamped = Math.max(0, Math.min(1, factor));
+    if (Math.abs(clamped - this.currentLightFactor) < 0.005) return;
+    this.currentLightFactor = clamped;
+    for (let i = 0; i < this.vehicles.length; i += 1) {
+      this.vehicles[i].setLightsIntensity(clamped);
+    }
   }
 
   /** AI歩行者などが参照するための AI 交通車両スナップショットを out へ追記（ゼロアロケーション） */
@@ -141,6 +151,7 @@ export class TrafficManager {
             this.collisionWorld,
             this.maxAnisotropy,
           );
+          vehicle.setLightsIntensity(this.currentLightFactor);
           this.vehicles.push(vehicle);
           this.scene.add(vehicle.root);
           this.emitStatus();
@@ -255,6 +266,7 @@ export class TrafficManager {
     this.isDisposed = true;
 
     for (const tv of this.vehicles) {
+      tv.disposeLights();
       this.collisionWorld.removeCollider(tv.config.id);
       this.scene.remove(tv.root);
     }

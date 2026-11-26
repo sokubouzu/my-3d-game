@@ -15,10 +15,21 @@ export interface CityBuildProgress {
 
 export interface CityBuilderHandle {
   group: THREE.Group;
+  setNightFactor: (factor: number) => void;
   dispose: () => void;
 }
 
 const MAX_CONCURRENT_LOADS = 3;
+const WINDOW_MATERIAL_PATTERN = /(window|glass|cristal|ventana|vitre|shoji)/i;
+const WARM_WINDOW_EMISSIVE = new THREE.Color(0xffcc7a);
+const UNLIT_EMISSIVE = new THREE.Color(0x000000);
+
+interface TrackedEmissiveMaterial {
+  mat: THREE.MeshStandardMaterial;
+  kind: 'window' | 'nativeEmissive';
+  baseEmissive: THREE.Color;
+  baseIntensity: number;
+}
 
 /**
  * 1-D: 承認済み GLB アセットをバウンディングボックス自動スケーリング＆接地（Y=0 / 歩道高）で
@@ -45,6 +56,28 @@ export function buildJapaneseCity(
   // 同一 URL の GLB を重複ダウンロードしないためのテンプレート Promise キャッシュ
   const templatePromises = new Map<string, Promise<THREE.Group>>();
   const loadedTemplates: THREE.Group[] = [];
+  const trackedEmissives: TrackedEmissiveMaterial[] = [];
+  const trackedMatSet = new Set<THREE.Material>();
+  let currentNightFactor = 0;
+
+  const applyNightFactorToMaterial = (
+    entry: TrackedEmissiveMaterial,
+    factor: number,
+  ): void => {
+    if (entry.kind === 'window') {
+      if (factor > 0.03) {
+        entry.mat.emissive.copy(WARM_WINDOW_EMISSIVE);
+        entry.mat.emissiveIntensity = factor * 0.88;
+      } else {
+        entry.mat.emissive.copy(UNLIT_EMISSIVE);
+        entry.mat.emissiveIntensity = 0;
+      }
+    } else {
+      entry.mat.emissive.copy(entry.baseEmissive);
+      entry.mat.emissiveIntensity =
+        entry.baseIntensity * (0.45 + factor * 1.95);
+    }
+  };
 
   const emitProgress = () => {
     if (isDisposed || !onProgress) return;
@@ -79,13 +112,16 @@ export function buildJapaneseCity(
     (a, b) => a.priority - b.priority,
   );
 
-  const loadTemplate = (url: string): Promise<THREE.Group> => {
+  const loadTemplate = (
+    url: string,
+    category: CityAssetPlacement['category'],
+  ): Promise<THREE.Group> => {
     const existing = templatePromises.get(url);
     if (existing) return existing;
 
     const promise = gltfLoader.loadAsync(url).then((gltf) => {
       const root = gltf.scene;
-      // テクスチャ異方性とミップマップ設定を M1 iPad Air 向けに最適化
+      // テクスチャ異方性とミップマップ設定を M1 iPad Air 向けに最適化 & 夜間窓/看板発光対象を収集
       root.traverse((obj) => {
         if (!(obj instanceof THREE.Mesh)) return;
         const materials = Array.isArray(obj.material)
@@ -97,6 +133,41 @@ export function buildJapaneseCity(
           if (stdMat.map) stdMat.map.anisotropy = anisotropy;
           if (stdMat.normalMap) stdMat.normalMap.anisotropy = anisotropy;
           if (stdMat.roughnessMap) stdMat.roughnessMap.anisotropy = anisotropy;
+
+          if (
+            (category === 'buildings' || category === 'props') &&
+            stdMat instanceof THREE.MeshStandardMaterial &&
+            !trackedMatSet.has(stdMat)
+          ) {
+            const hasNativeEmissive =
+              stdMat.emissiveMap !== null ||
+              stdMat.emissive.r + stdMat.emissive.g + stdMat.emissive.b > 0.05;
+            const isWindowMat =
+              WINDOW_MATERIAL_PATTERN.test(stdMat.name) ||
+              WINDOW_MATERIAL_PATTERN.test(obj.name);
+
+            if (hasNativeEmissive) {
+              trackedMatSet.add(stdMat);
+              const entry: TrackedEmissiveMaterial = {
+                mat: stdMat,
+                kind: 'nativeEmissive',
+                baseEmissive: stdMat.emissive.clone(),
+                baseIntensity: Math.max(0.8, stdMat.emissiveIntensity || 1.0),
+              };
+              trackedEmissives.push(entry);
+              applyNightFactorToMaterial(entry, currentNightFactor);
+            } else if (isWindowMat) {
+              trackedMatSet.add(stdMat);
+              const entry: TrackedEmissiveMaterial = {
+                mat: stdMat,
+                kind: 'window',
+                baseEmissive: UNLIT_EMISSIVE.clone(),
+                baseIntensity: 0,
+              };
+              trackedEmissives.push(entry);
+              applyNightFactorToMaterial(entry, currentNightFactor);
+            }
+          }
         }
       });
       loadedTemplates.push(root);
@@ -109,7 +180,7 @@ export function buildJapaneseCity(
 
   const placeInstance = async (placement: CityAssetPlacement): Promise<void> => {
     try {
-      const template = await loadTemplate(placement.url);
+      const template = await loadTemplate(placement.url, placement.category);
       if (isDisposed) return;
 
       const instanceModel = template.clone(true);
@@ -147,8 +218,18 @@ export function buildJapaneseCity(
 
   return {
     group: cityGroup,
+    setNightFactor: (factor: number) => {
+      const clamped = Math.max(0, Math.min(1, factor));
+      if (Math.abs(clamped - currentNightFactor) < 0.005) return;
+      currentNightFactor = clamped;
+      for (let i = 0; i < trackedEmissives.length; i += 1) {
+        applyNightFactorToMaterial(trackedEmissives[i], clamped);
+      }
+    },
     dispose: () => {
       isDisposed = true;
+      trackedEmissives.length = 0;
+      trackedMatSet.clear();
       for (const placement of JAPANESE_CITY_PLACEMENTS) {
         collisionWorld.removeCollider(placement.instanceId);
       }

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { CITY_METRICS, type CollisionWorld } from '../world/collisionWorld';
+import { createRadialGlowTexture } from '../world/streetLights';
 
 export type TrafficAxis = 'NS' | 'EW';
 export type SignalColor = 'green' | 'yellow' | 'red';
@@ -50,12 +51,27 @@ export class TrafficLightController {
 
   private readonly geometries: THREE.BufferGeometry[] = [];
   private readonly materials: THREE.Material[] = [];
+  private readonly textures: THREE.Texture[] = [];
   private readonly poleColliderIds: string[] = [];
 
   private readonly nsVehMats: VehicleSignalMaterials;
   private readonly ewVehMats: VehicleSignalMaterials;
   private readonly nsPedMats: PedSignalMaterials;
   private readonly ewPedMats: PedSignalMaterials;
+
+  private readonly haloMatGreen: THREE.SpriteMaterial;
+  private readonly haloMatYellow: THREE.SpriteMaterial;
+  private readonly haloMatRed: THREE.SpriteMaterial;
+  private readonly nsVehHalos: { green: THREE.Sprite[]; yellow: THREE.Sprite[]; red: THREE.Sprite[] } = {
+    green: [],
+    yellow: [],
+    red: [],
+  };
+  private readonly ewVehHalos: { green: THREE.Sprite[]; yellow: THREE.Sprite[]; red: THREE.Sprite[] } = {
+    green: [],
+    yellow: [],
+    red: [],
+  };
 
   private cycleTime = 0;
   private nsVehicle: SignalColor = 'green';
@@ -64,6 +80,7 @@ export class TrafficLightController {
   private ewPedestrian: PedSignalState = 'red';
   private phaseRemainingSec = GREEN_DURATION_SEC;
   private lastAppliedKey = '';
+  private nightFactor = 0;
 
   constructor(scene: THREE.Scene, collisionWorld: CollisionWorld) {
     this.scene = scene;
@@ -76,10 +93,48 @@ export class TrafficLightController {
     this.nsPedMats = this.createPedMaterials();
     this.ewPedMats = this.createPedMaterials();
 
+    const haloTex = createRadialGlowTexture(
+      64,
+      'rgba(255, 255, 255, 0.95)',
+      'rgba(255, 255, 255, 0.38)',
+      'rgba(255, 255, 255, 0.0)',
+    );
+    this.textures.push(haloTex);
+
+    const makeHaloMat = (color: THREE.Color) => {
+      const mat = new THREE.SpriteMaterial({
+        map: haloTex,
+        color: color.clone(),
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        fog: true,
+      });
+      this.materials.push(mat);
+      return mat;
+    };
+    this.haloMatGreen = makeHaloMat(LIT_GREEN_COLOR);
+    this.haloMatYellow = makeHaloMat(LIT_YELLOW_COLOR);
+    this.haloMatRed = makeHaloMat(LIT_RED_COLOR);
+
     this.buildIntersectionPoles();
     this.scene.add(this.root);
 
     this.updateSignals(0);
+  }
+
+  public setNightFactor(factor: number): void {
+    const clamped = Math.max(0, Math.min(1, factor));
+    if (Math.abs(clamped - this.nightFactor) < 0.005) return;
+    this.nightFactor = clamped;
+    const haloOpacity = clamped * 0.78;
+    this.haloMatGreen.opacity = haloOpacity;
+    this.haloMatYellow.opacity = haloOpacity;
+    this.haloMatRed.opacity = haloOpacity;
+    // 発光強度とハロー可視状態を再適用
+    this.lastAppliedKey = '';
+    this.updateSignals(this.cycleTime);
   }
 
   public update(dt: number): void {
@@ -168,19 +223,32 @@ export class TrafficLightController {
     if (key === this.lastAppliedKey) return;
     this.lastAppliedKey = key;
 
-    this.applyVehicleMaterials(this.nsVehMats, this.nsVehicle);
-    this.applyVehicleMaterials(this.ewVehMats, this.ewVehicle);
+    this.applyVehicleMaterials(this.nsVehMats, this.nsVehHalos, this.nsVehicle);
+    this.applyVehicleMaterials(this.ewVehMats, this.ewVehHalos, this.ewVehicle);
     this.applyPedMaterials(this.nsPedMats, this.nsPedestrian, blinkOn);
     this.applyPedMaterials(this.ewPedMats, this.ewPedestrian, blinkOn);
   }
 
   private applyVehicleMaterials(
     mats: VehicleSignalMaterials,
+    halos: { green: THREE.Sprite[]; yellow: THREE.Sprite[]; red: THREE.Sprite[] },
     color: SignalColor,
   ): void {
-    setLensState(mats.green, color === 'green', LIT_GREEN_COLOR);
-    setLensState(mats.yellow, color === 'yellow', LIT_YELLOW_COLOR);
-    setLensState(mats.red, color === 'red', LIT_RED_COLOR);
+    const intensity = 2.2 + this.nightFactor * 2.4;
+    const showHalos = this.nightFactor > 0.04;
+    setLensState(mats.green, color === 'green', LIT_GREEN_COLOR, intensity);
+    setLensState(mats.yellow, color === 'yellow', LIT_YELLOW_COLOR, intensity);
+    setLensState(mats.red, color === 'red', LIT_RED_COLOR, intensity);
+
+    for (let i = 0; i < halos.green.length; i += 1) {
+      halos.green[i].visible = showHalos && color === 'green';
+    }
+    for (let i = 0; i < halos.yellow.length; i += 1) {
+      halos.yellow[i].visible = showHalos && color === 'yellow';
+    }
+    for (let i = 0; i < halos.red.length; i += 1) {
+      halos.red[i].visible = showHalos && color === 'red';
+    }
   }
 
   private applyPedMaterials(
@@ -188,10 +256,11 @@ export class TrafficLightController {
     state: PedSignalState,
     blinkOn: boolean,
   ): void {
+    const intensity = 2.0 + this.nightFactor * 2.2;
     const greenLit = state === 'green' || (state === 'blink' && blinkOn);
     const redLit = state === 'red';
-    setLensState(mats.green, greenLit, LIT_GREEN_COLOR);
-    setLensState(mats.red, redLit, LIT_RED_COLOR);
+    setLensState(mats.green, greenLit, LIT_GREEN_COLOR, intensity);
+    setLensState(mats.red, redLit, LIT_RED_COLOR, intensity);
   }
 
   private createVehicleMaterials(): VehicleSignalMaterials {
@@ -304,7 +373,10 @@ export class TrafficLightController {
       boxGeo,
     );
 
-    const buildVehicleHead = (mats: VehicleSignalMaterials): THREE.Group => {
+    const buildVehicleHead = (
+      mats: VehicleSignalMaterials,
+      halos: { green: THREE.Sprite[]; yellow: THREE.Sprite[]; red: THREE.Sprite[] },
+    ): THREE.Group => {
       const head = new THREE.Group();
 
       const body = new THREE.Mesh(vehHousingGeo, housingMat);
@@ -315,17 +387,26 @@ export class TrafficLightController {
       head.add(face);
 
       // 日本式横型3灯: +Z正面から見る運転手視点で左から 青 (+0.36) / 黄 (0) / 赤 (-0.36)
-      const lensSpecs: ReadonlyArray<[number, THREE.MeshStandardMaterial]> = [
-        [0.36, mats.green],
-        [0, mats.yellow],
-        [-0.36, mats.red],
+      const lensSpecs: ReadonlyArray<
+        [number, THREE.MeshStandardMaterial, THREE.SpriteMaterial, THREE.Sprite[]]
+      > = [
+        [0.36, mats.green, this.haloMatGreen, halos.green],
+        [0, mats.yellow, this.haloMatYellow, halos.yellow],
+        [-0.36, mats.red, this.haloMatRed, halos.red],
       ];
 
-      for (const [lx, mat] of lensSpecs) {
+      for (const [lx, mat, haloMat, haloList] of lensSpecs) {
         const lens = new THREE.Mesh(vehLensGeo, mat);
         lens.rotation.x = Math.PI / 2;
         lens.position.set(lx, 0, 0.155);
         head.add(lens);
+
+        const halo = new THREE.Sprite(haloMat);
+        halo.position.set(lx, 0, 0.22);
+        halo.scale.set(0.72, 0.72, 1);
+        halo.visible = false;
+        head.add(halo);
+        haloList.push(halo);
 
         const visor = new THREE.Mesh(vehVisorGeo, visorMat);
         visor.rotation.x = Math.PI / 2;
@@ -449,6 +530,7 @@ export class TrafficLightController {
 
       const vehHead = buildVehicleHead(
         spec.axis === 'NS' ? this.nsVehMats : this.ewVehMats,
+        spec.axis === 'NS' ? this.nsVehHalos : this.ewVehHalos,
       );
       vehHead.position.set(armLen - 0.55, 5.15, 0.16);
       armPivot.add(vehHead);
@@ -502,8 +584,10 @@ export class TrafficLightController {
     this.scene.remove(this.root);
     for (const geo of this.geometries) geo.dispose();
     for (const mat of this.materials) mat.dispose();
+    for (const tex of this.textures) tex.dispose();
     this.geometries.length = 0;
     this.materials.length = 0;
+    this.textures.length = 0;
   }
 }
 
@@ -511,11 +595,12 @@ function setLensState(
   mat: THREE.MeshStandardMaterial,
   lit: boolean,
   litColor: THREE.Color,
+  intensity: number,
 ): void {
   if (lit) {
     mat.color.copy(litColor);
     mat.emissive.copy(litColor);
-    mat.emissiveIntensity = 2.4;
+    mat.emissiveIntensity = intensity;
   } else {
     mat.color.copy(UNLIT_LENS_COLOR);
     mat.emissive.copy(UNLIT_EMISSIVE);

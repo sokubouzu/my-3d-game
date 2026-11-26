@@ -1,5 +1,9 @@
 import * as THREE from 'three';
 import type { WheelSlot } from '../vehicle/vehicleConfig';
+import {
+  createVehicleLightRig,
+  type VehicleLightRig,
+} from '../vehicle/vehicleLights';
 import type { VehicleDimensions, WheelRig } from '../vehicle/vehicleModel';
 import type { CollisionWorld, ObbBox2D } from '../world/collisionWorld';
 import {
@@ -78,6 +82,7 @@ export class TrafficVehicle {
   private readonly collisionWorld: CollisionWorld;
   private readonly wheels: Record<WheelSlot, WheelRig | null>;
   private readonly avgWheelRadius: number;
+  private readonly lightRig: VehicleLightRig;
 
   private currentSegment: RoadSegment;
   private segmentDistance: number;
@@ -174,6 +179,10 @@ export class TrafficVehicle {
       length: scaledSize.z,
     };
 
+    // 3-G: AI 交通車両のヘッドライト・テールランプ発光リグ
+    this.lightRig = createVehicleLightRig('car', this.dimensions);
+    this.root.add(this.lightRig.group);
+
     // 2. 4輪ピボットリグ構築
     this.wheels = buildTrafficWheelRig(this.root, clonedModel, config);
     let rSum = 0;
@@ -214,6 +223,15 @@ export class TrafficVehicle {
     };
 
     this.syncTransformAndCollider();
+  }
+
+  public setLightsIntensity(factor: number): void {
+    this.lightRig.setIntensity(factor);
+  }
+
+  public disposeLights(): void {
+    this.root.remove(this.lightRig.group);
+    this.lightRig.dispose();
   }
 
   public getObstacleSnapshot(): TrafficObstacle {
