@@ -1,6 +1,6 @@
 {
-  "schemaVersion": "1.2.0",
-  "taskId": "1-D / 1-E",
+  "schemaVersion": "1.3.0",
+  "taskId": "2-A",
   "targetDevice": "iPad Air (5th gen, Apple M1 / 8GB RAM)",
   "summary": {
     "totalAssets": 34,
@@ -1295,6 +1295,123 @@
               "hasCollision": true
             }
           ]
+        },
+        "heroVehicleRig": {
+          "taskId": "2-A",
+          "role": "playable_hero_vehicle",
+          "instanceId": "hero_vehicle_innova",
+          "placement": {
+            "positionXYZ": [
+              3.0,
+              0.0,
+              8.5
+            ],
+            "rotationYRad": 0.0,
+            "lane": "left_hand_traffic_southbound_plusZ",
+            "targetLengthMeters": 4.6,
+            "normalizedDimensionsMeters": {
+              "width": 1.89,
+              "height": 1.74,
+              "length": 4.6
+            },
+            "hasCollision": true,
+            "colliderShrink": 0.92
+          },
+          "coordinateSystem": {
+            "rawModelForwardAxis": "-Z",
+            "rawModelRightAxis": "+X",
+            "driverSide": "right_hand_drive",
+            "normalizedForwardAxis": "+Z",
+            "modelForwardCorrectionYRad": 3.141593,
+            "groundedY": 0.0
+          },
+          "movableParts": {
+            "wheels": {
+              "spinAxisVehicleLocal": "+X (forward roll = positive X rotation on spinPivot)",
+              "steerAxisVehicleLocal": "+Y (left turn = positive Y rotation on steerPivot)",
+              "tireDiameterMeters": 0.64,
+              "frontLeft": {
+                "steerable": true,
+                "spinNodes": [
+                  "paint.044",
+                  "paint.041",
+                  "paint.045",
+                  "Cylinder.039"
+                ],
+                "steerOnlyNodes": [
+                  "Cylinder.045"
+                ],
+                "normalizedCenterRawModelMeters": [
+                  -0.76,
+                  0.32,
+                  -1.5
+                ]
+              },
+              "frontRight": {
+                "steerable": true,
+                "spinNodes": [
+                  "paint.042",
+                  "paint.040",
+                  "paint.043",
+                  "Cylinder.040"
+                ],
+                "steerOnlyNodes": [
+                  "Cylinder.041"
+                ],
+                "normalizedCenterRawModelMeters": [
+                  0.76,
+                  0.32,
+                  -1.49
+                ]
+              },
+              "rearLeft": {
+                "steerable": false,
+                "spinNodes": [
+                  "paint.038",
+                  "paint.035",
+                  "paint.039"
+                ],
+                "steerOnlyNodes": [],
+                "normalizedCenterRawModelMeters": [
+                  -0.76,
+                  0.32,
+                  1.28
+                ]
+              },
+              "rearRight": {
+                "steerable": false,
+                "spinNodes": [
+                  "paint.036",
+                  "paint.027",
+                  "paint.037",
+                  "Cylinder.044"
+                ],
+                "steerOnlyNodes": [],
+                "normalizedCenterRawModelMeters": [
+                  0.76,
+                  0.32,
+                  1.28
+                ]
+              }
+            },
+            "steeringWheel": {
+              "nodeName": "stir",
+              "childMeshNodes": [
+                "stir_STEERPLAST_0",
+                "stir_Material.007_0"
+              ],
+              "rotationAxisLocal": "Z (steering column tilted ~18.9 deg around X)",
+              "normalizedCenterRawModelMeters": [
+                0.46,
+                0.95,
+                -0.86
+              ]
+            },
+            "doors": {
+              "separateMovableNodes": false,
+              "note": "ボディパネル(paint.003〜paint.016等)および窓ガラスは車体共通原点の一体構造のため独立した開閉ドアノードはなし。乗降時はドア固定＋車体横からの乗車アニメーション遷移を想定。"
+            }
+          }
         }
       },
       {

@@ -29,6 +29,9 @@ const INITIAL_STATUS: EngineStatus = {
     pavement: 'procedural',
     sky: 'procedural',
   },
+  heroVehicleLoaded: false,
+  heroVehicleError: null,
+  heroVehicleWheels: 0,
 };
 
 export function App() {

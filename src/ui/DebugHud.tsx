@@ -29,7 +29,7 @@ export function DebugHud({ status }: DebugHudProps) {
 
       {expanded && (
         <div className="hud-details">
-          <div className="hud-title">my-3d-game (Phase 1-D / 1-E)</div>
+          <div className="hud-title">my-3d-game (Phase 2-A)</div>
           <div>
             API: {status.isWebGL2 ? 'WebGL2' : 'WebGL1'} | DPR:{' '}
             {status.dpr.toFixed(2)}
@@ -41,6 +41,14 @@ export function DebugHud({ status }: DebugHudProps) {
               ? `OK (${status.playerHeight.toFixed(2)}m, ${status.jointCount} bones)`
               : status.playerError
                 ? `Error: ${status.playerError}`
+                : 'Loading...'}
+          </div>
+          <div>
+            HeroCar:{' '}
+            {status.heroVehicleLoaded
+              ? `OK (${status.heroVehicleWheels} wheels)`
+              : status.heroVehicleError
+                ? `Error: ${status.heroVehicleError}`
                 : 'Loading...'}
           </div>
           <div>

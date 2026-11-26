@@ -18,6 +18,11 @@ import {
   buildJapaneseCity,
   type CityBuildProgress,
 } from '../world/cityBuilder';
+import {
+  HERO_VEHICLE_CONFIG,
+  loadHeroVehicle,
+  type LoadedHeroVehicle,
+} from '../vehicle';
 
 export interface EngineStatus {
   isWebGL2: boolean;
@@ -37,6 +42,9 @@ export interface EngineStatus {
   cityFailedCount: number;
   colliderCount: number;
   envStatus: EnvironmentStatus;
+  heroVehicleLoaded: boolean;
+  heroVehicleError: string | null;
+  heroVehicleWheels: number;
 }
 
 export interface GameEngineHandle {
@@ -107,6 +115,8 @@ export function startGameEngine(
   let loadedPlayer: LoadedPlayerModel | null = null;
   let playerController: PlayerController | null = null;
   let playerError: string | null = null;
+  let loadedHeroVehicle: LoadedHeroVehicle | null = null;
+  let heroVehicleError: string | null = null;
   const playerPos = new THREE.Vector3(0, 0, 0);
 
   let cityProgress: CityBuildProgress = {
@@ -148,8 +158,11 @@ export function startGameEngine(
       cityLoadedCount: cityProgress.loadedCount,
       cityTotalCount: cityProgress.totalCount,
       cityFailedCount: cityProgress.failedCount,
-      colliderCount: cityProgress.colliderCount,
+      colliderCount: collisionWorld.getColliderCount(),
       envStatus,
+      heroVehicleLoaded: loadedHeroVehicle !== null,
+      heroVehicleError,
+      heroVehicleWheels: loadedHeroVehicle?.rig.boundWheelCount ?? 0,
     });
   };
 
@@ -159,7 +172,7 @@ export function startGameEngine(
     emitStatus();
   });
 
-  // 1-D: 承認済み全24 GLBモデルの街区配置 & OBB コライダー構築
+  // 1-D: 承認済み単体 GLB モデルの街区配置 & OBB コライダー構築
   const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
   const cityBuilder = buildJapaneseCity(
     scene,
@@ -170,6 +183,51 @@ export function startGameEngine(
       emitStatus();
     },
   );
+
+  // 2-A: 運転可能な主役車両1台を前方左側車線へ配置 & OBB コライダー登録（ロード前暫定 -> 実測更新）
+  collisionWorld.upsertCollider(
+    HERO_VEHICLE_CONFIG.id,
+    HERO_VEHICLE_CONFIG.initialPosition.x,
+    HERO_VEHICLE_CONFIG.initialPosition.z,
+    HERO_VEHICLE_CONFIG.placeholderDimensions.width *
+      HERO_VEHICLE_CONFIG.colliderShrink,
+    HERO_VEHICLE_CONFIG.placeholderDimensions.length *
+      HERO_VEHICLE_CONFIG.colliderShrink,
+    HERO_VEHICLE_CONFIG.initialRotationY,
+    0,
+    HERO_VEHICLE_CONFIG.placeholderDimensions.height,
+  );
+
+  loadHeroVehicle(maxAnisotropy, HERO_VEHICLE_CONFIG)
+    .then((vehicle) => {
+      if (isDisposed) {
+        vehicle.dispose();
+        return;
+      }
+      loadedHeroVehicle = vehicle;
+      scene.add(vehicle.root);
+      collisionWorld.upsertCollider(
+        vehicle.config.id,
+        vehicle.root.position.x,
+        vehicle.root.position.z,
+        Math.max(0.4, vehicle.dimensions.width * vehicle.config.colliderShrink),
+        Math.max(
+          0.4,
+          vehicle.dimensions.length * vehicle.config.colliderShrink,
+        ),
+        vehicle.root.rotation.y,
+        0,
+        Math.max(0.5, vehicle.dimensions.height),
+      );
+      emitStatus();
+    })
+    .catch((err: unknown) => {
+      if (isDisposed) return;
+      collisionWorld.removeCollider(HERO_VEHICLE_CONFIG.id);
+      heroVehicleError =
+        err instanceof Error ? err.message : 'Failed to load hero vehicle GLB';
+      emitStatus();
+    });
 
   const inputManager = new InputManager(canvas);
 
@@ -310,6 +368,13 @@ export function startGameEngine(
         loadedPlayer = null;
       }
       playerController = null;
+
+      collisionWorld.removeCollider(HERO_VEHICLE_CONFIG.id);
+      if (loadedHeroVehicle) {
+        scene.remove(loadedHeroVehicle.root);
+        loadedHeroVehicle.dispose();
+        loadedHeroVehicle = null;
+      }
 
       cityBuilder.dispose();
       cityEnv.dispose();

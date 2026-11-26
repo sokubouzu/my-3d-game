@@ -39,6 +39,8 @@ const JUMP_VELOCITY = 6.2; // m/s
 const IDLE_SPEED_THRESHOLD = 0.15;
 const RUN_SPEED_THRESHOLD = 3.0;
 const CROSS_FADE_DURATION = 0.22;
+const COYOTE_TIME = 0.12; // 秒: 接地判定の微小な猶予時間
+const STEP_OFFSET = 0.2; // m: 縁石・段差を接地維持のまま吸収する最大高さ
 
 /**
  * 1-C: 徒歩移動・加減速・Idle/Walk/Run/Jump スムーズ切替・基本地面衝突を管理する独立モジュール。
@@ -55,6 +57,9 @@ export class PlayerController {
   private yaw = 0; // +Z 正面向き
   private verticalVelocity = 0;
   private isGrounded = true;
+  private coyoteTimer = COYOTE_TIME;
+  private airborneTime = 0;
+  private isJumping = false;
   private state: PlayerLocomotionState = 'idle';
   private activeAction: THREE.AnimationAction | null = null;
   private activeClipName = 'None';
@@ -154,11 +159,17 @@ export class PlayerController {
       this.player.root.rotation.y = this.yaw;
     }
 
-    // ジャンプ入力
-    if (input.jumpPressed && this.isGrounded) {
+    // ジャンプ入力（接地中またはコヨーテタイム内なら許可）
+    const canJump = this.isGrounded || this.coyoteTimer > 0;
+    if (input.jumpPressed && canJump) {
       this.verticalVelocity = JUMP_VELOCITY;
       this.isGrounded = false;
+      this.isJumping = true;
+      this.coyoteTimer = 0;
+      this.airborneTime = COYOTE_TIME;
     }
+
+    const wasGrounded = this.isGrounded;
 
     // 重力と位置更新
     if (!this.isGrounded) {
@@ -188,14 +199,34 @@ export class PlayerController {
     pos.x = Math.max(-limit, Math.min(limit, pos.x));
     pos.z = Math.max(-limit, Math.min(limit, pos.z));
 
-    // 基本地面衝突判定（Y = groundY）
+    // 基本地面衝突判定（ステップオフセット 0.2m による段差吸収 + コヨーテタイム 0.12s）
     const groundY = this.ground.getGroundHeight(pos.x, pos.z);
-    if (pos.y <= groundY) {
+    const heightAboveGround = pos.y - groundY;
+
+    if (this.verticalVelocity <= 0 && heightAboveGround <= 0) {
       pos.y = groundY;
       this.verticalVelocity = 0;
       this.isGrounded = true;
-    } else if (pos.y > groundY + 0.02) {
+      this.isJumping = false;
+      this.coyoteTimer = COYOTE_TIME;
+      this.airborneTime = 0;
+    } else if (
+      wasGrounded &&
+      !this.isJumping &&
+      this.verticalVelocity <= 0 &&
+      heightAboveGround > 0 &&
+      heightAboveGround <= STEP_OFFSET
+    ) {
+      // 歩道・車道境界などの低い下り段差（<= 0.2m）を接地維持のまま吸着吸収
+      pos.y = groundY;
+      this.verticalVelocity = 0;
+      this.isGrounded = true;
+      this.coyoteTimer = COYOTE_TIME;
+      this.airborneTime = 0;
+    } else if (heightAboveGround > 0.02 || this.verticalVelocity > 0) {
       this.isGrounded = false;
+      this.coyoteTimer = Math.max(0, this.coyoteTimer - clampedDt);
+      this.airborneTime += clampedDt;
     }
 
     // 移動速度・接地状態に応じたアニメーション状態遷移
@@ -205,16 +236,27 @@ export class PlayerController {
 
   private updateLocomotionAnimation(horizontalSpeed: number): void {
     if (!this.isGrounded) {
-      if (this.verticalVelocity > 0.1) {
-        this.state = 'jump';
-        this.transitionToClip('Jumping', false, 0.12);
-      } else {
+      if (this.verticalVelocity > 0.1 || this.isJumping) {
+        if (this.verticalVelocity > 0.1) {
+          this.state = 'jump';
+          this.transitionToClip('Jumping', false, 0.12);
+        } else {
+          this.state = 'fall';
+          if (this.activeClipName !== 'Jumping') {
+            this.transitionToClip('FallingToLanding', false, 0.15);
+          }
+        }
+        return;
+      }
+
+      // 意図しない微小な段差・コライダー継ぎ目での一瞬の浮きはコヨーテタイム中なら落下モーションへ遷移させない
+      if (this.airborneTime >= COYOTE_TIME) {
         this.state = 'fall';
         if (this.activeClipName !== 'Jumping') {
           this.transitionToClip('FallingToLanding', false, 0.15);
         }
+        return;
       }
-      return;
     }
 
     if (horizontalSpeed >= RUN_SPEED_THRESHOLD) {
