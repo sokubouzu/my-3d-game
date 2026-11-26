@@ -232,14 +232,15 @@ export function startGameEngine(
   // 3-G: 街灯システム（14基＋中央交差点代表光源1基、castShadow=false）
   const streetLights = new StreetLightSystem(scene, collisionWorld);
 
-  // 3-G: プレイヤー運転車両の前方路面照射用 SpotLight（常設・影オフ・強度0で消灯しシェーダ再コンパイル回避）
+  // 3-G / 4-A調整: プレイヤー運転車両の前方路面照射用 SpotLight（常設・影オフ・強度0で消灯しシェーダ再コンパイル回避）
+  // 夜間高速走行時に前方のカーブ・白線・ガードレールをしっかり照らせる照射距離 (88m) と広がり角 (54°) に調整
   const playerHeadlightSpot = new THREE.SpotLight(
-    0xfff4dd,
+    0xfff5e0,
     0,
-    46,
-    Math.PI * 0.25,
-    0.62,
-    1.5,
+    88,
+    Math.PI * 0.3,
+    0.68,
+    1.25,
   );
   playerHeadlightSpot.castShadow = false;
   scene.add(playerHeadlightSpot);
@@ -768,15 +769,15 @@ export function startGameEngine(
 
         headlightTargetScratch.set(
           0,
-          0.08,
-          dims.length * 0.5 + (isBike ? 14 : 17),
+          0.25,
+          dims.length * 0.5 + (isBike ? 22 : 28),
         );
         bodyGroup.localToWorld(headlightTargetScratch);
 
         playerHeadlightSpot.position.copy(headlightOriginScratch);
         playerHeadlightSpot.target.position.copy(headlightTargetScratch);
         playerHeadlightSpot.target.updateMatrixWorld();
-        playerHeadlightSpot.intensity = headlightFactor * (isBike ? 48 : 74);
+        playerHeadlightSpot.intensity = headlightFactor * (isBike ? 68 : 96);
       } else {
         playerHeadlightSpot.intensity = 0;
       }

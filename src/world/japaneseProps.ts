@@ -136,19 +136,19 @@ export function buildJapaneseStreetProps(
   const swY = CITY_METRICS.sidewalkHeight; // 0.12
 
   // =========================================================================
-  // 1. 自動販売機（青・赤・白 10基 — 夕方・夜に前面ディスプレイが明るく発光）
+  // 1. 自動販売機（青・赤・白 10基 — 歩道外縁/壁際へ整列、夕方・夜に自然な明るさで発光）
   // =========================================================================
   const vendingSpecs: VendingSpec[] = [
-    { id: 'jp_vm_n_west', x: -8.8, z: -38, yaw: Math.PI / 2, baseY: swY, theme: 'blue' },
-    { id: 'jp_vm_n_east', x: 8.8, z: -48, yaw: -Math.PI / 2, baseY: swY, theme: 'red' },
-    { id: 'jp_vm_s_west', x: -8.8, z: 44, yaw: Math.PI / 2, baseY: swY, theme: 'white' },
-    { id: 'jp_vm_s_east', x: 8.8, z: 52, yaw: -Math.PI / 2, baseY: swY, theme: 'blue' },
-    { id: 'jp_vm_w_north', x: -36, z: -8.8, yaw: 0, baseY: swY, theme: 'red' },
-    { id: 'jp_vm_e_south', x: 38, z: 8.8, yaw: Math.PI, baseY: swY, theme: 'white' },
-    { id: 'jp_vm_park_w', x: 12.6, z: -96, yaw: -Math.PI / 2, baseY: 0, theme: 'blue' },
-    { id: 'jp_vm_park_n', x: 61.0, z: -120.8, yaw: Math.PI, baseY: 0, theme: 'white' },
-    { id: 'jp_vm_plaza_w', x: -27.2, z: 91.5, yaw: Math.PI / 2, baseY: 0, theme: 'red' },
-    { id: 'jp_vm_plaza_e', x: 27.2, z: 104.0, yaw: -Math.PI / 2, baseY: 0, theme: 'blue' },
+    { id: 'jp_vm_n_west', x: -10.35, z: -38, yaw: Math.PI / 2, baseY: swY, theme: 'blue' },
+    { id: 'jp_vm_n_east', x: 10.35, z: -48, yaw: -Math.PI / 2, baseY: swY, theme: 'red' },
+    { id: 'jp_vm_s_west', x: -10.35, z: 44, yaw: Math.PI / 2, baseY: swY, theme: 'white' },
+    { id: 'jp_vm_s_east', x: 10.35, z: 52, yaw: -Math.PI / 2, baseY: swY, theme: 'blue' },
+    { id: 'jp_vm_w_north', x: -36, z: -10.35, yaw: 0, baseY: swY, theme: 'red' },
+    { id: 'jp_vm_e_south', x: 38, z: 10.35, yaw: Math.PI, baseY: swY, theme: 'white' },
+    { id: 'jp_vm_park_w', x: 13.4, z: -95.5, yaw: -Math.PI / 2, baseY: 0, theme: 'blue' },
+    { id: 'jp_vm_park_n', x: 61.5, z: -120.6, yaw: Math.PI, baseY: 0, theme: 'white' },
+    { id: 'jp_vm_plaza_w', x: -29.8, z: 91.5, yaw: Math.PI / 2, baseY: 0, theme: 'red' },
+    { id: 'jp_vm_plaza_e', x: 28.0, z: 104.0, yaw: -Math.PI / 2, baseY: 0, theme: 'blue' },
   ];
 
   const vmBodyGeo = trackGeo(new THREE.BoxGeometry(1.12, 1.84, 0.72));
@@ -197,7 +197,7 @@ export function buildJapaneseStreetProps(
     emissiveDisplayMats.push({
       mat: vmDisplayMats[theme],
       dayIntensity: 0.02,
-      nightIntensity: 2.1,
+      nightIntensity: 1.18,
     });
   }
 
@@ -222,7 +222,7 @@ export function buildJapaneseStreetProps(
       polygonOffsetUnits: -2,
     }),
   );
-  nightGlowMats.push({ mat: vmGlowPoolMat, maxOpacity: 0.36 });
+  nightGlowMats.push({ mat: vmGlowPoolMat, maxOpacity: 0.26 });
 
   for (const spec of vendingSpecs) {
     const g = new THREE.Group();
@@ -265,7 +265,7 @@ export function buildJapaneseStreetProps(
   // =========================================================================
   const shopSigns: ShopSignSpec[] = [
     // コンビニ風ポール袖看板（4方向商業角・駅前広場・外周合流付近）
-    { id: 'sign_konbini_nw', x: -11.2, z: -13.5, yaw: Math.PI / 2, baseY: swY, theme: 'konbini', style: 'pylon' },
+    { id: 'sign_konbini_nw', x: -11.4, z: -12.0, yaw: Math.PI / 2, baseY: swY, theme: 'konbini', style: 'pylon' },
     { id: 'sign_konbini_se', x: 11.2, z: 32.0, yaw: -Math.PI / 2, baseY: swY, theme: 'konbini', style: 'pylon' },
     { id: 'sign_izakaya_nw', x: -11.4, z: -26.5, yaw: Math.PI / 2, baseY: swY, theme: 'izakaya', style: 'pylon' },
     { id: 'sign_cafe_sw', x: -11.2, z: 30.0, yaw: Math.PI / 2, baseY: swY, theme: 'cafe', style: 'pylon' },
@@ -308,13 +308,13 @@ export function buildJapaneseStreetProps(
   for (const theme of ['konbini', 'izakaya', 'cafe', 'parking'] as const) {
     emissiveDisplayMats.push({
       mat: pylonFaceMats[theme],
-      dayIntensity: 0.04,
-      nightIntensity: 1.85,
+      dayIntensity: 0.03,
+      nightIntensity: 1.15,
     });
     emissiveDisplayMats.push({
       mat: facadeFaceMats[theme],
-      dayIntensity: 0.04,
-      nightIntensity: 1.75,
+      dayIntensity: 0.03,
+      nightIntensity: 1.1,
     });
   }
 
@@ -337,7 +337,7 @@ export function buildJapaneseStreetProps(
       fog: true,
     }),
   );
-  nightGlowMats.push({ mat: signHaloMat, maxOpacity: 0.45 });
+  nightGlowMats.push({ mat: signHaloMat, maxOpacity: 0.32 });
 
   const pylonPoleGeo = trackGeo(new THREE.CylinderGeometry(0.08, 0.1, 4.6, 8));
   const pylonBoxGeo = trackGeo(new THREE.BoxGeometry(0.24, 2.2, 0.96));
@@ -428,7 +428,7 @@ export function buildJapaneseStreetProps(
   emissiveDisplayMats.push({
     mat: reflectorMat,
     dayIntensity: 0.0,
-    nightIntensity: 1.65,
+    nightIntensity: 1.35,
   });
 
   // =========================================================================
@@ -447,7 +447,7 @@ export function buildJapaneseStreetProps(
   emissiveDisplayMats.push({
     mat: chevronMat,
     dayIntensity: 0.0,
-    nightIntensity: 0.85,
+    nightIntensity: 0.95,
   });
 
   // =========================================================================
@@ -523,16 +523,15 @@ export function buildJapaneseStreetProps(
 
 function buildGuardrailLayout(swY: number): GuardrailRun[] {
   const runs: GuardrailRun[] = [];
-  const gEdge = 6.2; // 内側歩道縁石の直近内側
+  const gEdge = 6.35; // 歩道縁石の内側へオフセット（車道端6.0mとの接触回避＆歩道動線7.2..9.5mと非干渉）
 
-  // 1. 内側コア市街地の歩道・車道境界（横断歩道 ±13m および駐車/運転車両ドア付近は開放）
-  // 北通り (z < 0)
+  // 1. 内側コア市街地の歩道・車道境界（交差点・横断歩道 ±14.5m および駐車/運転車両ドア付近は広く開放）
+  // 北通り (z < 0) — Porsche (-4.2, -22) 付近 z=-27..-14.5 を開放
   runs.push(
     { id: 'gr_in_nw1', x0: -gEdge, z0: -76, x1: -gEdge, z1: -27, baseY: swY },
-    { id: 'gr_in_nw2', x0: -gEdge, z0: -17, x1: -gEdge, z1: -13, baseY: swY },
     { id: 'gr_in_ne1', x0: gEdge, z0: -76, x1: gEdge, z1: -21, baseY: swY },
   );
-  // 南通り (z > 0)
+  // 南通り (z > 0) — Innova (4.1, 8.5) / Bike (4.75, 14) / 駐車車付近を開放
   runs.push(
     { id: 'gr_in_sw1', x0: -gEdge, z0: 23, x1: -gEdge, z1: 76, baseY: swY },
     { id: 'gr_in_se1', x0: gEdge, z0: 19, x1: gEdge, z1: 76, baseY: swY },
@@ -540,35 +539,35 @@ function buildGuardrailLayout(swY: number): GuardrailRun[] {
   // 西通り (x < 0)
   runs.push(
     { id: 'gr_in_wn1', x0: -76, z0: -gEdge, x1: -25, z1: -gEdge, baseY: swY },
-    { id: 'gr_in_ws1', x0: -76, z0: gEdge, x1: -13, z1: gEdge, baseY: swY },
+    { id: 'gr_in_ws1', x0: -76, z0: gEdge, x1: -14.5, z1: gEdge, baseY: swY },
   );
   // 東通り (x > 0)
   runs.push(
-    { id: 'gr_in_en1', x0: 13, z0: -gEdge, x1: 76, z1: -gEdge, baseY: swY },
+    { id: 'gr_in_en1', x0: 14.5, z0: -gEdge, x1: 76, z1: -gEdge, baseY: swY },
     { id: 'gr_in_es1', x0: 23, z0: gEdge, x1: 76, z1: gEdge, baseY: swY },
   );
 
-  // 2. 拡張幹線道路（±82..±119m、公園西入口 z=-106..-98 は開放、南はロータリーのため省略）
+  // 2. 拡張幹線道路（±82..±118m、T字交差点手前にゆとり確保・公園西入口 z=-107..-97 を10m開放、南はロータリーのため省略）
   runs.push(
-    { id: 'gr_ext_nw', x0: -gEdge, z0: -119, x1: -gEdge, z1: -82, baseY: 0 },
-    { id: 'gr_ext_ne1', x0: gEdge, z0: -119, x1: gEdge, z1: -106, baseY: 0 },
-    { id: 'gr_ext_ne2', x0: gEdge, z0: -98, x1: gEdge, z1: -82, baseY: 0 },
-    { id: 'gr_ext_wn', x0: -119, z0: -gEdge, x1: -82, z1: -gEdge, baseY: 0 },
-    { id: 'gr_ext_ws', x0: -119, z0: gEdge, x1: -82, z1: gEdge, baseY: 0 },
-    { id: 'gr_ext_en', x0: 82, z0: -gEdge, x1: 119, z1: -gEdge, baseY: 0 },
-    { id: 'gr_ext_es', x0: 82, z0: gEdge, x1: 119, z1: gEdge, baseY: 0 },
+    { id: 'gr_ext_nw', x0: -gEdge, z0: -118, x1: -gEdge, z1: -82, baseY: 0 },
+    { id: 'gr_ext_ne1', x0: gEdge, z0: -118, x1: gEdge, z1: -107, baseY: 0 },
+    { id: 'gr_ext_ne2', x0: gEdge, z0: -97, x1: gEdge, z1: -82, baseY: 0 },
+    { id: 'gr_ext_wn', x0: -118, z0: -gEdge, x1: -82, z1: -gEdge, baseY: 0 },
+    { id: 'gr_ext_ws', x0: -118, z0: gEdge, x1: -82, z1: gEdge, baseY: 0 },
+    { id: 'gr_ext_en', x0: 82, z0: -gEdge, x1: 118, z1: -gEdge, baseY: 0 },
+    { id: 'gr_ext_es', x0: 82, z0: gEdge, x1: 118, z1: gEdge, baseY: 0 },
   );
 
-  // 3. 外周道路ループの外側ガードレール（直線 + 4つの緩やかな高速コーナー）
-  const ringSpan = CITY_METRICS.outerRingHalfSpan; // 132
-  const cornerR = CITY_METRICS.outerRingCornerRadius; // 38
-  const halfW = CITY_METRICS.outerRingHalfWidth; // 7
-  const outerOffset = halfW + 0.35; // 7.35 (外側直線 ±139.35m, 外側カーブ r = 45.35m)
-  const innerOffset = -(halfW + 0.35); // -7.35 (内側カーブ r = 30.65m)
+  // 3. 外周道路ループの外側ガードレール（16m幅員＋緩やかなR=42m高速コーナー、路肩 0.55m オフセット）
+  const ringSpan = CITY_METRICS.outerRingHalfSpan; // 134
+  const cornerR = CITY_METRICS.outerRingCornerRadius; // 42
+  const halfW = CITY_METRICS.outerRingHalfWidth; // 8.0
+  const outerOffset = halfW + 0.55; // 8.55 (外側直線 ±142.55m, 外側カーブ r = 50.55m)
+  const innerOffset = -(halfW + 0.55); // -8.55 (内側カーブ r = 33.45m)
 
   // 外周直線4辺（連続）
-  const straightHalf = ringSpan - cornerR; // 94
-  const outEdge = ringSpan + outerOffset; // 139.35
+  const straightHalf = ringSpan - cornerR; // 92
+  const outEdge = ringSpan + outerOffset; // 142.55
   runs.push(
     { id: 'gr_ring_out_n', x0: -straightHalf, z0: -outEdge, x1: straightHalf, z1: -outEdge, baseY: 0, hasReflector: true },
     { id: 'gr_ring_out_s', x0: -straightHalf, z0: outEdge, x1: straightHalf, z1: outEdge, baseY: 0, hasReflector: true },
@@ -576,24 +575,24 @@ function buildGuardrailLayout(swY: number): GuardrailRun[] {
     { id: 'gr_ring_out_e', x0: outEdge, z0: -straightHalf, x1: outEdge, z1: straightHalf, baseY: 0, hasReflector: true },
   );
 
-  // 外周内側直線（T字交差点 ±13m と 公園北入口 x∈[49,61] を開放）
-  const inEdge = ringSpan - outerOffset; // 124.65
+  // 外周内側直線（4方向T字交差点 ±16m と 公園北入口 x∈[48,62] を広く開放）
+  const inEdge = ringSpan - outerOffset; // 125.45
   runs.push(
-    { id: 'gr_ring_in_n1', x0: -straightHalf, z0: -inEdge, x1: -13, z1: -inEdge, baseY: 0 },
-    { id: 'gr_ring_in_n2', x0: 13, z0: -inEdge, x1: 49, z1: -inEdge, baseY: 0 },
-    { id: 'gr_ring_in_n3', x0: 61, z0: -inEdge, x1: straightHalf, z1: -inEdge, baseY: 0 },
-    { id: 'gr_ring_in_s1', x0: -straightHalf, z0: inEdge, x1: -13, z1: inEdge, baseY: 0 },
-    { id: 'gr_ring_in_s2', x0: 13, z0: inEdge, x1: straightHalf, z1: inEdge, baseY: 0 },
-    { id: 'gr_ring_in_w1', x0: -inEdge, z0: -straightHalf, x1: -inEdge, z1: -13, baseY: 0 },
-    { id: 'gr_ring_in_w2', x0: -inEdge, z0: 13, x1: -inEdge, z1: straightHalf, baseY: 0 },
-    { id: 'gr_ring_in_e1', x0: inEdge, z0: -straightHalf, x1: inEdge, z1: -13, baseY: 0 },
-    { id: 'gr_ring_in_e2', x0: inEdge, z0: 13, x1: inEdge, z1: straightHalf, baseY: 0 },
+    { id: 'gr_ring_in_n1', x0: -straightHalf, z0: -inEdge, x1: -16, z1: -inEdge, baseY: 0 },
+    { id: 'gr_ring_in_n2', x0: 16, z0: -inEdge, x1: 48, z1: -inEdge, baseY: 0 },
+    { id: 'gr_ring_in_n3', x0: 62, z0: -inEdge, x1: straightHalf, z1: -inEdge, baseY: 0 },
+    { id: 'gr_ring_in_s1', x0: -straightHalf, z0: inEdge, x1: -16, z1: inEdge, baseY: 0 },
+    { id: 'gr_ring_in_s2', x0: 16, z0: inEdge, x1: straightHalf, z1: inEdge, baseY: 0 },
+    { id: 'gr_ring_in_w1', x0: -inEdge, z0: -straightHalf, x1: -inEdge, z1: -16, baseY: 0 },
+    { id: 'gr_ring_in_w2', x0: -inEdge, z0: 16, x1: -inEdge, z1: straightHalf, baseY: 0 },
+    { id: 'gr_ring_in_e1', x0: inEdge, z0: -straightHalf, x1: inEdge, z1: -16, baseY: 0 },
+    { id: 'gr_ring_in_e2', x0: inEdge, z0: 16, x1: inEdge, z1: straightHalf, baseY: 0 },
   );
 
-  // 外周4コーナー曲線ガードレール（外側10分割・内側8分割で滑らか曲線＋コリジョン）
-  const loopArcs = sampleRoundedLoopPoints(ringSpan, cornerR, 10);
-  // sampleRoundedLoopPoints は4コーナー各11点（計44点＋閉じ点1）
-  const ptsPerCorner = 11;
+  // 外周4コーナー曲線ガードレール（12分割で高速コーナーに沿った滑らかな曲線＋コリジョン）
+  const cornerArcSegs = 12;
+  const loopArcs = sampleRoundedLoopPoints(ringSpan, cornerR, cornerArcSegs);
+  const ptsPerCorner = cornerArcSegs + 1;
   for (let c = 0; c < 4; c += 1) {
     const startIdx = c * ptsPerCorner;
     for (let i = 0; i < ptsPerCorner - 1; i += 1) {
@@ -760,33 +759,36 @@ function buildInstancedGuardrails(
 // ===========================================================================
 
 function buildRoadSignLayout(swY: number): RoadSignSpec[] {
+  const ringSpan = CITY_METRICS.outerRingHalfSpan; // 134
+  const cornerR = CITY_METRICS.outerRingCornerRadius; // 42
+  const halfW = CITY_METRICS.outerRingHalfWidth; // 8.0
+  const ringOuterSign = ringSpan + halfW + 0.95; // 142.95 (外周ガードレール直後の歩道縁)
+
   const signs: RoadSignSpec[] = [
-    // 内側市街地：横断歩道・制限速度40・止まれ
-    { id: 'rs_cw_nw', x: -6.7, z: -12.2, yaw: Math.PI, baseY: swY, type: 'crosswalk' },
-    { id: 'rs_cw_se', x: 6.7, z: 12.2, yaw: 0, baseY: swY, type: 'crosswalk' },
-    { id: 'rs_cw_sw', x: -12.2, z: 6.7, yaw: -Math.PI / 2, baseY: swY, type: 'crosswalk' },
-    { id: 'rs_cw_ne', x: 12.2, z: -6.7, yaw: Math.PI / 2, baseY: swY, type: 'crosswalk' },
-    { id: 'rs_spd40_n', x: 6.65, z: -36.0, yaw: 0, baseY: swY, type: 'speed40' },
-    { id: 'rs_spd40_s', x: -6.65, z: 36.0, yaw: Math.PI, baseY: swY, type: 'speed40' },
-    { id: 'rs_spd40_w', x: -38.0, z: -6.65, yaw: -Math.PI / 2, baseY: swY, type: 'speed40' },
-    { id: 'rs_spd40_e', x: 38.0, z: 6.65, yaw: Math.PI / 2, baseY: swY, type: 'speed40' },
-    // 拡張T字路合流手前の「止まれ」標識
-    { id: 'rs_stop_n', x: -6.7, z: -121.0, yaw: 0, baseY: 0, type: 'tomare' },
-    { id: 'rs_stop_s', x: 6.7, z: 121.5, yaw: Math.PI, baseY: 0, type: 'tomare' },
-    { id: 'rs_stop_w', x: -121.0, z: 6.7, yaw: Math.PI / 2, baseY: 0, type: 'tomare' },
-    { id: 'rs_stop_e', x: 121.0, z: -6.7, yaw: -Math.PI / 2, baseY: 0, type: 'tomare' },
+    // 内側市街地：横断歩道・制限速度40（すべて歩道縁石ライン ±6.45m へ整列し歩道中央を開放）
+    { id: 'rs_cw_nw', x: -6.45, z: -12.6, yaw: Math.PI, baseY: swY, type: 'crosswalk' },
+    { id: 'rs_cw_se', x: 6.45, z: 12.6, yaw: 0, baseY: swY, type: 'crosswalk' },
+    { id: 'rs_cw_sw', x: -12.6, z: 6.45, yaw: -Math.PI / 2, baseY: swY, type: 'crosswalk' },
+    { id: 'rs_cw_ne', x: 12.6, z: -6.45, yaw: Math.PI / 2, baseY: swY, type: 'crosswalk' },
+    { id: 'rs_spd40_n', x: 6.45, z: -36.0, yaw: 0, baseY: swY, type: 'speed40' },
+    { id: 'rs_spd40_s', x: -6.45, z: 36.0, yaw: Math.PI, baseY: swY, type: 'speed40' },
+    { id: 'rs_spd40_w', x: -38.0, z: -6.45, yaw: -Math.PI / 2, baseY: swY, type: 'speed40' },
+    { id: 'rs_spd40_e', x: 38.0, z: 6.45, yaw: Math.PI / 2, baseY: swY, type: 'speed40' },
+    // 拡張T字路合流手前の「止まれ」標識（横断歩道 ±123.6m の手前 ±120.5m・縁石 ±6.45m へ整列）
+    { id: 'rs_stop_n', x: -6.45, z: -120.5, yaw: 0, baseY: 0, type: 'tomare' },
+    { id: 'rs_stop_s', x: 6.45, z: 121.2, yaw: Math.PI, baseY: 0, type: 'tomare' },
+    { id: 'rs_stop_w', x: -120.5, z: 6.45, yaw: Math.PI / 2, baseY: 0, type: 'tomare' },
+    { id: 'rs_stop_e', x: 120.5, z: -6.45, yaw: -Math.PI / 2, baseY: 0, type: 'tomare' },
     // 外周道路の制限速度60標識
-    { id: 'rs_spd60_n', x: -42, z: -139.8, yaw: Math.PI / 2, baseY: 0, type: 'speed60' },
-    { id: 'rs_spd60_s', x: 42, z: 139.8, yaw: -Math.PI / 2, baseY: 0, type: 'speed60' },
-    { id: 'rs_spd60_w', x: -139.8, z: 42, yaw: Math.PI, baseY: 0, type: 'speed60' },
-    { id: 'rs_spd60_e', x: 139.8, z: -42, yaw: 0, baseY: 0, type: 'speed60' },
+    { id: 'rs_spd60_n', x: -42, z: -ringOuterSign, yaw: Math.PI / 2, baseY: 0, type: 'speed60' },
+    { id: 'rs_spd60_s', x: 42, z: ringOuterSign, yaw: -Math.PI / 2, baseY: 0, type: 'speed60' },
+    { id: 'rs_spd60_w', x: -ringOuterSign, z: 42, yaw: Math.PI, baseY: 0, type: 'speed60' },
+    { id: 'rs_spd60_e', x: ringOuterSign, z: -42, yaw: 0, baseY: 0, type: 'speed60' },
   ];
 
   // 外周道路4コーナーの外側に視認性抜群の黒黄シェブロン（カーブ誘導標識）を各4基ずつ配置
-  const ringSpan = CITY_METRICS.outerRingHalfSpan; // 132
-  const cornerR = CITY_METRICS.outerRingCornerRadius; // 38
-  const s = ringSpan - cornerR; // 94
-  const chevronRadius = cornerR + CITY_METRICS.outerRingHalfWidth + 1.0; // 46.0
+  const s = ringSpan - cornerR; // 92
+  const chevronRadius = cornerR + halfW + 1.1; // 51.1 (コーナー外側ガードレール 50.55m の外側)
 
   const cornerDefs: ReadonlyArray<{
     cx: number;
@@ -1012,9 +1014,13 @@ function buildTreeLayout(swY: number): TreeSpec[] {
     pushTree(x, z, 0, 1.02, true);
   }
 
-  // 4. 外周道路ループ沿いの並木（外側歩道帯 ±142m ＋ 四隅コーナー外側）
-  const ringSpan = CITY_METRICS.outerRingHalfSpan; // 132
-  const outerVerge = ringSpan + CITY_METRICS.outerRingHalfWidth + 2.8; // 141.8
+  // 4. 外周道路ループ沿いの並木（外側歩道の外縁へ整列し、歩道中央を開放）
+  const ringSpan = CITY_METRICS.outerRingHalfSpan; // 134
+  const outerVerge =
+    ringSpan +
+    CITY_METRICS.outerRingHalfWidth +
+    CITY_METRICS.outerRingOuterSidewalkWidth -
+    0.55; // 145.45 (外側歩道 142..146m の外縁)
   for (const coord of [-84, -56, -28, 28, 56, 84]) {
     pushTree(coord, -outerVerge, 0, 1.05 + (idx % 3) * 0.09, true);
     pushTree(coord, outerVerge, 0, 1.05 + (idx % 3) * 0.09, true);
@@ -1022,9 +1028,13 @@ function buildTreeLayout(swY: number): TreeSpec[] {
     pushTree(outerVerge, coord, 0, 1.05 + (idx % 3) * 0.09, true);
   }
 
-  // コーナー外側の街路樹（4コーナー各3本）
-  const s = ringSpan - CITY_METRICS.outerRingCornerRadius; // 94
-  const treeArcR = CITY_METRICS.outerRingCornerRadius + CITY_METRICS.outerRingHalfWidth + 3.2; // 48.2
+  // コーナー外側の街路樹（4コーナー各3本、外側歩道外縁に整列）
+  const s = ringSpan - CITY_METRICS.outerRingCornerRadius; // 92
+  const treeArcR =
+    CITY_METRICS.outerRingCornerRadius +
+    CITY_METRICS.outerRingHalfWidth +
+    CITY_METRICS.outerRingOuterSidewalkWidth -
+    0.4; // 53.6
   const corners: ReadonlyArray<[number, number, number, number]> = [
     [s, -s, -Math.PI / 2, 0],
     [s, s, 0, Math.PI / 2],
@@ -1239,8 +1249,8 @@ function createVendingDisplayMaterial(
     ctx.fillStyle = isEmissive ? '#080c12' : '#1e293b';
     ctx.fillRect(0, 0, w, h);
 
-    // 上部ドリンクディスプレイ窓（夜間に明るく光る白バックライト）
-    ctx.fillStyle = isEmissive ? '#e8f6ff' : '#f1f5f9';
+    // 上部ドリンクディスプレイ窓（夜間に白飛びせずカラフルな飲料棚が映える適度な白バックライト）
+    ctx.fillStyle = isEmissive ? '#cde4f5' : '#f1f5f9';
     ctx.fillRect(10, 10, w - 20, 152);
 
     // 3段のドリンク棚＋カラフルな缶・ペットボトル

@@ -13,7 +13,13 @@ interface StreetLightPlacement {
 
 const SW_Y = CITY_METRICS.sidewalkHeight;
 const RING_OUTER_POST =
-  CITY_METRICS.outerRingHalfSpan + CITY_METRICS.outerRingHalfWidth + 0.85; // 139.85m
+  CITY_METRICS.outerRingHalfSpan + CITY_METRICS.outerRingHalfWidth + 0.9;
+const RING_CORNER_CENTER =
+  CITY_METRICS.outerRingHalfSpan - CITY_METRICS.outerRingCornerRadius;
+const RING_CORNER_POST =
+  RING_CORNER_CENTER +
+  (CITY_METRICS.outerRingCornerRadius + CITY_METRICS.outerRingHalfWidth + 0.95) *
+    Math.SQRT1_2;
 
 /**
  * 内側市街地（14基・歩道 Y=0.12）＋ 外周道路ループ（20基・Y=0）の計34基の街灯。
@@ -61,10 +67,10 @@ const STREET_LIGHT_PLACEMENTS: readonly StreetLightPlacement[] = [
   { id: 'street_light_re3', x: RING_OUTER_POST, z: 24, baseY: 0, yaw: Math.PI },
   { id: 'street_light_re4', x: RING_OUTER_POST, z: 72, baseY: 0, yaw: Math.PI },
   // 外周道路ループ：四隅コーナー中央 (アームをコーナー中心向き)
-  { id: 'street_light_rc_ne', x: 126.4, z: -126.4, baseY: 0, yaw: (-3 * Math.PI) / 4 },
-  { id: 'street_light_rc_se', x: 126.4, z: 126.4, baseY: 0, yaw: (3 * Math.PI) / 4 },
-  { id: 'street_light_rc_sw', x: -126.4, z: 126.4, baseY: 0, yaw: Math.PI / 4 },
-  { id: 'street_light_rc_nw', x: -126.4, z: -126.4, baseY: 0, yaw: -Math.PI / 4 },
+  { id: 'street_light_rc_ne', x: RING_CORNER_POST, z: -RING_CORNER_POST, baseY: 0, yaw: (-3 * Math.PI) / 4 },
+  { id: 'street_light_rc_se', x: RING_CORNER_POST, z: RING_CORNER_POST, baseY: 0, yaw: (3 * Math.PI) / 4 },
+  { id: 'street_light_rc_sw', x: -RING_CORNER_POST, z: RING_CORNER_POST, baseY: 0, yaw: Math.PI / 4 },
+  { id: 'street_light_rc_nw', x: -RING_CORNER_POST, z: -RING_CORNER_POST, baseY: 0, yaw: -Math.PI / 4 },
 ];
 
 const LAMP_DAY_COLOR = new THREE.Color(0xdbe3eb);
@@ -324,21 +330,21 @@ export class StreetLightSystem {
 
     if (isLit) {
       this.lampLensMat.emissive.copy(LAMP_NIGHT_EMISSIVE);
-      this.lampLensMat.emissiveIntensity = clamped * 3.4;
+      this.lampLensMat.emissiveIntensity = clamped * 1.9;
     } else {
       this.lampLensMat.emissive.copy(LAMP_UNLIT_EMISSIVE);
       this.lampLensMat.emissiveIntensity = 0;
     }
 
-    this.haloSpriteMat.opacity = clamped * 0.72;
-    this.groundPoolMat.opacity = clamped * 0.32;
+    this.haloSpriteMat.opacity = clamped * 0.56;
+    this.groundPoolMat.opacity = clamped * 0.28;
     this.groundPoolInst.visible = isLit;
 
     for (let i = 0; i < this.haloSprites.length; i += 1) {
       this.haloSprites[i].visible = isLit;
     }
 
-    this.intersectionLight.intensity = clamped * 44;
+    this.intersectionLight.intensity = clamped * 40;
   }
 
   public dispose(): void {

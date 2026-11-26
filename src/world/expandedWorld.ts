@@ -118,9 +118,9 @@ export function buildExpandedWorld(
   const innerSwW = CITY_METRICS.outerRingInnerSidewalkWidth; // 3.5
   const outerSwW = CITY_METRICS.outerRingOuterSidewalkWidth; // 4.0
 
-  // 2-A. 4方向幹線道路の延長アスファルト (80..126m)
+  // 2-A. 4方向幹線道路の延長アスファルト (80..126m、外周道路内縁と隙間・重なりゼロで接続)
   const armStart = innerHalf; // 80
-  const armEnd = ringSpan - ringHalfW + 1.0; // 126 (外周道路内縁 125m と 1m 重ねて隙間ゼロ)
+  const armEnd = ringSpan - ringHalfW; // 126 (外周道路内縁と完全一致させてZファイティング防止)
   const armLen = armEnd - armStart; // 46m
   const armCenter = armStart + armLen * 0.5; // 103m
   const roadWidth = roadHalf * 2; // 12m
@@ -130,7 +130,7 @@ export function buildExpandedWorld(
     z: number,
     w: number,
     d: number,
-    y = 0.005,
+    y = 0.006,
   ) => {
     const geo = trackGeo(createWorldUvRectGeometry(w, d, 1 / 160));
     const mesh = new THREE.Mesh(geo, asphaltMaterial);
@@ -140,12 +140,12 @@ export function buildExpandedWorld(
   };
 
   // 北・西・東延長（南はロータリー込みで接続）
-  addWorldAsphaltRect(0, -armCenter, roadWidth, armLen, 0.005);
-  addWorldAsphaltRect(-armCenter, 0, armLen, roadWidth, 0.005);
-  addWorldAsphaltRect(armCenter, 0, armLen, roadWidth, 0.005);
-  // 南延長（内側80 -> ロータリー84、ロータリー122 -> 外周126、広場タイル 0.002 より上）
-  addWorldAsphaltRect(0, 83.0, roadWidth, 8.0, 0.005);
-  addWorldAsphaltRect(0, 123.5, roadWidth, 6.0, 0.005);
+  addWorldAsphaltRect(0, -armCenter, roadWidth, armLen, 0.006);
+  addWorldAsphaltRect(-armCenter, 0, armLen, roadWidth, 0.006);
+  addWorldAsphaltRect(armCenter, 0, armLen, roadWidth, 0.006);
+  // 南延長（内側80 -> ロータリー北端85、ロータリー南端123 -> 外周内縁126、広場タイル 0.002 より上・ロータリー車道 0.011 より下）
+  addWorldAsphaltRect(0, 82.5, roadWidth, 5.0, 0.006);
+  addWorldAsphaltRect(0, 124.5, roadWidth, 3.0, 0.006);
 
   // 幹線延長の両脇歩道帯（北・西・東のみ、幅 3.5m）
   const addWorldPavementRect = (
@@ -261,29 +261,61 @@ export function buildExpandedWorld(
   parkLawn.receiveShadow = true;
   root.add(parkLawn);
 
-  // 公園内遊歩道（東西スパイン・南北スパイン・入口アプローチ・中央円形広場・外周プロムナード）
-  const addParkPathRect = (x: number, z: number, w: number, d: number) => {
+  // 公園内遊歩道（重なり・Zファイティングゼロの非重複セグメント構成、4方向ゲート・道路へシームレス接続）
+  const addParkPathRect = (x: number, z: number, w: number, d: number, y = 0.014) => {
     const geo = trackGeo(createWorldUvRectGeometry(w, d, 1 / 6));
     const mesh = new THREE.Mesh(geo, parkPathMat);
-    mesh.position.set(x, 0.014, z);
+    mesh.position.set(x, y, z);
     mesh.receiveShadow = true;
     root.add(mesh);
   };
-  // 東西メイン遊歩道（西入口アプローチ x=6.2..96 まで接続）
-  addParkPathRect(51.1, parkCz, 89.8, 4.4);
-  // 南北メイン遊歩道（北外周歩道 z=-121.5〜南街区 z=-80 まで接続）
-  addParkPathRect(parkCx, -100.75, 4.4, 41.5);
-  // 公園内周遊パス（矩形ループ）
-  addParkPathRect(parkCx, parkB.minZ + 5.5, parkW - 14, 2.8);
-  addParkPathRect(parkCx, parkB.maxZ - 5.5, parkW - 14, 2.8);
-  addParkPathRect(parkB.minX + 7.5, parkCz, 2.8, parkD - 10);
-  addParkPathRect(parkB.maxX - 7.5, parkCz, 2.8, parkD - 10);
+  const plazaR = 8.6;
+  const mainW = 4.4;
+  const loopW = 2.8;
+  const loopN = parkB.minZ + 5.5; // -114.5
+  const loopS = parkB.maxZ - 5.5; // -89.5
+  const loopW_X = parkB.minX + 7.5; // 21.5
+  const loopE_X = parkB.maxX - 7.5; // 88.5
 
-  // 中央円形広場 (radius = 8.6m)
-  const parkPlazaGeo = trackGeo(new THREE.CircleGeometry(8.6, 32));
+  // 東西メイン遊歩道（中央円形広場手前で分割し、西は北幹線歩道 x=6.2、東は公園東口 x=98 まで接続）
+  const ewWestEnd = parkCx - plazaR + 0.3; // 46.7
+  addParkPathRect((6.2 + ewWestEnd) * 0.5, parkCz, ewWestEnd - 6.2, mainW);
+  const ewEastStart = parkCx + plazaR - 0.3; // 63.3
+  const ewEastEnd = parkB.maxX + 2.0; // 98.0
+  addParkPathRect((ewEastStart + ewEastEnd) * 0.5, parkCz, ewEastEnd - ewEastStart, mainW);
+
+  // 南北メイン遊歩道（北は外周道路内側歩道 z=-122.5、南は内側街区 z=-80.0 まで接続）
+  const nsNorthStart = -(ringSpan - ringHalfW - innerSwW); // -122.5
+  const nsNorthEnd = parkCz - plazaR + 0.3; // -110.3
+  addParkPathRect(parkCx, (nsNorthStart + nsNorthEnd) * 0.5, mainW, nsNorthEnd - nsNorthStart);
+  const nsSouthStart = parkCz + plazaR - 0.3; // -93.7
+  const nsSouthEnd = -innerHalf; // -80.0
+  addParkPathRect(parkCx, (nsSouthStart + nsSouthEnd) * 0.5, mainW, nsSouthEnd - nsSouthStart);
+
+  // 公園内周遊パス（メイン遊歩道・四隅との重複ゼロで分割配置）
+  const loopLeftStart = loopW_X + loopW * 0.5; // 22.9
+  const loopLeftEnd = parkCx - mainW * 0.5; // 52.8
+  const loopRightStart = parkCx + mainW * 0.5; // 57.2
+  const loopRightEnd = loopE_X - loopW * 0.5; // 87.1
+  addParkPathRect((loopLeftStart + loopLeftEnd) * 0.5, loopN, loopLeftEnd - loopLeftStart, loopW);
+  addParkPathRect((loopRightStart + loopRightEnd) * 0.5, loopN, loopRightEnd - loopRightStart, loopW);
+  addParkPathRect((loopLeftStart + loopLeftEnd) * 0.5, loopS, loopLeftEnd - loopLeftStart, loopW);
+  addParkPathRect((loopRightStart + loopRightEnd) * 0.5, loopS, loopRightEnd - loopRightStart, loopW);
+
+  const loopNorthTop = loopN - loopW * 0.5; // -115.9
+  const loopNorthBot = parkCz - mainW * 0.5; // -104.2
+  const loopSouthTop = parkCz + mainW * 0.5; // -99.8
+  const loopSouthBot = loopS + loopW * 0.5; // -88.1
+  addParkPathRect(loopW_X, (loopNorthTop + loopNorthBot) * 0.5, loopW, loopNorthBot - loopNorthTop);
+  addParkPathRect(loopW_X, (loopSouthTop + loopSouthBot) * 0.5, loopW, loopSouthBot - loopSouthTop);
+  addParkPathRect(loopE_X, (loopNorthTop + loopNorthBot) * 0.5, loopW, loopNorthBot - loopNorthTop);
+  addParkPathRect(loopE_X, (loopSouthTop + loopSouthBot) * 0.5, loopW, loopSouthBot - loopSouthTop);
+
+  // 中央円形広場 (radius = 8.6m, Y = 0.017 で接続部と明確に分離)
+  const parkPlazaGeo = trackGeo(new THREE.CircleGeometry(plazaR, 32));
   const parkPlaza = new THREE.Mesh(parkPlazaGeo, parkPathMat);
   parkPlaza.rotation.x = -Math.PI / 2;
-  parkPlaza.position.set(parkCx, 0.016, parkCz);
+  parkPlaza.position.set(parkCx, 0.017, parkCz);
   parkPlaza.receiveShadow = true;
   root.add(parkPlaza);
 
@@ -360,20 +392,20 @@ export function buildExpandedWorld(
 
   addCollider('park_fountain', parkCx, parkCz, 5.4, 5.4, 0, 0, 2.8);
 
-  // 公園外周柵（4方向に幅6mの歩行者ゲートを開放、InstancedMesh + OBB コライダー）
+  // 公園外周柵（4方向に幅8mの広い歩行者ゲートを開放、InstancedMesh + OBB コライダー）
   const parkFences: FenceSegmentSpec[] = [
-    // 北辺 (z = -120, 中央 x=52..58 ゲート開放)
-    { id: 'park_fence_n1', x0: 14, z0: -120, x1: 52, z1: -120 },
-    { id: 'park_fence_n2', x0: 58, z0: -120, x1: 96, z1: -120 },
-    // 南辺 (z = -84, 中央 x=52..58 ゲート開放)
-    { id: 'park_fence_s1', x0: 14, z0: -84, x1: 52, z1: -84 },
-    { id: 'park_fence_s2', x0: 58, z0: -84, x1: 96, z1: -84 },
-    // 西辺 (x = 14, 中央 z=-105..-99 ゲート開放)
-    { id: 'park_fence_w1', x0: 14, z0: -120, x1: 14, z1: -105 },
-    { id: 'park_fence_w2', x0: 14, z0: -99, x1: 14, z1: -84 },
-    // 東辺 (x = 96, 中央 z=-105..-99 ゲート開放)
-    { id: 'park_fence_e1', x0: 96, z0: -120, x1: 96, z1: -105 },
-    { id: 'park_fence_e2', x0: 96, z0: -99, x1: 96, z1: -84 },
+    // 北辺 (z = -120, 中央 x=51..59 ゲート開放)
+    { id: 'park_fence_n1', x0: 14, z0: -120, x1: 51, z1: -120 },
+    { id: 'park_fence_n2', x0: 59, z0: -120, x1: 96, z1: -120 },
+    // 南辺 (z = -84, 中央 x=51..59 ゲート開放)
+    { id: 'park_fence_s1', x0: 14, z0: -84, x1: 51, z1: -84 },
+    { id: 'park_fence_s2', x0: 59, z0: -84, x1: 96, z1: -84 },
+    // 西辺 (x = 14, 中央 z=-106..-98 ゲート開放)
+    { id: 'park_fence_w1', x0: 14, z0: -120, x1: 14, z1: -106 },
+    { id: 'park_fence_w2', x0: 14, z0: -98, x1: 14, z1: -84 },
+    // 東辺 (x = 96, 中央 z=-106..-98 ゲート開放)
+    { id: 'park_fence_e1', x0: 96, z0: -120, x1: 96, z1: -106 },
+    { id: 'park_fence_e2', x0: 96, z0: -98, x1: 96, z1: -84 },
   ];
   buildInstancedParkFences(root, parkFences, trackGeo, trackMat, addCollider);
 
@@ -410,9 +442,9 @@ export function buildExpandedWorld(
   plazaMesh.receiveShadow = true;
   root.add(plazaMesh);
 
-  // ロータリー環状車道アスファルト (r = 10.5..20.5, Y = 0.008 — 物理地面 Y = 0)
+  // ロータリー環状車道アスファルト (r = 10.5..20.5, Y = 0.011 — 南接続車道 0.006 と明確に分離、物理地面 Y = 0)
   const rotaryRoadGeo = trackGeo(
-    createRingAsphaltGeometry(rotInR, rotOutR, 48, 0.008, 1 / 160),
+    createRingAsphaltGeometry(rotInR, rotOutR, 48, 0.011, 1 / 160),
   );
   const rotaryRoadMesh = new THREE.Mesh(rotaryRoadGeo, asphaltMaterial);
   rotaryRoadMesh.position.set(rotC.x, 0, rotC.z);
@@ -646,9 +678,9 @@ export function buildExpandedWorld(
     { id: 'bench_park_e2', x: 80, z: parkCz + 3.4, yaw: Math.PI },
     { id: 'bench_park_n1', x: 40, z: parkB.minZ + 3.4, yaw: 0 },
     { id: 'bench_park_s1', x: 70, z: parkB.maxZ - 3.4, yaw: Math.PI },
-    // 駅前ロータリー広場4脚
-    { id: 'bench_plaza_w1', x: -24.5, z: 97.5, yaw: Math.PI / 2 },
-    { id: 'bench_plaza_w2', x: -24.5, z: 110.5, yaw: Math.PI / 2 },
+    // 駅前ロータリー広場4脚（西側は駅キャノピー沿いへ整列、東側はバスシェルター下へ収容）
+    { id: 'bench_plaza_w1', x: -27.2, z: 97.5, yaw: Math.PI / 2 },
+    { id: 'bench_plaza_w2', x: -27.2, z: 110.5, yaw: Math.PI / 2 },
     { id: 'bench_plaza_e1', x: 26.2, z: 95.5, yaw: -Math.PI / 2 },
     { id: 'bench_plaza_e2', x: 26.2, z: 112.5, yaw: -Math.PI / 2 },
   ];
@@ -766,11 +798,11 @@ export function buildExpandedWorld(
 
     if (isLit) {
       parkLampGlobeMat.emissive.copy(WARM_LAMP_EMISSIVE);
-      parkLampGlobeMat.emissiveIntensity = clamped * 3.0;
+      parkLampGlobeMat.emissiveIntensity = clamped * 1.75;
       fountainWaterMat.emissive.copy(FOUNTAIN_GLOW_EMISSIVE);
-      fountainWaterMat.emissiveIntensity = clamped * 0.42;
+      fountainWaterMat.emissiveIntensity = clamped * 0.36;
       stationGlassMat.emissive.copy(STATION_GLASS_EMISSIVE);
-      stationGlassMat.emissiveIntensity = clamped * 0.95;
+      stationGlassMat.emissiveIntensity = clamped * 0.78;
     } else {
       parkLampGlobeMat.emissive.copy(UNLIT_EMISSIVE);
       parkLampGlobeMat.emissiveIntensity = 0;
@@ -780,17 +812,17 @@ export function buildExpandedWorld(
       stationGlassMat.emissiveIntensity = 0;
     }
 
-    clockFaceMat.emissiveIntensity = 0.08 + clamped * 1.45;
-    stationSignMat.emissiveIntensity = 0.1 + clamped * 1.65;
-    busSignMat.emissiveIntensity = 0.08 + clamped * 1.35;
+    clockFaceMat.emissiveIntensity = 0.05 + clamped * 1.05;
+    stationSignMat.emissiveIntensity = 0.06 + clamped * 1.15;
+    busSignMat.emissiveIntensity = 0.05 + clamped * 1.0;
 
-    lampHaloMat.opacity = clamped * 0.65;
+    lampHaloMat.opacity = clamped * 0.5;
     for (let i = 0; i < lampHalos.length; i += 1) {
       lampHalos[i].visible = isLit;
     }
 
-    parkPointLight.intensity = clamped * 34;
-    rotaryPointLight.intensity = clamped * 42;
+    parkPointLight.intensity = clamped * 32;
+    rotaryPointLight.intensity = clamped * 38;
   };
 
   setNightFactor(0);
@@ -1036,14 +1068,15 @@ function buildExpandedRoadMarkings(
     }),
   );
 
-  const ringSpan = CITY_METRICS.outerRingHalfSpan; // 132
-  const cornerR = CITY_METRICS.outerRingCornerRadius; // 38
-  const ringHalfW = CITY_METRICS.outerRingHalfWidth; // 7
-  const y = 0.015;
+  const ringSpan = CITY_METRICS.outerRingHalfSpan; // 134
+  const cornerR = CITY_METRICS.outerRingCornerRadius; // 42
+  const ringHalfW = CITY_METRICS.outerRingHalfWidth; // 8.0
+  const laneDivOff = ringHalfW * 0.5; // 4.0m (片側2車線の中央)
+  const y = 0.018;
 
   // 外周道路ループの中央線（オレンジ実線）および内側・外側白実線
   const ringCenterGeo = trackGeo(
-    createRoundedLoopStripGeometry(ringSpan, cornerR, -0.11, 0.11, y, 20, 0.1),
+    createRoundedLoopStripGeometry(ringSpan, cornerR, -0.11, 0.11, y, 22, 0.1),
   );
   parent.add(new THREE.Mesh(ringCenterGeo, yellowMat));
 
@@ -1054,7 +1087,7 @@ function buildExpandedRoadMarkings(
       -ringHalfW + 0.3,
       -ringHalfW + 0.48,
       y,
-      20,
+      22,
       0.1,
     ),
   );
@@ -1067,7 +1100,7 @@ function buildExpandedRoadMarkings(
       ringHalfW - 0.48,
       ringHalfW - 0.3,
       y,
-      20,
+      22,
       0.1,
     ),
   );
@@ -1087,8 +1120,8 @@ function buildExpandedRoadMarkings(
   const whiteStrips: StripItem[] = [];
   const yellowStrips: StripItem[] = [];
 
-  // 外周道路ループの2車線分割破線（内側車線 -3.5m / 外側車線 +3.5m）
-  const loopSamples = sampleRoundedLoopPoints(ringSpan, cornerR, 18);
+  // 外周道路ループの2車線分割破線（内側車線 -4.0m / 外側車線 +4.0m）
+  const loopSamples = sampleRoundedLoopPoints(ringSpan, cornerR, 20);
   for (let i = 0; i < loopSamples.length - 1; i += 1) {
     const p0 = loopSamples[i];
     const p1 = loopSamples[i + 1];
@@ -1107,23 +1140,23 @@ function buildExpandedRoadMarkings(
       const nLen = Math.hypot(nx, nz) || 1;
       const unx = nx / nLen;
       const unz = nz / nLen;
-      // 4方向T字接続部 (±10m) は破線を省く
+      // 4方向T字接続部 (±12m) は破線を省く
       if (
-        (Math.abs(bx) < 10 && Math.abs(Math.abs(bz) - ringSpan) < 12) ||
-        (Math.abs(bz) < 10 && Math.abs(Math.abs(bx) - ringSpan) < 12)
+        (Math.abs(bx) < 12 && Math.abs(Math.abs(bz) - ringSpan) < 14) ||
+        (Math.abs(bz) < 12 && Math.abs(Math.abs(bx) - ringSpan) < 14)
       ) {
         continue;
       }
       whiteStrips.push({
-        x: bx - unx * 3.5,
-        z: bz - unz * 3.5,
+        x: bx - unx * laneDivOff,
+        z: bz - unz * laneDivOff,
         w: 0.14,
         d: 4.0,
         ry,
       });
       whiteStrips.push({
-        x: bx + unx * 3.5,
-        z: bz + unz * 3.5,
+        x: bx + unx * laneDivOff,
+        z: bz + unz * laneDivOff,
         w: 0.14,
         d: 4.0,
         ry,
@@ -1131,9 +1164,9 @@ function buildExpandedRoadMarkings(
     }
   }
 
-  // 4方向延長幹線の白線・中央線 (80..123m)
-  const extLen = 42.0;
-  const extCenter = 80 + extLen * 0.5; // 101
+  // 4方向延長幹線の白線・中央線 (80..121.8m、T字横断歩道手前まで)
+  const extLen = 41.8;
+  const extCenter = 80 + extLen * 0.5; // 100.9
   const roadHalf = CITY_METRICS.roadHalfWidth; // 6
   const outerOff = roadHalf - 0.35;
 
@@ -1160,20 +1193,20 @@ function buildExpandedRoadMarkings(
     });
   }
 
-  // T字合流部（北・西・東・南）の横断歩道ゼブラストライプ
+  // T字合流部（北・西・東・南）の横断歩道ゼブラストライプ（外周内縁 ±126m の手前 ±123.6m）
   const stripeCount = 8;
   const stripeSpan = roadHalf * 2 - 1.6;
   const stripeStep = stripeSpan / stripeCount;
   for (let i = 0; i < stripeCount; i += 1) {
     const off = -stripeSpan * 0.5 + stripeStep * (i + 0.5);
     // 北・南 T字合流部
-    whiteStrips.push({ x: off, z: -122.8, w: 0.52, d: 2.8, ry: 0 });
-    whiteStrips.push({ x: off, z: 123.0, w: 0.52, d: 2.6, ry: 0 });
+    whiteStrips.push({ x: off, z: -123.6, w: 0.52, d: 2.8, ry: 0 });
+    whiteStrips.push({ x: off, z: 123.8, w: 0.52, d: 2.4, ry: 0 });
     // 西・東 T字合流部
-    whiteStrips.push({ x: -122.8, z: off, w: 2.8, d: 0.52, ry: 0 });
-    whiteStrips.push({ x: 122.8, z: off, w: 2.8, d: 0.52, ry: 0 });
-    // ロータリー北入口横断歩道 (z = 83.2)
-    whiteStrips.push({ x: off, z: 83.2, w: 0.52, d: 2.6, ry: 0 });
+    whiteStrips.push({ x: -123.6, z: off, w: 2.8, d: 0.52, ry: 0 });
+    whiteStrips.push({ x: 123.6, z: off, w: 2.8, d: 0.52, ry: 0 });
+    // ロータリー北入口横断歩道 (z = 82.4)
+    whiteStrips.push({ x: off, z: 82.4, w: 0.52, d: 2.6, ry: 0 });
   }
 
   // ロータリー環状破線 (r = 15.5m)
@@ -1582,13 +1615,15 @@ function buildInstancedPlazaBollards(
   ) => void,
 ): void {
   const coords: Array<{ x: number; z: number }> = [];
-  // 東・西の歩道円弧（北・南の車道接続開口部を避けて配置）
+  // 東・西の歩道円弧（北・南の車道接続開口部＋駅エントランス/バス停前の東西歩行者出入口を開放）
   const arcRanges: ReadonlyArray<[number, number]> = [
-    [-Math.PI * 0.34, Math.PI * 0.34], // 東側円弧
-    [Math.PI * 0.66, Math.PI * 1.34], // 西側円弧
+    [-Math.PI * 0.34, -Math.PI * 0.09], // 東北側円弧
+    [Math.PI * 0.09, Math.PI * 0.34], // 東南側円弧
+    [Math.PI * 0.66, Math.PI * 0.91], // 西南側円弧
+    [Math.PI * 1.09, Math.PI * 1.34], // 西北側円弧
   ];
   for (const [aStart, aEnd] of arcRanges) {
-    const steps = 10;
+    const steps = 4;
     for (let i = 0; i <= steps; i += 1) {
       const a = aStart + ((aEnd - aStart) * i) / steps;
       coords.push({
@@ -1611,10 +1646,10 @@ function buildInstancedPlazaBollards(
   inst.instanceMatrix.needsUpdate = true;
   parent.add(inst);
 
-  // 東・西それぞれの弧を4本の低めコリジョンセグメントで近似（車両の広場乗り上げ防止）
+  // 各サブ弧を2本の低めコリジョンセグメントで近似（車両の広場乗り上げ防止しつつ歩行者出入口を確保）
   for (let rIdx = 0; rIdx < arcRanges.length; rIdx += 1) {
     const [aStart, aEnd] = arcRanges[rIdx];
-    const segs = 4;
+    const segs = 2;
     for (let i = 0; i < segs; i += 1) {
       const a0 = aStart + ((aEnd - aStart) * i) / segs;
       const a1 = aStart + ((aEnd - aStart) * (i + 1)) / segs;

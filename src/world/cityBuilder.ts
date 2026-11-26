@@ -67,7 +67,7 @@ export function buildJapaneseCity(
     if (entry.kind === 'window') {
       if (factor > 0.03) {
         entry.mat.emissive.copy(WARM_WINDOW_EMISSIVE);
-        entry.mat.emissiveIntensity = factor * 0.88;
+        entry.mat.emissiveIntensity = factor * 0.78;
       } else {
         entry.mat.emissive.copy(UNLIT_EMISSIVE);
         entry.mat.emissiveIntensity = 0;
@@ -75,7 +75,7 @@ export function buildJapaneseCity(
     } else {
       entry.mat.emissive.copy(entry.baseEmissive);
       entry.mat.emissiveIntensity =
-        entry.baseIntensity * (0.45 + factor * 1.95);
+        entry.baseIntensity * (0.4 + factor * 1.05);
     }
   };
 

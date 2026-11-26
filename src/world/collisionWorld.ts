@@ -165,12 +165,12 @@ export const CITY_METRICS = {
   sidewalkHeight: 0.12,
   /** 歩道縁石の段差補間幅 (m) */
   curbSlopeWidth: 0.45,
-  /** 外周道路ループの中心線半幅 (±132m) */
-  outerRingHalfSpan: 132,
-  /** 外周道路ループの四隅コーナー中心線半径 (m, 直線区間は -94..+94 = 188m) */
-  outerRingCornerRadius: 38,
-  /** 外周道路ループの車道半幅 (全幅 14m: 片側2車線＋路肩) */
-  outerRingHalfWidth: 7.0,
+  /** 外周道路ループの中心線半幅 (±134m) */
+  outerRingHalfSpan: 134,
+  /** 外周道路ループの四隅コーナー中心線半径 (m, 直線区間は -92..+92 = 184m、高速走行対応の緩やかカーブ) */
+  outerRingCornerRadius: 42,
+  /** 外周道路ループの車道半幅 (全幅 16m: 片側2車線 4.0m×2 のゆとりある幅員) */
+  outerRingHalfWidth: 8.0,
   /** 外周道路ループの内側歩道幅 (m) */
   outerRingInnerSidewalkWidth: 3.5,
   /** 外周道路ループの外側歩道幅 (m) */
@@ -189,8 +189,8 @@ export const CITY_METRICS = {
   plazaBounds: {
     minX: -44,
     maxX: 44,
-    minZ: 82,
-    maxZ: 122,
+    minZ: 80,
+    maxZ: 122.5,
   },
 } as const;
 
