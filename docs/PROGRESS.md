@@ -1,13 +1,49 @@
 # 開発進捗記録（PROGRESS.md）
 
 ## 現在のステータス
-- **完了済み作業ID**: `0-C`（素材棚卸し）、`1-A`（最小起動基盤・GitHub Pages設定）、`1-B`（人物表示）、`1-C`（徒歩移動・三人称カメラ・iPadタッチ操作）、`1-D`（日本の街区配置と衝突判定 + 単体厳選＆埋まり/浮き解消修正）、`1-E`（Poly Haven 1K PBR・HDRI・環境仕上げ）、**PHASE 1 実機検証完了**、`2-A`（運転可能な主役車両1台の表示・構造確認・`src/vehicle/` 土台）、`2-B`（主役車両への乗降・運転物理・車輪回転・運転カメラ・iPad運転タッチUI + 3台セットミニチュア車両修正）、`2-C`（カメラの建物遮蔽回避・主役車両110km/h化・街区配置済みスポーツカーの運転車両化160km/h）、**`3-A`（iPadタッチ操作UI消失不具合修正 + AI交通車両4台の左側通行自動走行システム）**
-- **次回作業ID**: `3-B` 以降（iPad Air 第5世代実機でのタッチUI常時表示維持・AI交通車両の左側通行/車間距離維持/衝突回避検証完了後に進行）
-- **関連コミットID**: `7c84879`（3-A iPadタッチUI消失修正・AI交通車両4台の自動走行システム）、`2156aa0`（2-C カメラ遮蔽回避・110km/h化・Porsche 911 Turbo 運転車両化160km/h）、`7a16542`（2-B 運転物理・乗降・運転カメラ/UI・ミニチュア3台セット車両修正）、`460bdb6`（2-A 主役車両配置＆リグ土台・歩道境界つまづき修正）、`f3e12dc`（1-D ジオラマ除外＆単体Y=0厳密接地修正）、`6b8976b`（1-D 飛行機除外等）、`b5343ca`（1-D / 1-E 実装）、`abd08be`（1-B / 1-C 実装）、`0c5e527`（0-C / 1-A）
+- **完了済み作業ID**: `0-C`（素材棚卸し）、`1-A`（最小起動基盤・GitHub Pages設定）、`1-B`（人物表示）、`1-C`（徒歩移動・三人称カメラ・iPadタッチ操作）、`1-D`（日本の街区配置と衝突判定 + 単体厳選＆埋まり/浮き解消修正）、`1-E`（Poly Haven 1K PBR・HDRI・環境仕上げ）、**PHASE 1 実機検証完了**、`2-A`（運転可能な主役車両1台の表示・構造確認・`src/vehicle/` 土台）、`2-B`（主役車両への乗降・運転物理・車輪回転・運転カメラ・iPad運転タッチUI + 3台セットミニチュア車両修正）、`2-C`（カメラの建物遮蔽回避・主役車両110km/h化・街区配置済みスポーツカーの運転車両化160km/h）、`3-A`（iPadタッチ操作UI消失不具合修正 + AI交通車両4台の左側通行自動走行システム）、**`3-B`（車同士のめり込み防止修正 + 歩道を歩くAI歩行者6人 + 日本式信号サイクル連動）**
+- **次回作業ID**: `3-C` 以降（iPad Air 第5世代実機での車両めり込み防止・信号サイクル停止・AI歩行者の歩道/横断歩道往来・60FPS維持検証完了後に進行）
+- **関連コミットID**: `5dba266`（3-B 車両OBBめり込み防止・AI歩行者6人・日本式信号サイクル連動）、`7c84879`（3-A iPadタッチUI消失修正・AI交通車両4台の自動走行システム）、`2156aa0`（2-C カメラ遮蔽回避・110km/h化・Porsche 911 Turbo 運転車両化160km/h）、`7a16542`（2-B 運転物理・乗降・運転カメラ/UI・ミニチュア3台セット車両修正）、`460bdb6`（2-A 主役車両配置＆リグ土台・歩道境界つまづき修正）、`f3e12dc`（1-D ジオラマ除外＆単体Y=0厳密接地修正）、`6b8976b`（1-D 飛行機除外等）、`b5343ca`（1-D / 1-E 実装）、`abd08be`（1-B / 1-C 実装）、`0c5e527`（0-C / 1-A）
 
 ---
 
 ## 作業履歴
+
+### 作業ID: 3-B（車同士のめり込み防止修正 & 歩道を歩くAI歩行者6人 + 日本式信号サイクル連動）
+- **実施日**: 2026-11-26
+- **コミットID**: `5dba266`（`5dba26620b0319af816198cb754a481697865a0e`）
+- **GitHub Actions Run ID**: `45748329278`（`Deploy to GitHub Pages`: `build` = `success`, `deploy` = `success`）
+- **検証ランク**: **状態B**（コード実装・CIビルド＆GitHub Pagesデプロイ成功／実ブラウザ・iPad Air 第5世代実機での描画＝状態C・車両分離/信号停止/歩行者横断動作＝状態D・実機検証＝状態Eは未実施）
+
+#### 実装内容
+1. **車同士のめり込み（オーバーラップ）防止修正**:
+   - `src/traffic/trafficVehicle.ts` の前方検知を **前後バンパー先端基準＋安全車間バッファ（車両間 `2.6m`・歩行者 `3.2m`、減速開始 `20.0m`）** へ引き上げ、相手 OBB 9点サンプリング（中心・4隅・4辺中点）をゼロアロケーション実装。また信号待ち中や安全車間以下のデッドロック強制前進を禁止。
+   - `src/world/collisionWorld.ts` にゼロアロケーションの **2D OBB vs OBB 分離軸定理（SAT）最小侵入深度分離関数 `computeObbObbSeparation`** を追加し、`resolveVehicleCollision` に OBB 分離パスを統合。
+   - `src/traffic/trafficManager.ts` の毎フレーム更新末尾に、**全 AI 車両同士** および **AI 車両 vs 運転可能車両（自車含む）** の 2D OBB vs OBB SAT 最小侵入深度押し戻しパス（最大3回反復・安全マージン `0.08m`）を追加し、`applySeparationPush` で位置・セグメント距離・コライダーを即時同期。
+2. **歩道を歩く通行人（AI歩行者6人）の実装**:
+   - `src/pedestrians/` モジュール（`pedestrianRoutes.ts` / `pedestrianAgent.ts` / `pedestrianManager.ts` / `index.ts`）を新規作成。
+   - 承認済みキャラクター GLB（`public/assets/characters/player.glb`）を1回だけロードして `SkeletonUtils.clone` で **6人** の AI 歩行者インスタンスを軽量生成（テクスチャ・ジオメトリ共有、`castShadow: false`、各個体ごとの独立 `AnimationMixer` により歩行速度連動の `Walking` と停止時 `Idle` をクロスフェード再生）。
+   - 街区歩道（`±7.2m〜±9.5m`）および4方向横断歩道（`±8.4m`）を約 **4.2〜4.9 km/h（`1.16〜1.35 m/s`）** で周回・往来させ、進行方向のプレイヤー・車両・他歩行者に対して一時停止・軽回避・最小距離分離を実装。AI 交通車両側にも歩行者位置を共有して相互停止連携。
+3. **日本式信号サイクルと交通・歩行者の連動**:
+   - `src/traffic/trafficLights.ts` を新規作成し、中央交差点4隅に日本式の横型3灯車両信号機（左から青・黄・赤、バイザー付き）＋縦型2灯歩行者用信号機（上赤・下青）＋亜鉛メッキ支柱＆制御箱を共有ジオメトリ・発光マテリアル・支柱 OBB コライダー付きで設置。
+   - **青 15秒（終盤3秒は歩行者青点滅）→ 黄 3秒 → 全赤 1.5秒 → 赤 19.5秒** のサイクルで南北・東西を交互切替。赤・黄信号時は AI 交通車両が停止線（`11.4m`）手前でバンパーを揃えて停止し、AI 歩行者は横断歩道側の信号が青点灯中のときのみ横断開始（横断中は対岸まで渡り切る）するよう連動。
+4. **M1 iPad Air 最適化**:
+   - 毎フレームの障害物配列・OBB・サンプリング配列をすべて事前確保プール＆固定長 `Float64Array` で再利用し、信号マテリアル更新も状態変化時のみ実行するゼロアロケーション設計を採用。
+
+#### 変更ファイル一覧
+- `src/world/collisionWorld.ts`（2D OBB vs OBB SAT 最小侵入深度分離 `computeObbObbSeparation` 追加・`resolveVehicleCollision` 統合）
+- `src/traffic/trafficLights.ts`（新規作成：日本式信号機3Dモデル・発光マテリアル・青/黄/赤サイクル制御）
+- `src/traffic/trafficVehicle.ts`（バンパー基準前方検知強化・信号停止連動・歩行者検知・`applySeparationPush`・ゼロアロケーション化）
+- `src/traffic/trafficManager.ts`（車両間 OBB SAT 分離パス追加・信号/歩行者連携・ゼロアロケーション化）
+- `src/traffic/index.ts`（`TrafficLightController` エクスポート追加）
+- `src/pedestrians/pedestrianRoutes.ts`（新規作成：歩道・4方向横断歩道の6人分巡回ルート定義）
+- `src/pedestrians/pedestrianAgent.ts`（新規作成：独立 `AnimationMixer`・信号連動・回避/停止/分離）
+- `src/pedestrians/pedestrianManager.ts`（新規作成：`SkeletonUtils.clone` による6人統括管理）
+- `src/pedestrians/index.ts`（新規作成：モジュールエクスポート）
+- `src/engine/scene.ts`・`src/App.tsx`・`src/ui/DebugHud.tsx`（信号・AI歩行者統合、ゼロアロケーション更新、HUD に Phase 3-B / Pedestrians / Signal 追加）
+- `docs/PROGRESS.md`（本記録を更新）
+
+---
 
 ### 作業ID: 3-A（iPadタッチ操作UI消失不具合修正 & AI交通車両の自動走行システム）
 - **実施日**: 2026-11-26
