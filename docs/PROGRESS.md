@@ -1,19 +1,49 @@
 # 開発進捗記録（PROGRESS.md）
 
 ## 現在のステータス
-- **完了済み作業ID**: `0-C`（素材棚卸し）、`1-A`（最小起動基盤・GitHub Pages設定）、`1-B`（人物表示）、`1-C`（徒歩移動・三人称カメラ・iPadタッチ操作）、`1-D`（日本の街区配置と衝突判定 + 単体厳選＆埋まり/浮き解消修正）、`1-E`（Poly Haven 1K PBR・HDRI・環境仕上げ）
-- **次回作業ID**: `2-A`（iPad実機再確認後の次フェーズ）
-- **関連コミットID**: `f3e12dc`（1-D ジオラマ除外＆単体Y=0厳密接地修正）、`6b8976b`（1-D 飛行機除外等）、`b5343ca`（1-D / 1-E 実装）、`abd08be`（1-B / 1-C 実装）、`0c5e527`（0-C / 1-A）
+- **完了済み作業ID**: `0-C`（素材棚卸し）、`1-A`（最小起動基盤・GitHub Pages設定）、`1-B`（人物表示）、`1-C`（徒歩移動・三人称カメラ・iPadタッチ操作）、`1-D`（日本の街区配置と衝突判定 + 単体厳選＆埋まり/浮き解消修正）、`1-E`（Poly Haven 1K PBR・HDRI・環境仕上げ）、**PHASE 1 実機検証完了（残課題：歩道境界つまづき修正済み）**、`2-A`（運転可能な主役車両1台の表示・構造確認・`src/vehicle/` 土台）
+- **次回作業ID**: `2-B`（車両の運転物理・車輪回転・ステアリング・乗降UI）※2-A の iPad 実機表示・接地・歩道境界修正確認後に進行
+- **関連コミットID**: `460bdb6`（2-A 主役車両配置＆リグ土台・歩道境界つまづき修正）、`f3e12dc`（1-D ジオラマ除外＆単体Y=0厳密接地修正）、`6b8976b`（1-D 飛行機除外等）、`b5343ca`（1-D / 1-E 実装）、`abd08be`（1-B / 1-C 実装）、`0c5e527`（0-C / 1-A）
 
 ---
 
 ## 作業履歴
 
+### 作業ID: 2-A（運転可能な主役車両1台の表示・構造確認） & PHASE 1残課題（歩道境界つまづき修正）
+- **実施日**: 2026-11-26
+- **コミットID**: `460bdb6`（`460bdb6a0a3ed009250b9e880d3da8c310669023`）
+- **GitHub Actions Run ID**: `45731910321`（`Deploy to GitHub Pages`: `build` = `success`, `deploy` = `success`）
+- **検証ランク**:
+  - **PHASE 1（1-A〜1-E）**: iPad Air 第5世代実機にて表示・徒歩移動・街区配置を確認済み（**状態E**、残課題だった歩道境界の着地モーション誤作動を今回修正）。
+  - **今回の 2-A 実装および歩道境界修正**: **状態B**（GLBノード解析・コード実装・CIビルド＆GitHub Pagesデプロイ成功／実ブラウザ・iPad実機での描画＝状態C・動作＝状態D・実機検証＝状態Eは未実施）。
+
+#### 実装内容
+1. **PHASE 1残課題：歩道・車道境界での「つまづき（落下判定誤作動）」修正**:
+   - `src/player/playerController.ts` に **ステップオフセット（`STEP_OFFSET = 0.2m`）** と **コヨーテタイム（`COYOTE_TIME = 0.12s`）** を導入。
+   - 歩道（`Y = 0.12m`）から車道（`Y = 0m`）へ下りる際や縁石スロープ横断時に `0 < pos.y - groundY <= 0.2m` を接地維持のまま吸着吸収し、微小な浮きでも 0.12 秒間は `FallingToLanding` へ遷移しないよう修正。
+2. **主役車両1台の選定・配置・OBBコリジョン設定（作業ID: 2-A）**:
+   - 承認済み車両 GLB の比較解析結果から、品質・実車プロポーション・M1 iPad Air 負荷バランス（90,503 tri / 6.5MB / CC-BY-4.0）・日本の右ハンドル適合性・可動ノード独立性のすべてが最も優れる **`2011_-_13_toyota_kijang_innova_2.0_g_tgn40.glb`（Toyota Kijang Innova 2.0 G）** を選定。
+   - プレイヤー初期位置 `(0, 0, 0)`・正面 `+Z` から見やすい前方左側通行車線上 **`(x: 3.0, y: 0.0, z: 8.5)`** に全長 `4.6m`（幅 `1.89m` × 高さ `1.74m`）・正面向き（`+Z`）・`Y = 0` 厳密接地で1台配置し、OBB コライダー（`hero_vehicle_innova`）を登録。
+3. **車両 GLB 内部ノード解析・`src/vehicle/` 土台構築・マニフェスト記録**:
+   - 4輪すべてのタイヤ・リム・ブレーキディスク/キャリパー独立ノードとステアリング独立ノード `stir`（ローカル Z 軸回転）、およびドア固定構造を特定し `docs/ASSET_MANIFEST.json` の `heroVehicleRig` へ記録。
+   - `src/vehicle/vehicleConfig.ts`・`src/vehicle/vehicleModel.ts`・`src/vehicle/index.ts` を新設し、各車輪中心に `steerPivot`（Y軸操舵）→ `spinPivot`（X軸前後回転）を自動構築して 2-B で即座に車輪回転・ステアリング制御（`setSteerAngle` / `addWheelSpin`）できる土台を整備（運転物理・乗降UIは未実装のまま停止）。
+
+#### 変更ファイル一覧
+- `src/player/playerController.ts`（ステップオフセット `0.2m`・コヨーテタイム `0.12s` 導入）
+- `src/vehicle/vehicleConfig.ts`（新規作成：主役車両設定・配置・ノード定義）
+- `src/vehicle/vehicleModel.ts`（新規作成：GLBロード・`+Z`正規化・`Y=0`接地・4輪/ステアリングリグ構築）
+- `src/vehicle/index.ts`（新規作成：モジュールエクスポート）
+- `src/engine/scene.ts`・`src/App.tsx`・`src/ui/DebugHud.tsx`（主役車両ロード・OBBコリジョン同期・HUD状態表示追加）
+- `docs/ASSET_MANIFEST.json`（`heroVehicleRig` 解析結果・ノード名・回転軸を追記）
+- `docs/PROGRESS.md`（本記録を更新）
+
+---
+
 ### 作業ID: 1-D ジオラマセット・スキャン塊除外＆単体Y=0厳密接地修正
 - **実施日**: 2026-11-26
 - **コミットID**: `f3e12dc`（`f3e12dc205bd90060c88b3cab9921a920fe1503c`）
 - **GitHub Actions Run ID**: `45727753001`（`Deploy to GitHub Pages`: `build` = `success`, `deploy` = `success`）
-- **検証ランク**: **状態B**（コード修正・CIビルド＆GitHub Pagesデプロイ成功／iPad実機再検証＝状態C〜Eは未実施）
+- **検証ランク**: **状態E**（iPad Air 第5世代実機確認完了。歩道境界の着地モーション誤作動は 2-A にて修正）
 
 #### 修正内容
 1. **ジオラマセット・広域フォトグラメトリスキャン・干渉アセットの配置除外（ファイル自体は保持）**:
