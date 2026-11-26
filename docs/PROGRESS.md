@@ -1,13 +1,48 @@
 # 開発進捗記録（PROGRESS.md）
 
 ## 現在のステータス
-- **完了済み作業ID**: `0-C`（素材棚卸し）、`1-A`（最小起動基盤・GitHub Pages設定）、`1-B`（人物表示）、`1-C`（徒歩移動・三人称カメラ・iPadタッチ操作）、`1-D`（日本の街区配置と衝突判定 + 単体厳選＆埋まり/浮き解消修正）、`1-E`（Poly Haven 1K PBR・HDRI・環境仕上げ）、**PHASE 1 実機検証完了**、`2-A`（運転可能な主役車両1台の表示・構造確認・`src/vehicle/` 土台）、`2-B`（主役車両への乗降・運転物理・車輪回転・運転カメラ・iPad運転タッチUI + 3台セットミニチュア車両修正）、`2-C`（カメラの建物遮蔽回避・主役車両110km/h化・街区配置済みスポーツカーの運転車両化160km/h）、`3-A`（iPadタッチ操作UI消失不具合修正 + AI交通車両4台の左側通行自動走行システム）、`3-B`（車同士のめり込み防止修正 + 歩道を歩くAI歩行者6人 + 日本式信号サイクル連動）、`3-C`（通行人の服装・髪色・身長バリエーション追加 + 画面右上の軽量2D Canvasミニマップ + 運転中の右下デジタルスピードメーター）、**`3-D`（iPad Safari対応の音響システム：エンジン音・ブレーキスキッド音・衝突音・足音＆着地音・街の環境音・ミュートUI + iPad Safari無音不具合修正 + 通常車エンジン音の静かな実用車化＆スポーツカー差別化調整）**
-- **次回作業ID**: `3-E` 以降（iPad Air 第5世代実機での音響再生・通常車／スポーツカー音色差別化・初回タップ解除・ミュート切替・60FPS維持検証完了後に進行）
-- **関連コミットID**: `2fcf9a5`（3-D 通常乗用車エンジン音の静かな実用車化＆スポーツカー差別化調整）、`ef916cf`（3-D iPadOS Safari無音不具合修正・同期アンロック＋中音域＆ゲイン最適化）、`2cfcaf1` / `f6c8486`（3-D iPad Safari対応Web Audio手続き型音響システム・ミュートUI）、`ebe049e`（3-C 通行人バリエーション・軽量2Dミニマップ・運転デジタル速度計）、`5dba266`（3-B 車両OBBめり込み防止・AI歩行者6人・日本式信号サイクル連動）、`7c84879`（3-A iPadタッチUI消失修正・AI交通車両4台の自動走行システム）、`2156aa0`（2-C カメラ遮蔽回避・110km/h化・Porsche 911 Turbo 運転車両化160km/h）、`7a16542`（2-B 運転物理・乗降・運転カメラ/UI・ミニチュア3台セット車両修正）、`460bdb6`（2-A 主役車両配置＆リグ土台・歩道境界つまづき修正）、`f3e12dc`（1-D ジオラマ除外＆単体Y=0厳密接地修正）、`6b8976b`（1-D 飛行機除外等）、`b5343ca`（1-D / 1-E 実装）、`abd08be`（1-B / 1-C 実装）、`0c5e527`（0-C / 1-A）
+- **完了済み作業ID**: `0-C`（素材棚卸し）、`1-A`（最小起動基盤・GitHub Pages設定）、`1-B`（人物表示）、`1-C`（徒歩移動・三人称カメラ・iPadタッチ操作）、`1-D`（日本の街区配置と衝突判定 + 単体厳選＆埋まり/浮き解消修正）、`1-E`（Poly Haven 1K PBR・HDRI・環境仕上げ）、**PHASE 1 実機検証完了**、`2-A`（運転可能な主役車両1台の表示・構造確認・`src/vehicle/` 土台）、`2-B`（主役車両への乗降・運転物理・車輪回転・運転カメラ・iPad運転タッチUI + 3台セットミニチュア車両修正）、`2-C`（カメラの建物遮蔽回避・主役車両110km/h化・街区配置済みスポーツカーの運転車両化160km/h）、`3-A`（iPadタッチ操作UI消失不具合修正 + AI交通車両4台の左側通行自動走行システム）、`3-B`（車同士のめり込み防止修正 + 歩道を歩くAI歩行者6人 + 日本式信号サイクル連動）、`3-C`（通行人の服装・髪色・身長バリエーション追加 + 画面右上の軽量2D Canvasミニマップ + 運転中の右下デジタルスピードメーター）、`3-D`（iPad Safari対応の音響システム・通常車実用車化＆スポーツカー差別化調整）、**`3-E`（街区配置済みバイク `Harley Custom Bike` の3台目運転可能車両化：135km/h・車体バンク演出・跨がり乗車姿勢・バイク専用エンジン音）**
+- **次回作業ID**: `3-F` 以降（iPad Air 第5世代実機でのバイク乗降・跨がり姿勢・バンク演出・バイク専用排気音・3車種乗換・60FPS維持検証完了後に進行）
+- **関連コミットID**: `bd8b30e`（3-E 街区配置済みバイクの運転乗り物化・135km/h・バンク演出・跨がり姿勢・バイク専用排気音）、`2fcf9a5`（3-D 通常乗用車エンジン音の静かな実用車化＆スポーツカー差別化調整）、`ef916cf`（3-D iPadOS Safari無音不具合修正・同期アンロック＋中音域＆ゲイン最適化）、`2cfcaf1` / `f6c8486`（3-D iPad Safari対応Web Audio手続き型音響システム・ミュートUI）、`ebe049e`（3-C 通行人バリエーション・軽量2Dミニマップ・運転デジタル速度計）、`5dba266`（3-B 車両OBBめり込み防止・AI歩行者6人・日本式信号サイクル連動）、`7c84879`（3-A iPadタッチUI消失修正・AI交通車両4台の自動走行システム）、`2156aa0`（2-C カメラ遮蔽回避・110km/h化・Porsche 911 Turbo 運転車両化160km/h）、`7a16542`（2-B 運転物理・乗降・運転カメラ/UI・ミニチュア3台セット車両修正）、`460bdb6`（2-A 主役車両配置＆リグ土台・歩道境界つまづき修正）、`f3e12dc`（1-D ジオラマ除外＆単体Y=0厳密接地修正）、`6b8976b`（1-D 飛行機除外等）、`b5343ca`（1-D / 1-E 実装）、`abd08be`（1-B / 1-C 実装）、`0c5e527`（0-C / 1-A）
 
 ---
 
 ## 作業履歴
+
+### 作業ID: 3-E（街区配置済みバイクの運転乗り物化：135km/h・車体バンク演出・跨がり姿勢・バイク専用排気音）
+- **実施日**: 2026-11-26
+- **コミットID**: `bd8b30e`（`bd8b30eee14f1727cf81e0f631880458c5588c79`）
+- **GitHub Actions Run ID**: `45759106903`（`Deploy to GitHub Pages`: `build` = `success`, `deploy` = `success`）
+- **検証ランク**: **状態B**（GLBノード解析・コード実装・CIビルド＆GitHub Pagesデプロイ成功／実ブラウザ・iPad Air 第5世代実機での跨がり姿勢・バンク演出・バイク専用排気音・乗降動作の確認＝状態C/D/Eは未実施）
+
+#### 実装内容
+1. **街区配置済みバイク GLB の特定・ノード解析・3台目運転可能車両化（多重配置なし）**:
+   - 南側路肩に静的配置されていた `veh_harley_bike`（`public/assets/vehicles/harley_custom_bike_v1.2.glb`、`x: 4.75, z: 14.0, targetSize: 2.3m`）を特定し、`src/world/cityLayout.ts` から静的配置エントリを除外したうえで、同一座標・同一見た目の向きのまま 3台目の運転可能車両（`type: 'bike'`、`BIKE_VEHICLE_CONFIG`）として `DRIVABLE_VEHICLES` へ統合。
+   - GLB 頂点分布およびノード階層を解析し、元モデルは `-Z` がフロント／ハンドル側（`modelForwardCorrectionY: Math.PI` で `+Z` 正面へ正規化、正規化寸法 `0.951m × 1.178m × 2.300m`、ホイールベース `1.67m`、シート座面 `Y ≈ 0.74m, Z ≈ -0.34m`）であること、また内部はテクスチャアトラス単位5メッシュ（`big1_A2k_big1A_0`, `big2_B2k_big2B_0`, `sym_small_C2k_symC_0`, `sym_small_C2k_1_symC_0`, `similar_D2k_simularD_0`）で結合されており前後ホイール・ハンドルの独立ノードはないことを確認し `docs/ASSET_MANIFEST.json` へ記録。
+2. **バイク専用走行挙動・スリム当たり判定・車体バンク（ロール角傾き）演出**:
+   - 最高前進速度を **約 135 km/h（`37.5 m/s`）**、加速 `17.5 m/s²`、最大ステア角 `0.64 rad`、ホイールベース `1.67m`、スリムコリジョン（`colliderShrink: 0.76` ≒ 幅 `0.72m`）に設定。
+   - `src/vehicle/vehicleModel.ts` にバンク回転用 `bodyGroup` と搭乗プレイヤー用 `riderAnchor` を構築し、`src/vehicle/vehicleController.ts` にて走行速度と舵角に応じてカーブ内側へ最大 `0.45 rad`（約 `26°`）自然に傾き、直進・減速時は滑らかに水平へ戻るロール演出を実装。
+3. **乗車時の跨がり姿勢表示・乗降処理・カメラ＆ミニマップ対応**:
+   - バイク乗車中は `player.glb` を非表示にせず、`PlayerController.enterBikeRide` により `riderAnchor` 配下のシート位置（`offsetY: 0.34m, offsetZ: -0.34m`, 軽度前傾 `0.14 rad`）へアタッチして `Driving` クリップをループ再生し、車体のバンクと一体で傾くように実装。
+   - バイク付近（車体外面から `2.4m` 以内 ≒ 中心から約 `2.5m` 圏内）で「乗る」ボタンを表示し、停車時の降車でバイク左側（`halfW + 0.72m`）へ安全に降りられるよう対応。
+   - `src/camera/thirdPersonCamera.ts` にバイク向け近接フレーミング、`src/ui/Minimap.tsx` にバイク用スリムアイコン（コーラルピンク `#f472b6`）を追加。
+4. **バイク専用エンジン音プロファイル（`bike`）追加**:
+   - `src/vehicle/vehicleConfig.ts` および `src/audio/soundManager.ts` に `bike` プロファイルを追加。`sawtooth`＋`square`（5度倍音比 `1.5`）＋`triangle` 波形、基本周波数 `46Hz〜215Hz`、`triangle` LFO による明確なアイドリング鼓動感（`10.5Hz`・深さ `0.13`）と鋭い回転応答（`freqTau: 0.035s`）により、単気筒〜2気筒バイクらしい歯切れのよい排気音をゼロアロケーションで合成。
+
+#### 変更ファイル一覧
+- `src/world/cityLayout.ts`（`veh_harley_bike` 静的配置除外）
+- `src/vehicle/vehicleConfig.ts`（`VehicleType`, `VehicleLeanConfig`, `BikeRiderMountConfig`, `VEHICLE_ENGINE_AUDIO_PROFILES.bike`, `BIKE_VEHICLE_CONFIG`, `DRIVABLE_VEHICLES` 3台化）
+- `src/vehicle/vehicleModel.ts`（`bodyGroup`・`riderAnchor`・`setLeanRoll` 追加）
+- `src/vehicle/vehicleController.ts`（バイクバンク計算・スリム当たり判定・バイク降車オフセット・`getType`/`getRiderAnchor`/`getRiderMount` 追加）
+- `src/vehicle/index.ts`（新規型・定数エクスポート）
+- `src/player/playerController.ts`（`enterBikeRide`・`updateRidingAnimation`・`exitBikeRide` 追加）
+- `src/audio/soundManager.ts`（`bike` プロファイル用 LFO 波形・鼓動感カーブ最適化）
+- `src/camera/thirdPersonCamera.ts`（バイク乗車時カメラ距離・注視点最適化）
+- `src/engine/scene.ts`（バイク乗車時プレイヤー表示＆アタッチ・降車時デタッチ・アニメ更新連携）
+- `src/App.tsx`・`src/ui/Minimap.tsx`・`src/ui/DebugHud.tsx`（3台対応・バイクミニマップアイコン・Phase 3-E 表示）
+- `docs/ASSET_MANIFEST.json`・`docs/PROGRESS.md`（記録更新）
+
+---
 
 ### 作業ID: 3-D 調整（通常乗用車エンジン音の「静かな実用車」化 & スポーツカーとの差別化維持）
 - **実施日**: 2026-11-26
