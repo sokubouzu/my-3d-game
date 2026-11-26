@@ -1,13 +1,33 @@
 # 開発進捗記録（PROGRESS.md）
 
 ## 現在のステータス
-- **完了済み作業ID**: `0-C`（素材棚卸し）、`1-A`（最小起動基盤・GitHub Pages設定）、`1-B`（人物表示）、`1-C`（徒歩移動・三人称カメラ・iPadタッチ操作）、`1-D`（日本の街区配置と衝突判定 + 実機テスト修正）、`1-E`（Poly Haven 1K PBR・HDRI・環境仕上げ）
+- **完了済み作業ID**: `0-C`（素材棚卸し）、`1-A`（最小起動基盤・GitHub Pages設定）、`1-B`（人物表示）、`1-C`（徒歩移動・三人称カメラ・iPadタッチ操作）、`1-D`（日本の街区配置と衝突判定 + 単体厳選＆埋まり/浮き解消修正）、`1-E`（Poly Haven 1K PBR・HDRI・環境仕上げ）
 - **次回作業ID**: `2-A`（iPad実機再確認後の次フェーズ）
-- **関連コミットID**: `6b8976b`（1-D 実機テスト不具合3点修正）、`b5343ca`（1-D / 1-E 実装）、`abd08be`（1-B / 1-C 実装）、`0c5e527`（0-C / 1-A）
+- **関連コミットID**: `f3e12dc`（1-D ジオラマ除外＆単体Y=0厳密接地修正）、`6b8976b`（1-D 飛行機除外等）、`b5343ca`（1-D / 1-E 実装）、`abd08be`（1-B / 1-C 実装）、`0c5e527`（0-C / 1-A）
 
 ---
 
 ## 作業履歴
+
+### 作業ID: 1-D ジオラマセット・スキャン塊除外＆単体Y=0厳密接地修正
+- **実施日**: 2026-11-26
+- **コミットID**: `f3e12dc`（`f3e12dc205bd90060c88b3cab9921a920fe1503c`）
+- **GitHub Actions Run ID**: `45727753001`（`Deploy to GitHub Pages`: `build` = `success`, `deploy` = `success`）
+- **検証ランク**: **状態B**（コード修正・CIビルド＆GitHub Pagesデプロイ成功／iPad実機再検証＝状態C〜Eは未実施）
+
+#### 修正内容
+1. **ジオラマセット・広域フォトグラメトリスキャン・干渉アセットの配置除外（ファイル自体は保持）**:
+   - `stylized_little_japanese_town_street.glb`、`night_city_japan.glb`、`vancouver_police_-_cambie_st._vancouver_bc_ca.glb`、`road_pack_not_including_the_road.glb`、`japan_street.glb`、`low_road_-_2.glb`、`train_track.glb`、`train_ride.glb`、`2012_sea-doo_gti_se_130.glb`（および前回除外済みの `porco_plane.glb`）を市街地配置リストから除外。
+2. **単体モデルの「埋まりゼロ・浮きゼロ」厳密接地と浮遊オブジェクト削除ガード**:
+   - `src/world/cityBuilder.ts` にて各単体モデルを空の親 `THREE.Group`（`position.y = 0` 固定）に包み、スケール適用後に `updateMatrixWorld(true)` → ワールド座標 `Box3` 計測 → 子モデル `position.y = -box.min.y` とする方式へ統一（過剰埋没の原因となった `surfaceEmbedRatio` 押し下げを撤廃）。
+   - 配置後の最終ワールド座標 `Box3.min.y > 0.5` の浮遊オブジェクトを自動除外するガードを追加。
+   - OBB コライダー（`minY = 0` 〜 `finalWorldBox.max.y`）を修正後の配置と完全同期。
+3. **実際に市街地へ配置した単体 GLB 一覧（14種・計22インスタンス）**:
+   - 建物（6種・12棟）: `japanese_house.glb`, `japanese_restaurant_inakaya.glb`, `psx_japanese_house.glb`, `dae_final_assignment_milestone_house.glb`, `buster_brown_shoe_store.glb`, `tokyo_japanese_house__casa_japonesa_low_poly.glb`
+   - 車両（6種・6台）: `2011_-_13_toyota_kijang_innova_2.0_g_tgn40.glb`, `free_1975_porsche_911_930_turbo.glb`, `2008__mazda_furai.glb`, `low_poly_japan_offroad_car.glb`, `thunderbolt_96_interceptor_-_low_poly_model.glb`, `harley_custom_bike_v1.2.glb`
+   - 小物（2種・4個）: `japanese_inspired_vending_machines.glb`, `dog.glb`
+
+---
 
 ### 作業ID: 1-D 実機テスト不具合修正（飛行機除外・Y=0厳密接地・ジオラマ道路面高さ修正）
 - **実施日**: 2026-11-26
