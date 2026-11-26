@@ -79,6 +79,10 @@ export class VehicleController {
     return this.speed;
   }
 
+  public getDimensions(): { width: number; height: number; length: number } {
+    return this.vehicle.dimensions;
+  }
+
   /** 降車可能なほぼ停止状態かどうか */
   public canExit(): boolean {
     return Math.abs(this.speed) <= EXIT_MAX_SPEED;

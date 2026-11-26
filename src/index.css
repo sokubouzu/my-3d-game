@@ -15,9 +15,12 @@ body,
 }
 
 .viewport-root {
-  position: relative;
-  width: 100%;
-  height: 100%;
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  width: 100dvw;
+  height: 100dvh;
   overflow: hidden;
 }
 
@@ -101,10 +104,36 @@ body,
 
 /* --- iPad 横画面向けマルチタッチ操作レイヤー --- */
 .touch-layer {
-  position: absolute;
+  position: fixed;
   inset: 0;
   z-index: 20;
   pointer-events: none;
+  opacity: 1;
+  visibility: visible;
+  isolation: isolate;
+  transform: translate3d(0, 0, 0);
+  -webkit-transform: translate3d(0, 0, 0);
+}
+
+/* 徒歩・運転モード切替パネル（条件付きアンマウント・opacity:0 を廃止） */
+.touch-mode-panel {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 1;
+}
+
+.touch-mode-panel.is-mode-active {
+  visibility: visible;
+}
+
+.touch-mode-panel.is-mode-inactive {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.touch-mode-panel.is-mode-inactive * {
+  pointer-events: none !important;
 }
 
 /* 画面右半分ドラッグ: カメラ回転 */
@@ -118,7 +147,7 @@ body,
   touch-action: none;
 }
 
-/* 画面左下: 移動バーチャルスティック */
+/* 画面左下: 移動バーチャルスティック（常に固定表示） */
 .virtual-stick-base {
   position: absolute;
   left: calc(env(safe-area-inset-left, 0px) + 28px);
@@ -126,19 +155,22 @@ body,
   width: 132px;
   height: 132px;
   border-radius: 50%;
-  background: rgba(15, 23, 42, 0.34);
-  border: 2px solid rgba(248, 250, 252, 0.28);
+  background: rgba(15, 23, 42, 0.38);
+  border: 2px solid rgba(248, 250, 252, 0.34);
   display: flex;
   align-items: center;
   justify-content: center;
   pointer-events: auto;
   touch-action: none;
+  opacity: 1;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
   transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 
 .virtual-stick-base.is-active {
-  background: rgba(15, 23, 42, 0.48);
-  border-color: rgba(125, 211, 252, 0.72);
+  background: rgba(15, 23, 42, 0.52);
+  border-color: rgba(125, 211, 252, 0.78);
 }
 
 .virtual-stick-ring {
@@ -146,8 +178,9 @@ body,
   width: 68px;
   height: 68px;
   border-radius: 50%;
-  border: 1px dashed rgba(248, 250, 252, 0.22);
+  border: 1px dashed rgba(248, 250, 252, 0.28);
   pointer-events: none;
+  opacity: 1;
 }
 
 .virtual-stick-knob {
@@ -156,12 +189,13 @@ body,
   border-radius: 50%;
   background: radial-gradient(
     circle at 35% 35%,
-    rgba(248, 250, 252, 0.88),
-    rgba(148, 163, 184, 0.65)
+    rgba(248, 250, 252, 0.9),
+    rgba(148, 163, 184, 0.68)
   );
-  border: 2px solid rgba(255, 255, 255, 0.8);
+  border: 2px solid rgba(255, 255, 255, 0.85);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
   pointer-events: none;
+  opacity: 1;
   will-change: transform;
 }
 
@@ -276,7 +310,7 @@ body,
   pointer-events: none;
 }
 
-/* --- 2-B: 運転モード 左下ステアリングボタン --- */
+/* --- 2-B: 運転モード 左下ステアリングボタン（常に固定表示） --- */
 .drive-steer-group {
   position: absolute;
   left: calc(env(safe-area-inset-left, 0px) + 28px);
@@ -284,6 +318,9 @@ body,
   display: flex;
   gap: 16px;
   pointer-events: none;
+  opacity: 1;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
 }
 
 .drive-steer-btn {
@@ -291,7 +328,7 @@ body,
   height: 88px;
   border-radius: 20px;
   border: 2px solid rgba(248, 250, 252, 0.42);
-  background: rgba(15, 23, 42, 0.52);
+  background: rgba(15, 23, 42, 0.56);
   color: #f8fafc;
   display: flex;
   flex-direction: column;
@@ -301,6 +338,7 @@ body,
   pointer-events: auto;
   touch-action: none;
   cursor: pointer;
+  opacity: 1;
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   transition: transform 0.08s ease, background-color 0.12s ease, border-color 0.12s ease;

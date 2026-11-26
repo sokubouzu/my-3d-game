@@ -26,9 +26,23 @@ export interface InputSnapshot {
 }
 
 /**
+ * タッチ対応端末かどうかを判定する。
+ * iPad (iPadOS Safari はデスクトップ UA になるが maxTouchPoints > 0 / ontouchstart が真) を確実に検出する。
+ */
+export function isTouchCapableDevice(): boolean {
+  if (typeof window === 'undefined') return false;
+  return (
+    'ontouchstart' in window ||
+    (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0)
+  );
+}
+
+/**
  * iPad タッチUI と PC（WASD + マウス + E/F + Space）の入力を統合する独立モジュール。
+ * タッチ対応端末ではマウス・キーボードイベントが発生してもタッチ入力を無効化しない。
  */
 export class InputManager {
+  public readonly isTouchDevice: boolean;
   private readonly keysPressed = new Set<string>();
   private touchMoveX = 0;
   private touchMoveY = 0;
@@ -45,11 +59,13 @@ export class InputManager {
   private isMouseDragging = false;
   private lastMouseX = 0;
   private lastMouseY = 0;
+  private lastTouchTimestamp = 0;
   private readonly canvas: HTMLCanvasElement;
 
   private readonly handleKeyDown: (event: KeyboardEvent) => void;
   private readonly handleKeyUp: (event: KeyboardEvent) => void;
   private readonly handleWindowBlur: () => void;
+  private readonly handleTouchStart: () => void;
   private readonly handleMouseDown: (event: MouseEvent) => void;
   private readonly handleMouseMove: (event: MouseEvent) => void;
   private readonly handleMouseUp: () => void;
@@ -58,6 +74,7 @@ export class InputManager {
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
+    this.isTouchDevice = isTouchCapableDevice();
 
     this.handleKeyDown = (event: KeyboardEvent) => {
       const code = event.code;
@@ -89,12 +106,32 @@ export class InputManager {
     this.handleWindowBlur = () => {
       this.keysPressed.clear();
       this.isMouseDragging = false;
+      this.touchMoveX = 0;
+      this.touchMoveY = 0;
+      this.touchSprint = false;
       this.touchVehicleSteer = 0;
       this.touchVehicleThrottle = 0;
       this.touchVehicleBrake = 0;
     };
 
+    this.handleTouchStart = () => {
+      this.lastTouchTimestamp = performance.now();
+      this.isMouseDragging = false;
+    };
+
+    const isSyntheticTouchMouseEvent = (event: MouseEvent): boolean => {
+      const sc = (
+        event as MouseEvent & {
+          sourceCapabilities?: { firesTouchEvents?: boolean };
+        }
+      ).sourceCapabilities;
+      if (sc?.firesTouchEvents) return true;
+      // iPadOS Safari のタッチ直後に発火する互換マウスイベントを無視
+      return performance.now() - this.lastTouchTimestamp < 900;
+    };
+
     this.handleMouseDown = (event: MouseEvent) => {
+      if (isSyntheticTouchMouseEvent(event)) return;
       if (event.button === 0 || event.button === 2) {
         this.isMouseDragging = true;
         this.lastMouseX = event.clientX;
@@ -103,6 +140,7 @@ export class InputManager {
     };
 
     this.handleMouseMove = (event: MouseEvent) => {
+      if (isSyntheticTouchMouseEvent(event)) return;
       if (document.pointerLockElement === this.canvas) {
         this.lookDeltaX += event.movementX;
         this.lookDeltaY += event.movementY;
@@ -133,6 +171,9 @@ export class InputManager {
     window.addEventListener('keydown', this.handleKeyDown);
     window.addEventListener('keyup', this.handleKeyUp);
     window.addEventListener('blur', this.handleWindowBlur);
+    window.addEventListener('touchstart', this.handleTouchStart, {
+      passive: true,
+    });
     this.canvas.addEventListener('mousedown', this.handleMouseDown);
     window.addEventListener('mousemove', this.handleMouseMove);
     window.addEventListener('mouseup', this.handleMouseUp);
@@ -266,6 +307,7 @@ export class InputManager {
     window.removeEventListener('keydown', this.handleKeyDown);
     window.removeEventListener('keyup', this.handleKeyUp);
     window.removeEventListener('blur', this.handleWindowBlur);
+    window.removeEventListener('touchstart', this.handleTouchStart);
     this.canvas.removeEventListener('mousedown', this.handleMouseDown);
     window.removeEventListener('mousemove', this.handleMouseMove);
     window.removeEventListener('mouseup', this.handleMouseUp);

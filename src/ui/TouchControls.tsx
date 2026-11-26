@@ -1,10 +1,12 @@
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
 import type { ControlMode } from '../engine/scene';
+import { isTouchCapableDevice } from '../input/inputManager';
 import type { VehicleGear } from '../vehicle';
 
 export interface TouchControlsProps {
@@ -27,9 +29,12 @@ export interface TouchControlsProps {
 const STICK_MAX_RADIUS = 46;
 
 /**
- * 1-C / 2-B / 2-C: iPad 横画面（ランドスケープ）向けマルチタッチ操作 UI。
- * - 徒歩モード: 左下移動スティック / 右半分カメラ回転 / 右下 DASH・JUMP・（近接時）乗車ボタン
- * - 運転モード: 左下左右ステアリングボタン / 右半分カメラ回転 / 右下 ブレーキ(バック)・アクセル・降車ボタン / 下部中央スピードメーター
+ * 1-C / 2-B / 2-C / 3-A: iPad 横画面（ランドスケープ）向けマルチタッチ操作 UI。
+ * - タッチ対応端末（'ontouchstart' in window || navigator.maxTouchPoints > 0）では、
+ *   マウスやキーボードイベントが発生しても絶対にタッチ UI を非表示にしない。
+ * - 徒歩スティック（ベースリング＋ノブ）および運転ステアリング UI は条件付きアンマウントや
+ *   opacity: 0 を行わず常時マウントし、マルチタッチや touchcancel / pointercancel 発生時も
+ *   ノブ位置を原点へ戻すだけで描画自体を絶対に消さない。
  */
 export function TouchControls({
   controlMode,
@@ -47,6 +52,9 @@ export function TouchControls({
   onVehicleThrottleChange,
   onVehicleBrakeChange,
 }: TouchControlsProps) {
+  // タッチ対応端末フラグ（常に UI を保持し、マウス/キーボード入力で絶対に非表示にしない）
+  const isTouchDeviceRef = useRef<boolean>(isTouchCapableDevice());
+
   const stickBaseRef = useRef<HTMLDivElement | null>(null);
   const stickPointerIdRef = useRef<number | null>(null);
   const stickCenterRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -74,16 +82,30 @@ export function TouchControls({
   const [accelPressed, setAccelPressed] = useState(false);
   const [brakePressed, setBrakePressed] = useState(false);
 
-  // モード切替時に押しっぱなしタッチ状態を確実にリセット
-  useEffect(() => {
+  const emitSteerState = useCallback(
+    (leftActive: boolean, rightActive: boolean) => {
+      const steer = (rightActive ? 1 : 0) - (leftActive ? 1 : 0);
+      onVehicleSteerChange(steer);
+    },
+    [onVehicleSteerChange],
+  );
+
+  const resetStick = useCallback(() => {
     stickPointerIdRef.current = null;
     setStickActive(false);
     setKnobOffset({ x: 0, y: 0 });
     onMoveChange(0, 0);
+  }, [onMoveChange]);
+
+  const resetAllActivePointers = useCallback(() => {
+    resetStick();
+
+    lookPointerIdRef.current = null;
 
     sprintPointerIdRef.current = null;
     setSprintPressed(false);
     onSprintChange(false);
+    setJumpPressed(false);
 
     steerLeftPointerIdRef.current = null;
     steerRightPointerIdRef.current = null;
@@ -99,18 +121,113 @@ export function TouchControls({
     setBrakePressed(false);
     onVehicleBrakeChange(0);
   }, [
-    controlMode,
-    onMoveChange,
+    resetStick,
     onSprintChange,
     onVehicleSteerChange,
     onVehicleThrottleChange,
     onVehicleBrakeChange,
   ]);
 
-  const emitSteerState = (leftActive: boolean, rightActive: boolean) => {
-    const steer = (rightActive ? 1 : 0) - (leftActive ? 1 : 0);
-    onVehicleSteerChange(steer);
-  };
+  // モード切替時に押しっぱなしポインタ状態だけを安全にリセット（UI のマウント・表示は維持）
+  useEffect(() => {
+    resetAllActivePointers();
+  }, [controlMode, resetAllActivePointers]);
+
+  // マルチタッチ・touchcancel・pointercancel・Safari ジェスチャー割り込みに対する保護
+  useEffect(() => {
+    const releasePointerById = (pointerId: number) => {
+      if (stickPointerIdRef.current === pointerId) {
+        resetStick();
+      }
+      if (lookPointerIdRef.current === pointerId) {
+        lookPointerIdRef.current = null;
+      }
+      if (sprintPointerIdRef.current === pointerId) {
+        sprintPointerIdRef.current = null;
+        setSprintPressed(false);
+        onSprintChange(false);
+      }
+      if (steerLeftPointerIdRef.current === pointerId) {
+        steerLeftPointerIdRef.current = null;
+        setSteerLeftPressed(false);
+        emitSteerState(false, steerRightPointerIdRef.current !== null);
+      }
+      if (steerRightPointerIdRef.current === pointerId) {
+        steerRightPointerIdRef.current = null;
+        setSteerRightPressed(false);
+        emitSteerState(steerLeftPointerIdRef.current !== null, false);
+      }
+      if (accelPointerIdRef.current === pointerId) {
+        accelPointerIdRef.current = null;
+        setAccelPressed(false);
+        onVehicleThrottleChange(0);
+      }
+      if (brakePointerIdRef.current === pointerId) {
+        brakePointerIdRef.current = null;
+        setBrakePressed(false);
+        onVehicleBrakeChange(0);
+      }
+    };
+
+    const handleGlobalPointerEnd = (event: PointerEvent) => {
+      releasePointerById(event.pointerId);
+    };
+
+    const handleGlobalTouchCancel = () => {
+      // touchcancel 発生時は入力値とノブ位置のみ安全に原点復帰し、UI 描画自体は絶対に消さない
+      resetAllActivePointers();
+    };
+
+    const handleWindowBlur = () => {
+      resetAllActivePointers();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        resetAllActivePointers();
+      }
+    };
+
+    const preventSafariGesture = (event: Event) => {
+      event.preventDefault();
+    };
+
+    window.addEventListener('pointerup', handleGlobalPointerEnd);
+    window.addEventListener('pointercancel', handleGlobalPointerEnd);
+    window.addEventListener('touchcancel', handleGlobalTouchCancel, {
+      passive: true,
+    });
+    window.addEventListener('blur', handleWindowBlur);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    // iPadOS Safari のマルチタッチ時ピンチ・ジェスチャーによる touchcancel を抑止
+    window.addEventListener('gesturestart', preventSafariGesture, {
+      passive: false,
+    });
+    window.addEventListener('gesturechange', preventSafariGesture, {
+      passive: false,
+    });
+    window.addEventListener('gestureend', preventSafariGesture, {
+      passive: false,
+    });
+
+    return () => {
+      window.removeEventListener('pointerup', handleGlobalPointerEnd);
+      window.removeEventListener('pointercancel', handleGlobalPointerEnd);
+      window.removeEventListener('touchcancel', handleGlobalTouchCancel);
+      window.removeEventListener('blur', handleWindowBlur);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('gesturestart', preventSafariGesture);
+      window.removeEventListener('gesturechange', preventSafariGesture);
+      window.removeEventListener('gestureend', preventSafariGesture);
+    };
+  }, [
+    resetStick,
+    resetAllActivePointers,
+    emitSteerState,
+    onSprintChange,
+    onVehicleThrottleChange,
+    onVehicleBrakeChange,
+  ]);
 
   const updateStickPosition = (clientX: number, clientY: number) => {
     const dx = clientX - stickCenterRef.current.x;
@@ -125,14 +242,8 @@ export function TouchControls({
     onMoveChange(offsetX / STICK_MAX_RADIUS, -offsetY / STICK_MAX_RADIUS);
   };
 
-  const resetStick = () => {
-    stickPointerIdRef.current = null;
-    setStickActive(false);
-    setKnobOffset({ x: 0, y: 0 });
-    onMoveChange(0, 0);
-  };
-
   const handleStickDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (controlMode !== 'foot') return;
     if (stickPointerIdRef.current !== null) return;
     event.preventDefault();
     event.stopPropagation();
@@ -208,6 +319,7 @@ export function TouchControls({
   };
 
   const handleSprintDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (controlMode !== 'foot') return;
     if (sprintPointerIdRef.current !== null) return;
     event.preventDefault();
     event.stopPropagation();
@@ -236,6 +348,7 @@ export function TouchControls({
   };
 
   const handleJumpDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (controlMode !== 'foot') return;
     event.preventDefault();
     event.stopPropagation();
     setJumpPressed(true);
@@ -255,6 +368,7 @@ export function TouchControls({
   };
 
   const handleSteerLeftDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (controlMode !== 'vehicle') return;
     if (steerLeftPointerIdRef.current !== null) return;
     event.preventDefault();
     event.stopPropagation();
@@ -285,6 +399,7 @@ export function TouchControls({
   const handleSteerRightDown = (
     event: ReactPointerEvent<HTMLButtonElement>,
   ) => {
+    if (controlMode !== 'vehicle') return;
     if (steerRightPointerIdRef.current !== null) return;
     event.preventDefault();
     event.stopPropagation();
@@ -313,6 +428,7 @@ export function TouchControls({
   };
 
   const handleAccelDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (controlMode !== 'vehicle') return;
     if (accelPointerIdRef.current !== null) return;
     event.preventDefault();
     event.stopPropagation();
@@ -341,6 +457,7 @@ export function TouchControls({
   };
 
   const handleBrakeDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (controlMode !== 'vehicle') return;
     if (brakePointerIdRef.current !== null) return;
     event.preventDefault();
     event.stopPropagation();
@@ -368,8 +485,16 @@ export function TouchControls({
     }
   };
 
+  const isFootMode = controlMode === 'foot';
+  const isVehicleMode = controlMode === 'vehicle';
+
   return (
-    <div className="touch-layer" aria-label="Touch Controls">
+    <div
+      className="touch-layer"
+      data-touch-device={isTouchDeviceRef.current ? 'true' : 'false'}
+      data-control-mode={controlMode}
+      aria-label="Touch Controls"
+    >
       {/* 画面右半分ドラッグ: カメラ回転（徒歩・運転共通） */}
       <div
         className="camera-drag-zone"
@@ -380,163 +505,168 @@ export function TouchControls({
         onLostPointerCapture={handleLookUp}
       />
 
-      {controlMode === 'foot' ? (
-        <>
-          {/* 徒歩: 画面左下 移動バーチャルスティック */}
+      {/* 徒歩モード UI（常時マウント・opacity:0 廃止・ベースリング＆ノブ固定表示） */}
+      <div
+        className={`touch-mode-panel ${isFootMode ? 'is-mode-active' : 'is-mode-inactive'}`}
+        aria-hidden={!isFootMode}
+      >
+        {/* 徒歩: 画面左下 移動バーチャルスティック */}
+        <div
+          ref={stickBaseRef}
+          className={`virtual-stick-base${stickActive ? ' is-active' : ''}`}
+          onPointerDown={handleStickDown}
+          onPointerMove={handleStickMove}
+          onPointerUp={handleStickUp}
+          onPointerCancel={handleStickUp}
+          onLostPointerCapture={handleStickUp}
+          role="slider"
+          aria-label="Movement Stick"
+          aria-valuemin={-1}
+          aria-valuemax={1}
+          aria-valuenow={
+            Math.round(
+              (Math.hypot(knobOffset.x, knobOffset.y) / STICK_MAX_RADIUS) * 100,
+            ) / 100
+          }
+        >
+          <div className="virtual-stick-ring" />
           <div
-            ref={stickBaseRef}
-            className={`virtual-stick-base${stickActive ? ' is-active' : ''}`}
-            onPointerDown={handleStickDown}
-            onPointerMove={handleStickMove}
-            onPointerUp={handleStickUp}
-            onPointerCancel={handleStickUp}
-            onLostPointerCapture={handleStickUp}
-            role="slider"
-            aria-label="Movement Stick"
-            aria-valuemin={-1}
-            aria-valuemax={1}
-            aria-valuenow={
-              Math.round(
-                (Math.hypot(knobOffset.x, knobOffset.y) / STICK_MAX_RADIUS) *
-                  100,
-              ) / 100
-            }
+            className="virtual-stick-knob"
+            style={{
+              transform: `translate3d(${knobOffset.x}px, ${knobOffset.y}px, 0)`,
+            }}
+          />
+        </div>
+
+        {/* 徒歩: 車両近接時の乗車ボタン */}
+        {isFootMode && canEnterVehicle && (
+          <button
+            type="button"
+            className="interact-btn interact-btn-enter"
+            onPointerDown={handleInteractDown}
+            aria-label="Enter Vehicle"
           >
-            <div className="virtual-stick-ring" />
-            <div
-              className="virtual-stick-knob"
-              style={{
-                transform: `translate3d(${knobOffset.x}px, ${knobOffset.y}px, 0)`,
-              }}
-            />
-          </div>
-
-          {/* 徒歩: 車両近接時の乗車ボタン */}
-          {canEnterVehicle && (
-            <button
-              type="button"
-              className="interact-btn interact-btn-enter"
-              onPointerDown={handleInteractDown}
-              aria-label="Enter Vehicle"
-            >
-              <span className="interact-btn-main">乗る</span>
-              <span className="interact-btn-key">
-                {nearbyVehicleName ? `${nearbyVehicleName} (E/F)` : 'E / F'}
-              </span>
-            </button>
-          )}
-
-          {/* 徒歩: 画面右下 ダッシュ・ジャンプボタン */}
-          <div className="action-buttons">
-            <button
-              type="button"
-              className={`action-btn action-btn-sprint${sprintPressed ? ' is-pressed' : ''}`}
-              onPointerDown={handleSprintDown}
-              onPointerUp={handleSprintUp}
-              onPointerCancel={handleSprintUp}
-              onLostPointerCapture={handleSprintUp}
-              aria-label="Dash"
-            >
-              <span className="action-btn-label">DASH</span>
-            </button>
-
-            <button
-              type="button"
-              className={`action-btn action-btn-jump${jumpPressed ? ' is-pressed' : ''}`}
-              onPointerDown={handleJumpDown}
-              onPointerUp={handleJumpUp}
-              onPointerCancel={handleJumpUp}
-              aria-label="Jump"
-            >
-              <span className="action-btn-label">JUMP</span>
-            </button>
-          </div>
-        </>
-      ) : (
-        <>
-          {/* 運転: 画面左下 左右ステアリングボタン */}
-          <div className="drive-steer-group" aria-label="Steering Controls">
-            <button
-              type="button"
-              className={`drive-steer-btn${steerLeftPressed ? ' is-pressed' : ''}`}
-              onPointerDown={handleSteerLeftDown}
-              onPointerUp={handleSteerLeftUp}
-              onPointerCancel={handleSteerLeftUp}
-              onLostPointerCapture={handleSteerLeftUp}
-              aria-label="Steer Left"
-            >
-              <span className="drive-steer-arrow">◀</span>
-              <span className="drive-steer-sub">LEFT</span>
-            </button>
-
-            <button
-              type="button"
-              className={`drive-steer-btn${steerRightPressed ? ' is-pressed' : ''}`}
-              onPointerDown={handleSteerRightDown}
-              onPointerUp={handleSteerRightUp}
-              onPointerCancel={handleSteerRightUp}
-              onLostPointerCapture={handleSteerRightUp}
-              aria-label="Steer Right"
-            >
-              <span className="drive-steer-arrow">▶</span>
-              <span className="drive-steer-sub">RIGHT</span>
-            </button>
-          </div>
-
-          {/* 運転: 画面下部中央 軽量デジタル速度計 */}
-          <div className="drive-speedometer" aria-label="Speedometer">
-            <span className={`drive-gear drive-gear-${vehicleGear.toLowerCase()}`}>
-              {vehicleGear}
+            <span className="interact-btn-main">乗る</span>
+            <span className="interact-btn-key">
+              {nearbyVehicleName ? `${nearbyVehicleName} (E/F)` : 'E / F'}
             </span>
-            <span className="drive-speed-value">{vehicleSpeedKmh}</span>
-            <span className="drive-speed-unit">km/h</span>
-          </div>
+          </button>
+        )}
 
-          {/* 運転: 画面右下 降車ボタン + ブレーキ/バック + アクセルペダル */}
-          <div className="drive-right-controls">
+        {/* 徒歩: 画面右下 ダッシュ・ジャンプボタン */}
+        <div className="action-buttons">
+          <button
+            type="button"
+            className={`action-btn action-btn-sprint${sprintPressed ? ' is-pressed' : ''}`}
+            onPointerDown={handleSprintDown}
+            onPointerUp={handleSprintUp}
+            onPointerCancel={handleSprintUp}
+            onLostPointerCapture={handleSprintUp}
+            aria-label="Dash"
+          >
+            <span className="action-btn-label">DASH</span>
+          </button>
+
+          <button
+            type="button"
+            className={`action-btn action-btn-jump${jumpPressed ? ' is-pressed' : ''}`}
+            onPointerDown={handleJumpDown}
+            onPointerUp={handleJumpUp}
+            onPointerCancel={handleJumpUp}
+            aria-label="Jump"
+          >
+            <span className="action-btn-label">JUMP</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 運転モード UI（常時マウント・opacity:0 廃止・左右ステアリング固定表示） */}
+      <div
+        className={`touch-mode-panel ${isVehicleMode ? 'is-mode-active' : 'is-mode-inactive'}`}
+        aria-hidden={!isVehicleMode}
+      >
+        {/* 運転: 画面左下 左右ステアリングボタン */}
+        <div className="drive-steer-group" aria-label="Steering Controls">
+          <button
+            type="button"
+            className={`drive-steer-btn${steerLeftPressed ? ' is-pressed' : ''}`}
+            onPointerDown={handleSteerLeftDown}
+            onPointerUp={handleSteerLeftUp}
+            onPointerCancel={handleSteerLeftUp}
+            onLostPointerCapture={handleSteerLeftUp}
+            aria-label="Steer Left"
+          >
+            <span className="drive-steer-arrow">◀</span>
+            <span className="drive-steer-sub">LEFT</span>
+          </button>
+
+          <button
+            type="button"
+            className={`drive-steer-btn${steerRightPressed ? ' is-pressed' : ''}`}
+            onPointerDown={handleSteerRightDown}
+            onPointerUp={handleSteerRightUp}
+            onPointerCancel={handleSteerRightUp}
+            onLostPointerCapture={handleSteerRightUp}
+            aria-label="Steer Right"
+          >
+            <span className="drive-steer-arrow">▶</span>
+            <span className="drive-steer-sub">RIGHT</span>
+          </button>
+        </div>
+
+        {/* 運転: 画面下部中央 軽量デジタル速度計 */}
+        <div className="drive-speedometer" aria-label="Speedometer">
+          <span className={`drive-gear drive-gear-${vehicleGear.toLowerCase()}`}>
+            {vehicleGear}
+          </span>
+          <span className="drive-speed-value">{vehicleSpeedKmh}</span>
+          <span className="drive-speed-unit">km/h</span>
+        </div>
+
+        {/* 運転: 画面右下 降車ボタン + ブレーキ/バック + アクセルペダル */}
+        <div className="drive-right-controls">
+          <button
+            type="button"
+            className={`interact-btn interact-btn-exit${canExitVehicle ? '' : ' is-disabled'}`}
+            onPointerDown={canExitVehicle ? handleInteractDown : undefined}
+            disabled={!canExitVehicle}
+            aria-label="Exit Vehicle"
+          >
+            <span className="interact-btn-main">降りる</span>
+            <span className="interact-btn-key">
+              {canExitVehicle ? 'E / F' : '停車で降車'}
+            </span>
+          </button>
+
+          <div className="drive-pedal-group">
             <button
               type="button"
-              className={`interact-btn interact-btn-exit${canExitVehicle ? '' : ' is-disabled'}`}
-              onPointerDown={canExitVehicle ? handleInteractDown : undefined}
-              disabled={!canExitVehicle}
-              aria-label="Exit Vehicle"
+              className={`drive-pedal drive-pedal-brake${brakePressed ? ' is-pressed' : ''}`}
+              onPointerDown={handleBrakeDown}
+              onPointerUp={handleBrakeUp}
+              onPointerCancel={handleBrakeUp}
+              onLostPointerCapture={handleBrakeUp}
+              aria-label="Brake or Reverse"
             >
-              <span className="interact-btn-main">降りる</span>
-              <span className="interact-btn-key">
-                {canExitVehicle ? 'E / F' : '停車で降車'}
-              </span>
+              <span className="drive-pedal-title">BRAKE</span>
+              <span className="drive-pedal-sub">長押し: バック</span>
             </button>
 
-            <div className="drive-pedal-group">
-              <button
-                type="button"
-                className={`drive-pedal drive-pedal-brake${brakePressed ? ' is-pressed' : ''}`}
-                onPointerDown={handleBrakeDown}
-                onPointerUp={handleBrakeUp}
-                onPointerCancel={handleBrakeUp}
-                onLostPointerCapture={handleBrakeUp}
-                aria-label="Brake or Reverse"
-              >
-                <span className="drive-pedal-title">BRAKE</span>
-                <span className="drive-pedal-sub">長押し: バック</span>
-              </button>
-
-              <button
-                type="button"
-                className={`drive-pedal drive-pedal-accel${accelPressed ? ' is-pressed' : ''}`}
-                onPointerDown={handleAccelDown}
-                onPointerUp={handleAccelUp}
-                onPointerCancel={handleAccelUp}
-                onLostPointerCapture={handleAccelUp}
-                aria-label="Accelerate"
-              >
-                <span className="drive-pedal-title">ACCEL</span>
-                <span className="drive-pedal-sub">前進</span>
-              </button>
-            </div>
+            <button
+              type="button"
+              className={`drive-pedal drive-pedal-accel${accelPressed ? ' is-pressed' : ''}`}
+              onPointerDown={handleAccelDown}
+              onPointerUp={handleAccelUp}
+              onPointerCancel={handleAccelUp}
+              onLostPointerCapture={handleAccelUp}
+              aria-label="Accelerate"
+            >
+              <span className="drive-pedal-title">ACCEL</span>
+              <span className="drive-pedal-sub">前進</span>
+            </button>
           </div>
-        </>
-      )}
+        </div>
+      </div>
     </div>
   );
 }

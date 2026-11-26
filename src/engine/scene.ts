@@ -25,6 +25,12 @@ import {
   type LoadedHeroVehicle,
   type VehicleGear,
 } from '../vehicle';
+import {
+  TRAFFIC_VEHICLE_CONFIGS,
+  TrafficManager,
+  type TrafficObstacle,
+  type TrafficStatus,
+} from '../traffic';
 
 export type ControlMode = 'foot' | 'vehicle';
 
@@ -58,6 +64,8 @@ export interface EngineStatus {
   heroVehicleWheels: number;
   drivableVehicleCount: number;
   drivableVehicleTotal: number;
+  trafficLoadedCount: number;
+  trafficTotalCount: number;
 }
 
 export interface GameEngineHandle {
@@ -170,6 +178,13 @@ export function startGameEngine(
     pavement: 'procedural',
     sky: 'procedural',
   };
+  let trafficStatus: TrafficStatus = {
+    loadedCount: 0,
+    totalCount: TRAFFIC_VEHICLE_CONFIGS.length,
+    failedCount: 0,
+  };
+  const drivableObstacles: TrafficObstacle[] = [];
+  const tempVehiclePos = new THREE.Vector3();
 
   let rafId = 0;
   let frameCount = 0;
@@ -243,6 +258,8 @@ export function startGameEngine(
       heroVehicleWheels: totalBoundWheels,
       drivableVehicleCount: loadedVehicles.length,
       drivableVehicleTotal: DRIVABLE_VEHICLES.length,
+      trafficLoadedCount: trafficStatus.loadedCount,
+      trafficTotalCount: trafficStatus.totalCount,
     });
   };
 
@@ -298,6 +315,17 @@ export function startGameEngine(
         emitStatus();
       });
   }
+
+  // 3-A: AI 交通車両4台（日本の左側通行・自動走行・前方衝突回避・OBBコライダー）
+  const trafficManager = new TrafficManager(
+    scene,
+    collisionWorld,
+    maxAnisotropy,
+    (nextTrafficStatus) => {
+      trafficStatus = nextTrafficStatus;
+      emitStatus();
+    },
+  );
 
   const inputManager = new InputManager(canvas);
 
@@ -460,6 +488,27 @@ export function startGameEngine(
       }
     }
 
+    // 3-A: AI 交通車両の自動走行・前方検知（プレイヤー・運転車両2台・他AI車両）更新
+    drivableObstacles.length = 0;
+    for (const vc of vehicleControllers) {
+      vc.getPosition(tempVehiclePos);
+      const dims = vc.getDimensions();
+      drivableObstacles.push({
+        id: vc.getId(),
+        kind: 'drivable',
+        x: tempVehiclePos.x,
+        z: tempVehiclePos.z,
+        yaw: vc.getYaw(),
+        halfW: dims.width * 0.5,
+        halfD: dims.length * 0.5,
+      });
+    }
+    trafficManager.update(
+      dt,
+      controlMode === 'foot' && playerController ? playerPos : null,
+      drivableObstacles,
+    );
+
     // リアルタイムシャドウカメラを操作対象（プレイヤーまたは運転中の車両）周囲へ追従させる
     dirLight.position.set(focusPos.x + 18, focusPos.y + 30, focusPos.z + 14);
     dirLight.target.position.copy(focusPos);
@@ -541,6 +590,8 @@ export function startGameEngine(
         loadedPlayer = null;
       }
       playerController = null;
+
+      trafficManager.dispose();
 
       for (const vcConfig of DRIVABLE_VEHICLES) {
         collisionWorld.removeCollider(vcConfig.id);

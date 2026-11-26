@@ -41,6 +41,8 @@ const INITIAL_STATUS: EngineStatus = {
   heroVehicleWheels: 0,
   drivableVehicleCount: 0,
   drivableVehicleTotal: 2,
+  trafficLoadedCount: 0,
+  trafficTotalCount: 4,
 };
 
 export function App() {

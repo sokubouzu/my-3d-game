@@ -266,13 +266,14 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
 
   // =========================================================================
   // 5. 駐車車両 (車道路肩・全長 4.2〜4.8m 目安 / バイク 2.3m、Y = 0 厳守)
+  //    3-A: 内側走行レーン (±1.65m) のAI交通車両と干渉しない路肩位置 (±4.35m) へ整列
   // =========================================================================
   {
     instanceId: 'veh_innova_north',
     assetId: '2011_-_13_toyota_kijang_innova_2.0_g_tgn40',
     category: 'vehicles',
     url: './assets/vehicles/2011_-_13_toyota_kijang_innova_2.0_g_tgn40.glb',
-    x: 3.6,
+    x: 4.35,
     z: -16,
     rotationY: 0,
     fitMode: 'length',
@@ -284,7 +285,7 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     castShadow: true,
     priority: 1,
   },
-  // ※ veh_porsche_north (free_1975_porsche_911_930_turbo.glb / x:-3.6, z:-22) は
+  // ※ veh_porsche_north (free_1975_porsche_911_930_turbo.glb / x:-4.2, z:-22) は
   //    作業ID 2-C にて同一位置のまま運転可能スポーツカー（2台目）へ昇格したため静的配置から除外。
   {
     instanceId: 'veh_mazda_furai_east',
@@ -292,7 +293,7 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     category: 'vehicles',
     url: './assets/vehicles/2008__mazda_furai.glb',
     x: 18,
-    z: 3.6,
+    z: 4.35,
     rotationY: -Math.PI / 2,
     fitMode: 'length',
     targetSize: 4.6,
@@ -309,7 +310,7 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     category: 'vehicles',
     url: './assets/vehicles/2008__mazda_furai.glb',
     x: -20,
-    z: -3.6,
+    z: -4.35,
     rotationY: Math.PI / 2,
     fitMode: 'length',
     targetSize: 4.6,
@@ -325,7 +326,7 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     assetId: 'thunderbolt_96_interceptor_-_low_poly_model',
     category: 'vehicles',
     url: './assets/vehicles/thunderbolt_96_interceptor_-_low_poly_model.glb',
-    x: -3.6,
+    x: -4.35,
     z: 18,
     rotationY: Math.PI,
     fitMode: 'length',
@@ -342,7 +343,7 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     assetId: 'harley_custom_bike_v1.2',
     category: 'vehicles',
     url: './assets/vehicles/harley_custom_bike_v1.2.glb',
-    x: 4.4,
+    x: 4.75,
     z: 14,
     rotationY: Math.PI / 6,
     fitMode: 'length',
