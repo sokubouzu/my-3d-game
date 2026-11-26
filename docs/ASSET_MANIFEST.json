@@ -13,8 +13,8 @@
       "vehicles": 11,
       "props": 8
     },
-    "placedApprovedCount": 24,
-    "placedInstanceCount": 28
+    "placedApprovedCount": 23,
+    "placedInstanceCount": 27
   },
   "assets": {
     "characters": [
@@ -1682,20 +1682,11 @@
           "note": "GLBバイナリ検証・用途別配置済み、および1-D街区コード配置・CIビルド＆GitHub Pagesデプロイ成功（状態B）。実ブラウザでの描画確認（状態C）・衝突/動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
         },
         "cityPlacement": {
-          "taskId": "1-D",
-          "instanceCount": 1,
-          "instances": [
-            {
-              "instanceId": "se_porco_plane",
-              "positionXZ": [
-                24.0,
-                44.0
-              ],
-              "fitMode": "length",
-              "targetSizeMeters": 7.8,
-              "hasCollision": true
-            }
-          ]
+          "taskId": "1-D-fix",
+          "status": "excluded_from_city_for_airport_phase",
+          "instanceCount": 0,
+          "instances": [],
+          "note": "iPad実機テスト確認に基づき、市街地マップ（1-D）の配置リストから除外。アセットファイル自体は今後の空港フェーズ用に保持。"
         }
       },
       {

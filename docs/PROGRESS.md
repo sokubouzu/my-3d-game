@@ -1,13 +1,32 @@
 # 開発進捗記録（PROGRESS.md）
 
 ## 現在のステータス
-- **完了済み作業ID**: `0-C`（素材棚卸し）、`1-A`（最小起動基盤・GitHub Pages設定）、`1-B`（人物表示）、`1-C`（徒歩移動・三人称カメラ・iPadタッチ操作）、`1-D`（日本の街区配置と衝突判定）、`1-E`（Poly Haven 1K PBR・HDRI・環境仕上げ）
-- **次回作業ID**: `2-A`（実機確認・状態C/D/E検証後の次フェーズ）
-- **関連コミットID**: `b5343ca`（1-D / 1-E 実装）、`abd08be`（1-B / 1-C 実装）、`0c5e527`（0-C / 1-A）
+- **完了済み作業ID**: `0-C`（素材棚卸し）、`1-A`（最小起動基盤・GitHub Pages設定）、`1-B`（人物表示）、`1-C`（徒歩移動・三人称カメラ・iPadタッチ操作）、`1-D`（日本の街区配置と衝突判定 + 実機テスト修正）、`1-E`（Poly Haven 1K PBR・HDRI・環境仕上げ）
+- **次回作業ID**: `2-A`（iPad実機再確認後の次フェーズ）
+- **関連コミットID**: `6b8976b`（1-D 実機テスト不具合3点修正）、`b5343ca`（1-D / 1-E 実装）、`abd08be`（1-B / 1-C 実装）、`0c5e527`（0-C / 1-A）
 
 ---
 
 ## 作業履歴
+
+### 作業ID: 1-D 実機テスト不具合修正（飛行機除外・Y=0厳密接地・ジオラマ道路面高さ修正）
+- **実施日**: 2026-11-26
+- **コミットID**: `6b8976b`（`6b8976bba594623ecbfee3163bed55586bdf6a44`）
+- **GitHub Actions Run ID**: `45725726491`（`Deploy to GitHub Pages`: `build` = `success`, `deploy` = `success`）
+- **プレイヤー・操作UI**: `player.glb` の挙動・アニメーション・三人称カメラ・iPadタッチ操作 UI は一切変更なし。
+
+#### 修正内容（検証ランク: 状態B＝コード修正・CIビルド＆GitHub Pagesデプロイ成功／iPad実機再検証＝状態Eは未実施）
+1. **街区に誤配置された飛行機 GLB の配置除外**:
+   - `src/world/cityLayout.ts` から `porco_plane.glb`（`se_porco_plane`）の配置エントリを削除し、市街地配置を承認済み23種・計27インスタンスへ更新。
+   - `public/assets/vehicles/porco_plane.glb` ファイル自体は削除せず、今後の空港フェーズ用に保持。
+2. **空高く浮いていた建物を含む全配置モデルの厳密接地（Y = 0 厳守）**:
+   - `src/world/cityBuilder.ts` にてスケール適用後に必ず `model.updateMatrixWorld(true)` を実行してから `new THREE.Box3().setFromObject(model)` でワールド境界ボックスを再計算し、`model.position.y -= scaledBox.min.y` および `wrapper.updateMatrixWorld(true)` 後の最終ワールド境界検証で底面を正確に接地するよう修正。
+   - 地下基礎・突き出しパーツを持つ建物（`psx_japanese_house`, `tokyo_japanese_house__casa_japonesa_low_poly`, `japanese_restaurant_inakaya` 等）も埋設比率 `surfaceEmbedRatio` で地上基礎が地面に一致するよう補正。
+3. **建物＋道路セット（ジオラマ型 GLB）の道路面高さ修正とコリジョン同期**:
+   - `stylized_little_japanese_town_street.glb`・`night_city_japan.glb`・`japan_street.glb`・`buster_brown_shoe_store.glb` 等について、セット内の道路・地面プレート上面の実際の Y 座標を実行時計測（`detectDioramaRoadSurfaceOffsetY`）＋実測フォールバック比率（`surfaceEmbedRatio`）で求め、道路面が `Y = 0`（または歩道高さ `Y = 0.12m`）と一致するようモデル全体を下げて不要な厚い土台部分を地面下へ埋設。
+   - 修正後の最終ワールド境界ボックス（`finalWorldBox`）に合わせて OBB コライダーの `minY` / `maxY`（地上部分 `Math.max(0, finalWorldBox.min.y)` 〜 `finalWorldBox.max.y`）を正確に同期。
+
+---
 
 ### 作業ID: 1-D（日本の街区配置と衝突判定） & 1-E（Poly Haven 1K PBR・HDRI・環境仕上げ）
 - **実施日**: 2026-11-25
