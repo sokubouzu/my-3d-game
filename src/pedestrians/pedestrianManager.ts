@@ -1,21 +1,18 @@
 import * as THREE from 'three';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { getGltfLoader } from '../engine/loaders';
-import {
-  PLAYER_MODEL_URL,
-  TARGET_PLAYER_HEIGHT_METERS,
-} from '../player/playerModel';
+import { TARGET_PLAYER_HEIGHT_METERS } from '../player/playerModel';
 import type { TrafficLightController } from '../traffic/trafficLights';
 import type { TrafficObstacle } from '../traffic/trafficVehicle';
 import type { CollisionWorld } from '../world/collisionWorld';
 import { PedestrianAgent } from './pedestrianAgent';
 import {
-  PEDESTRIAN_APPEARANCES,
-  PEDESTRIAN_CONFIGS,
-  pickRandomPedestrianHeight,
-  type PedestrianAppearance,
-  type PedestrianConfig,
-} from './pedestrianRoutes';
+  createPedestrianVariationPlan,
+  FALLBACK_MIXAMO_MODEL_SPEC,
+  PEDESTRIAN_MODEL_SPECS,
+  type PedestrianModelSpec,
+} from './pedestrianCatalog';
+import { PEDESTRIAN_CONFIGS, type PedestrianConfig } from './pedestrianRoutes';
 
 export interface PedestrianStatus {
   loadedCount: number;
@@ -23,10 +20,19 @@ export interface PedestrianStatus {
   failed: boolean;
 }
 
+interface LoadedPedestrianTemplate {
+  spec: PedestrianModelSpec;
+  scene: THREE.Group;
+  animations: THREE.AnimationClip[];
+  baseScaleFactor: number;
+  baseMinYOffset: number;
+}
+
 /**
- * 3-B: 歩道および横断歩道を歩く AI 歩行者（6人）を統括管理するマネージャー。
- * - 既存の承認済みキャラクター GLB (player.glb) を1回だけロードし、SkeletonUtils.clone で軽量複製。
- * - テクスチャ・ジオメトリを共有し、各個体ごとに独立した AnimationMixer を駆動。
+ * 3-B / 4-B: 歩道および横断歩道を歩く AI 歩行者（8人）を統括管理するマネージャー。
+ * - 優先ルート: public/assets/pedestrians/ 配下の CC0 マルチキャラクター GLB（Quaternius 8種）を並列ロード。
+ * - フォールバック: 外部モデル取得失敗時は player.glb へ自動フォールバック。
+ * - すべての個体へ年齢層（大人・子供）・体型・3D装着パーツ・服装/肌/髪色・歩調テンポの個体差を自動付与。
  */
 export class PedestrianManager {
   private readonly scene: THREE.Scene;
@@ -36,7 +42,7 @@ export class PedestrianManager {
   private readonly onStatusChange?: (status: PedestrianStatus) => void;
 
   private readonly agents: PedestrianAgent[] = [];
-  private templateScene: THREE.Group | null = null;
+  private readonly loadedTemplates: LoadedPedestrianTemplate[] = [];
   private failed = false;
   private isDisposed = false;
 
@@ -77,85 +83,128 @@ export class PedestrianManager {
     }
   }
 
+  private async loadTemplate(
+    spec: PedestrianModelSpec,
+  ): Promise<LoadedPedestrianTemplate> {
+    const loader = getGltfLoader();
+    const gltf = await loader.loadAsync(spec.url);
+    const template = gltf.scene;
+
+    template.updateMatrixWorld(true);
+    const rawBox = new THREE.Box3().setFromObject(template);
+    const rawSize = new THREE.Vector3();
+    rawBox.getSize(rawSize);
+
+    // 帽子付きモデル（old_classy_female 等）で頭頂高により身長が縮まないよう、素体基準高を優先使用
+    const denomHeight =
+      spec.rigKind === 'quaternius' && spec.referenceBodyHeight > 0.1
+        ? spec.referenceBodyHeight
+        : rawSize.y > 0.01
+          ? rawSize.y
+          : TARGET_PLAYER_HEIGHT_METERS;
+
+    const baseScaleFactor = TARGET_PLAYER_HEIGHT_METERS / denomHeight;
+    const baseMinYOffset = Number.isFinite(rawBox.min.y)
+      ? -rawBox.min.y * baseScaleFactor
+      : 0;
+
+    const anisotropy = Math.min(4, Math.max(1, this.maxAnisotropy));
+    template.traverse((node) => {
+      if (node instanceof THREE.Mesh) {
+        const mats = Array.isArray(node.material)
+          ? node.material
+          : [node.material];
+        for (const mat of mats) {
+          if (mat instanceof THREE.MeshStandardMaterial) {
+            if (mat.map) mat.map.anisotropy = anisotropy;
+            if (mat.normalMap) mat.normalMap.anisotropy = anisotropy;
+            if (mat.roughnessMap) mat.roughnessMap.anisotropy = anisotropy;
+            mat.envMapIntensity = 0.78;
+          }
+        }
+      }
+    });
+
+    return {
+      spec,
+      scene: template,
+      animations: gltf.animations,
+      baseScaleFactor,
+      baseMinYOffset,
+    };
+  }
+
   private startLoading(): void {
     this.emitStatus();
-    const loader = getGltfLoader();
 
-    loader
-      .loadAsync(PLAYER_MODEL_URL)
-      .then((gltf) => {
-        if (this.isDisposed) return;
+    const loadAll = async () => {
+      // 優先ルート: 8種の CC0 マルチキャラクター GLB を並列ロード
+      const results = await Promise.allSettled(
+        PEDESTRIAN_MODEL_SPECS.map((spec) => this.loadTemplate(spec)),
+      );
+      if (this.isDisposed) return;
 
-        const template = gltf.scene;
-        this.templateScene = template;
+      const templateById = new Map<string, LoadedPedestrianTemplate>();
+      const availableSpecs: PedestrianModelSpec[] = [];
 
-        // テンプレートの初期寸法を1回だけ計測（身長 1.7m 正規化・足裏 Y=0 接地オフセット）
-        template.updateMatrixWorld(true);
-        const rawBox = new THREE.Box3().setFromObject(template);
-        const rawSize = new THREE.Vector3();
-        rawBox.getSize(rawSize);
-
-        const baseScaleFactor =
-          rawSize.y > 0.01 ? TARGET_PLAYER_HEIGHT_METERS / rawSize.y : 1.0;
-        const baseMinYOffset = Number.isFinite(rawBox.min.y)
-          ? -rawBox.min.y * baseScaleFactor
-          : 0;
-
-        const anisotropy = Math.min(4, Math.max(1, this.maxAnisotropy));
-        template.traverse((node) => {
-          if (node instanceof THREE.Mesh) {
-            const mats = Array.isArray(node.material)
-              ? node.material
-              : [node.material];
-            for (const mat of mats) {
-              if (mat instanceof THREE.MeshStandardMaterial) {
-                if (mat.map) mat.map.anisotropy = anisotropy;
-                if (mat.normalMap) mat.normalMap.anisotropy = anisotropy;
-                if (mat.roughnessMap) mat.roughnessMap.anisotropy = anisotropy;
-                mat.envMapIntensity = 0.85;
-              }
-            }
-          }
-        });
-
-        // 服装・髪色パレットを重複しないようシャッフルして各個体へ割り当て
-        const shuffledAppearances: PedestrianAppearance[] = [
-          ...PEDESTRIAN_APPEARANCES,
-        ];
-        for (let i = shuffledAppearances.length - 1; i > 0; i -= 1) {
-          const j = Math.floor(Math.random() * (i + 1));
-          const tmp = shuffledAppearances[i];
-          shuffledAppearances[i] = shuffledAppearances[j];
-          shuffledAppearances[j] = tmp;
+      for (const res of results) {
+        if (res.status === 'fulfilled') {
+          this.loadedTemplates.push(res.value);
+          templateById.set(res.value.spec.id, res.value);
+          availableSpecs.push(res.value.spec);
         }
+      }
 
-        for (let i = 0; i < this.configs.length; i += 1) {
-          const cfg = this.configs[i];
-          const cloned = SkeletonUtils.clone(template);
-          const randomHeight = pickRandomPedestrianHeight();
-          const appearance =
-            shuffledAppearances[i % shuffledAppearances.length];
-          const agent = new PedestrianAgent(
-            cfg,
-            cloned,
-            gltf.animations,
-            this.collisionWorld,
-            baseScaleFactor,
-            baseMinYOffset,
-            randomHeight,
-            appearance,
+      // フォールバックルート: CC0 パックが1つも取得できなかった場合は player.glb へフォールバック
+      if (availableSpecs.length === 0) {
+        try {
+          const fallbackTemplate = await this.loadTemplate(
+            FALLBACK_MIXAMO_MODEL_SPEC,
           );
-          this.agents.push(agent);
-          this.scene.add(agent.root);
+          if (this.isDisposed) return;
+          this.loadedTemplates.push(fallbackTemplate);
+          templateById.set(fallbackTemplate.spec.id, fallbackTemplate);
+          availableSpecs.push(fallbackTemplate.spec);
+        } catch {
+          if (this.isDisposed) return;
+          this.failed = true;
+          this.emitStatus();
+          return;
         }
+      }
 
-        this.emitStatus();
-      })
-      .catch(() => {
-        if (this.isDisposed) return;
-        this.failed = true;
-        this.emitStatus();
-      });
+      // 各歩行者のモデル・年齢層・体型・カラー・3Dパーツ・歩調プランを一括生成
+      const plan = createPedestrianVariationPlan(
+        this.configs.length,
+        availableSpecs,
+      );
+
+      for (let i = 0; i < this.configs.length; i += 1) {
+        const cfg = this.configs[i];
+        const variation = plan[i];
+        const template =
+          templateById.get(variation.modelSpec.id) ?? this.loadedTemplates[0];
+        if (!template) continue;
+
+        const cloned = SkeletonUtils.clone(template.scene);
+        const agent = new PedestrianAgent(
+          cfg,
+          cloned,
+          template.animations,
+          this.collisionWorld,
+          template.baseScaleFactor,
+          template.baseMinYOffset,
+          TARGET_PLAYER_HEIGHT_METERS,
+          variation,
+        );
+        this.agents.push(agent);
+        this.scene.add(agent.root);
+      }
+
+      this.emitStatus();
+    };
+
+    void loadAll();
   }
 
   public update(
@@ -187,12 +236,13 @@ export class PedestrianManager {
     }
     this.agents.length = 0;
 
-    if (this.templateScene) {
-      const disposedGeos = new Set<THREE.BufferGeometry>();
-      const disposedMats = new Set<THREE.Material>();
-      const disposedTexs = new Set<THREE.Texture>();
+    const disposedGeos = new Set<THREE.BufferGeometry>();
+    const disposedMats = new Set<THREE.Material>();
+    const disposedTexs = new Set<THREE.Texture>();
 
-      this.templateScene.traverse((node) => {
+    for (let i = 0; i < this.loadedTemplates.length; i += 1) {
+      const templateScene = this.loadedTemplates[i].scene;
+      templateScene.traverse((node) => {
         if (!(node instanceof THREE.Mesh)) return;
         if (node.geometry && !disposedGeos.has(node.geometry)) {
           disposedGeos.add(node.geometry);
@@ -224,7 +274,7 @@ export class PedestrianManager {
           mat.dispose();
         }
       });
-      this.templateScene = null;
     }
+    this.loadedTemplates.length = 0;
   }
 }

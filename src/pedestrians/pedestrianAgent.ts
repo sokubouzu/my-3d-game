@@ -2,19 +2,18 @@ import * as THREE from 'three';
 import type { TrafficLightController } from '../traffic/trafficLights';
 import type { TrafficObstacle } from '../traffic/trafficVehicle';
 import type { CollisionWorld } from '../world/collisionWorld';
-import type {
-  PedestrianAppearance,
-  PedestrianConfig,
-} from './pedestrianRoutes';
+import { attachPedestrianAccessories } from './pedestrianAccessories';
+import type { PedestrianVariation } from './pedestrianCatalog';
+import type { PedestrianConfig } from './pedestrianRoutes';
 
-const PED_RADIUS = 0.34;
-const WALK_ANIM_REF_SPEED = 1.28; // Walking クリップの標準速度基準 (m/s)
+const BASE_PED_RADIUS = 0.34;
+const WALK_ANIM_REF_SPEED = 1.26; // Walk / Walking クリップの標準速度基準 (m/s)
 const WAYPOINT_REACH_DIST = 0.45;
 const VEHICLE_STOP_DIST = 2.8;
 const HUMAN_AVOID_DIST = 1.85;
 const HUMAN_STOP_DIST = 0.82;
 const CROSSFADE_SEC = 0.22;
-const WARDROBE_SHADER_KEY = 'pedestrian-wardrobe-v1';
+const WARDROBE_SHADER_KEY = 'pedestrian-wardrobe-v2';
 
 function normalizeAngle(rad: number): number {
   let a = rad;
@@ -24,14 +23,17 @@ function normalizeAngle(rad: number): number {
 }
 
 /**
- * 3-B / 3-C: 歩道および横断歩道を歩行する単体 AI 歩行者エージェント。
- * - SkeletonUtils.clone で複製したスキニングモデル + 個体別 AnimationMixer（Walking / Idle クロスフェード）
- * - 個体ごとに material.clone() を行い、服（上下）と髪色のバリエーション＋身長 1.55m〜1.80m を適用
+ * 3-B / 3-C / 4-B: 歩道および横断歩道を歩行する単体 AI 歩行者エージェント。
+ * - CC0 マルチキャラクター GLB（Quaternius 8種）および Mixamo フォールバック両対応
+ * - 年齢層（大人 158〜182cm・細身/標準/がっしり体型 ＋ 子供 125〜135cm）
+ * - 頭部・胴体ボーンへの軽量 3D パーツ装着（キャップ帽・ニット帽・メガネ・リュック・ショルダーバッグ）
+ * - 服装・肌・髪色の個体別カラーパレット ＋ 個体ごとの歩行速度・歩調/腕振りテンポ差
  * - 信号連動（横断歩道が青のときのみ進入、横断中は対岸まで渡り切る）
  * - プレイヤー・車両・他歩行者への一時停止 / 軽回避 / めり込み防止分離
  */
 export class PedestrianAgent {
   public readonly config: PedestrianConfig;
+  public readonly variation: PedestrianVariation;
   public readonly root: THREE.Group;
   public readonly heightMeters: number;
 
@@ -41,6 +43,9 @@ export class PedestrianAgent {
   private readonly walkAction: THREE.AnimationAction | null;
   private readonly collisionWorld: CollisionWorld;
   private readonly clonedMaterials: THREE.Material[] = [];
+  private readonly pedRadius: number;
+  private readonly cruiseSpeedMs: number;
+  private readonly cadenceFactor: number;
 
   private currentWpIdx: number;
   private nextWpIdx: number;
@@ -62,25 +67,38 @@ export class PedestrianAgent {
     collisionWorld: CollisionWorld,
     baseScaleFactor: number,
     baseMinYOffset: number,
-    heightMeters: number,
-    appearance: PedestrianAppearance,
+    referenceHeightMeters: number,
+    variation: PedestrianVariation,
   ) {
     this.config = config;
+    this.variation = variation;
     this.collisionWorld = collisionWorld;
     this.model = clonedModel;
-    this.heightMeters = heightMeters;
+    this.heightMeters = variation.heightMeters;
+    this.cruiseSpeedMs = config.walkSpeedMs * variation.speedFactor;
+    this.cadenceFactor = variation.cadenceFactor;
+    this.pedRadius =
+      BASE_PED_RADIUS *
+      Math.max(0.84, variation.widthScale) *
+      (variation.ageGroup === 'child' ? 0.86 : 1.0);
 
-    // 身長バリエーション（1.55m〜1.80m）を反映しつつ足裏 Y=0 接地を維持
-    const heightRatio = heightMeters / 1.7;
-    const finalScale = baseScaleFactor * heightRatio;
-    clonedModel.scale.setScalar(finalScale);
+    // 年齢層・身長（子供 125〜135cm / 大人 158〜182cm）＋体型幅（細身・標準・がっしり）を反映しつつ足裏 Y=0 接地を維持
+    const heightRatio = variation.heightMeters / referenceHeightMeters;
+    const finalHeightScale = baseScaleFactor * heightRatio;
+    clonedModel.scale.set(
+      finalHeightScale * variation.widthScale,
+      finalHeightScale,
+      finalHeightScale * variation.depthScale,
+    );
     clonedModel.position.set(0, baseMinYOffset * heightRatio, 0);
 
-    // M1 iPad Air 最適化: AI 歩行者は castShadow = false、テクスチャは完全共有し
-    // 各個体のマテリアルのみ material.clone() して服・髪色のバリエーションを適用
-    const topColor = new THREE.Color(appearance.topHex);
-    const bottomColor = new THREE.Color(appearance.bottomHex);
-    const hairColor = new THREE.Color(appearance.hairHex);
+    // M1 iPad Air 最適化: AI 歩行者は castShadow = false、ジオメトリ・テクスチャは共有し
+    // 各個体のマテリアルのみ複製して服装・肌・髪色の豊富なカラーパレットを適用
+    const skinColor = new THREE.Color(variation.skinHex);
+    const hairColor = new THREE.Color(variation.hairHex);
+    const topColor = new THREE.Color(variation.wardrobe.topHex);
+    const bottomColor = new THREE.Color(variation.wardrobe.bottomHex);
+    const accentColor = new THREE.Color(variation.wardrobe.accentHex);
 
     clonedModel.traverse((node) => {
       if (node instanceof THREE.SkinnedMesh) {
@@ -90,38 +108,60 @@ export class PedestrianAgent {
         node.castShadow = false;
         node.receiveShadow = true;
 
+        const applyMat = (mat: THREE.Material): THREE.Material =>
+          variation.modelSpec.rigKind === 'quaternius'
+            ? this.cloneQuaterniusMaterial(
+                mat,
+                skinColor,
+                hairColor,
+                topColor,
+                bottomColor,
+                accentColor,
+              )
+            : this.cloneMixamoFallbackMaterial(
+                mat,
+                skinColor,
+                topColor,
+                bottomColor,
+                hairColor,
+                variation,
+              );
+
         if (Array.isArray(node.material)) {
-          node.material = node.material.map((m) =>
-            this.cloneVariedMaterial(
-              m,
-              topColor,
-              bottomColor,
-              hairColor,
-              appearance,
-            ),
-          );
+          node.material = node.material.map(applyMat);
         } else if (node.material) {
-          node.material = this.cloneVariedMaterial(
-            node.material,
-            topColor,
-            bottomColor,
-            hairColor,
-            appearance,
-          );
+          node.material = applyMat(node.material);
         }
       }
     });
 
+    // 頭部・胴体ボーンへ軽量 3D 装着パーツ（帽子・ニット帽・メガネ・リュック・ショルダーバッグ）をアタッチ
+    const attached = attachPedestrianAccessories(
+      clonedModel,
+      variation.modelSpec.rigKind,
+      variation.accessories,
+      variation.ageGroup === 'child',
+    );
+    for (let i = 0; i < attached.materials.length; i += 1) {
+      this.clonedMaterials.push(attached.materials[i]);
+    }
+
     this.root = new THREE.Group();
-    this.root.name = config.id;
+    this.root.name = `${config.id}_${variation.modelSpec.id}_${variation.buildKind}`;
     this.root.add(clonedModel);
 
-    // 個体ごとの独立 AnimationMixer & Walking / Idle アクション
+    // 個体ごとの独立 AnimationMixer & Walk / Walking / Idle アクション
     this.mixer = new THREE.AnimationMixer(clonedModel);
     const idleClip =
-      animations.find((c) => c.name === 'Idle') ?? animations[0] ?? null;
+      animations.find((c) => c.name === 'Idle') ??
+      animations.find((c) => c.name.toLowerCase().includes('idle')) ??
+      animations[0] ??
+      null;
     const walkClip =
-      animations.find((c) => c.name === 'Walking') ?? idleClip;
+      animations.find((c) => c.name === 'Walk') ??
+      animations.find((c) => c.name === 'Walking') ??
+      animations.find((c) => c.name.toLowerCase().includes('walk')) ??
+      idleClip;
 
     this.idleAction = idleClip ? this.mixer.clipAction(idleClip) : null;
     this.walkAction = walkClip ? this.mixer.clipAction(walkClip) : null;
@@ -129,7 +169,7 @@ export class PedestrianAgent {
     if (this.walkAction) {
       this.walkAction.play();
       this.walkAction.time =
-        config.animPhaseOffsetSec %
+        (config.animPhaseOffsetSec + Math.random() * 0.45) %
         Math.max(0.1, this.walkAction.getClip().duration);
       this.isWalkingAnim = true;
     } else if (this.idleAction) {
@@ -148,7 +188,7 @@ export class PedestrianAgent {
     this.z = startWp.z;
     this.y = collisionWorld.getGroundHeight(this.x, this.z);
     this.yaw = Math.atan2(nextWp.x - startWp.x, nextWp.z - startWp.z);
-    this.currentSpeed = config.walkSpeedMs;
+    this.currentSpeed = this.cruiseSpeedMs;
 
     this.obstacleSnapshot = {
       id: config.id,
@@ -156,24 +196,112 @@ export class PedestrianAgent {
       x: this.x,
       z: this.z,
       yaw: this.yaw,
-      halfW: PED_RADIUS,
-      halfD: PED_RADIUS,
+      halfW: this.pedRadius,
+      halfD: this.pedRadius,
     };
 
     this.syncTransform();
   }
 
   /**
-   * テクスチャを共有したままマテリアルを個別複製 (material.clone()) し、
-   * 肌色を保護しつつ上半身・下半身の服装カラーと髪色トーンを軽量シェーダで個体別に変化させる。
-   * 全歩行者で単一の shader program cache key を共有するため、M1 iPad Air でもコンパイル負荷ゼロ。
+   * CC0 Quaternius モデル（名前付き PBR マテリアル: Skin / Hair / Shirt / Pants / Black / Vest / Hat / Belt / Details / Face）
+   * へ自然なカラー・質感バリエーションを直接適用する（カスタムシェーダ不要で高速）。
    */
-  private cloneVariedMaterial(
+  private cloneQuaterniusMaterial(
     mat: THREE.Material,
+    skinColor: THREE.Color,
+    hairColor: THREE.Color,
+    topColor: THREE.Color,
+    bottomColor: THREE.Color,
+    accentColor: THREE.Color,
+  ): THREE.Material {
+    const cloned = mat.clone();
+    this.clonedMaterials.push(cloned);
+
+    if (!(cloned instanceof THREE.MeshStandardMaterial)) {
+      return cloned;
+    }
+
+    const name = cloned.name.toLowerCase();
+    cloned.envMapIntensity = 0.72;
+    cloned.metalness = Math.min(cloned.metalness, 0.12);
+
+    if (name === 'face' || name.includes('eye')) {
+      // 目・口パーツは元の視認性を維持
+      cloned.roughness = 0.65;
+      return cloned;
+    }
+
+    if (name.includes('skin')) {
+      cloned.color.copy(skinColor);
+      cloned.roughness = 0.78;
+      return cloned;
+    }
+
+    if (name.includes('hair') || name.includes('brow')) {
+      cloned.color.copy(hairColor);
+      cloned.roughness = 0.74;
+      return cloned;
+    }
+
+    if (name.includes('shirt') || name === 'black') {
+      // Suit 系モデルはジャケット・スラックスが 'Black' かつインナーが 'Shirt'
+      if (
+        this.variation.modelSpec.style === 'business' &&
+        name.includes('shirt')
+      ) {
+        cloned.color.setHex(0xeef1f5);
+      } else {
+        cloned.color.copy(topColor);
+      }
+      cloned.roughness = 0.85;
+      return cloned;
+    }
+
+    if (name.includes('pants') || name.includes('legs')) {
+      cloned.color.copy(bottomColor);
+      cloned.roughness = 0.88;
+      return cloned;
+    }
+
+    if (name.includes('vest')) {
+      cloned.color.copy(accentColor);
+      cloned.roughness = 0.76;
+      return cloned;
+    }
+
+    if (name.includes('hat')) {
+      if (this.variation.modelSpec.style === 'worker') {
+        cloned.color.setHex(0xe5b822); // 作業用ヘルメット（安全イエロー）
+        cloned.roughness = 0.42;
+      } else {
+        cloned.color.copy(accentColor);
+        cloned.roughness = 0.82;
+      }
+      return cloned;
+    }
+
+    if (name.includes('belt') || name.includes('detail')) {
+      cloned.color.copy(accentColor);
+      cloned.roughness = 0.72;
+      return cloned;
+    }
+
+    cloned.roughness = Math.max(cloned.roughness, 0.75);
+    return cloned;
+  }
+
+  /**
+   * フォールバック（player.glb / Mixamo リグ）使用時のバリエーションシェーダ。
+   * テクスチャ共有のまま、服装・髪色・肌色トーンを自然に変化させる。
+   */
+  private cloneMixamoFallbackMaterial(
+    mat: THREE.Material,
+    skinColor: THREE.Color,
     topColor: THREE.Color,
     bottomColor: THREE.Color,
     hairColor: THREE.Color,
-    appearance: PedestrianAppearance,
+    variation: PedestrianVariation,
   ): THREE.Material {
     if (!(mat instanceof THREE.MeshStandardMaterial)) {
       const cloned = mat.clone();
@@ -184,7 +312,6 @@ export class PedestrianAgent {
     const cloned = mat.clone();
     this.clonedMaterials.push(cloned);
 
-    // 眉マテリアルは髪色トーンに軽く調和させる
     const lowerName = cloned.name.toLowerCase();
     if (cloned.transparent) {
       if (lowerName.includes('brow') || lowerName.includes('hair')) {
@@ -193,17 +320,17 @@ export class PedestrianAgent {
       return cloned;
     }
 
-    // 本体マテリアル: バインドポーズの高さ (0..1.7m) と肌色マスクを用いて服・髪色のみを自然にリカラー
     cloned.customProgramCacheKey = () => WARDROBE_SHADER_KEY;
     cloned.onBeforeCompile = (shader) => {
       shader.uniforms.uPedTopColor = { value: topColor };
       shader.uniforms.uPedBottomColor = { value: bottomColor };
       shader.uniforms.uPedHairColor = { value: hairColor };
+      shader.uniforms.uPedSkinColor = { value: skinColor };
       shader.uniforms.uPedStrengths = {
         value: new THREE.Vector3(
-          appearance.topStrength,
-          appearance.bottomStrength,
-          appearance.hairStrength,
+          variation.wardrobe.topStrength,
+          variation.wardrobe.bottomStrength,
+          variation.wardrobe.hairStrength,
         ),
       };
 
@@ -227,30 +354,30 @@ varying float vPedNormY;
 uniform vec3 uPedTopColor;
 uniform vec3 uPedBottomColor;
 uniform vec3 uPedHairColor;
+uniform vec3 uPedSkinColor;
 uniform vec3 uPedStrengths;`,
         )
         .replace(
           '#include <map_fragment>',
           `#include <map_fragment>
 {
-  // 肌色（顔・手）を保護するための滑らかなマスク（リニア色空間）
   float rgDiff = smoothstep(0.02, 0.085, diffuseColor.r - diffuseColor.g);
   float gbDiff = smoothstep(0.01, 0.065, diffuseColor.g - diffuseColor.b);
   float skinBright = smoothstep(0.11, 0.26, diffuseColor.r);
   float skinMask = rgDiff * gbDiff * skinBright;
   float nonSkin = 1.0 - skinMask;
 
-  // 元の布地・髪の陰影（明度）を保持して自然にリカラー
   float luma = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));
   float clothShade = 0.24 + luma * 1.48;
   float hairShade = 0.20 + luma * 1.55;
+  float skinShade = 0.35 + luma * 1.25;
 
-  // 領域マスク: ズボン (0.10..0.44) / 上着 (0.44..0.74) / 髪・頭部 (0.74..1.00)
   float bottomMask = smoothstep(0.08, 0.13, vPedNormY) * (1.0 - smoothstep(0.42, 0.46, vPedNormY));
   float topMask = smoothstep(0.42, 0.46, vPedNormY) * (1.0 - smoothstep(0.72, 0.76, vPedNormY));
   float hairMask = smoothstep(0.73, 0.78, vPedNormY);
 
   vec3 col = diffuseColor.rgb;
+  col = mix(col, uPedSkinColor * skinShade, skinMask * 0.48);
   col = mix(col, uPedBottomColor * clothShade, bottomMask * nonSkin * uPedStrengths.y);
   col = mix(col, uPedTopColor * clothShade, topMask * nonSkin * uPedStrengths.x);
   col = mix(col, uPedHairColor * hairShade, hairMask * nonSkin * uPedStrengths.z);
@@ -305,7 +432,6 @@ uniform vec3 uPedStrengths;`,
     const crosswalkAxis = activeFrom.nextCrosswalkAxis;
     if (crosswalkAxis && trafficLights) {
       if (!this.inCrosswalk) {
-        // 歩道端からまだ車道へ踏み出していない段階
         const distFromStart = Math.hypot(
           this.x - activeFrom.x,
           this.z - activeFrom.z,
@@ -328,8 +454,8 @@ uniform vec3 uPedStrengths;`,
     let desiredSpeed = waitingForSignal
       ? 0
       : this.inCrosswalk
-        ? this.config.walkSpeedMs * 1.15 // 横断中はわずかに早足で自然に渡り切る
-        : this.config.walkSpeedMs;
+        ? this.cruiseSpeedMs * 1.15 // 横断中はわずかに早足で自然に渡り切る
+        : this.cruiseSpeedMs;
     let steerAvoidX = 0;
     let steerAvoidZ = 0;
 
@@ -342,24 +468,25 @@ uniform vec3 uPedStrengths;`,
       const distSq = rx * rx + rz * rz;
       if (distSq > maxR * maxR) continue;
 
-      // 車両ローカル座標へ変換して表面距離を計測
       const vCos = Math.cos(veh.yaw);
       const vSin = Math.sin(veh.yaw);
       const localX = -rx * vCos + rz * vSin;
       const localZ = -rx * vSin - rz * vCos;
-      const outX = Math.max(0, Math.abs(localX) - (veh.halfW + PED_RADIUS));
-      const outZ = Math.max(0, Math.abs(localZ) - (veh.halfD + PED_RADIUS));
+      const outX = Math.max(0, Math.abs(localX) - (veh.halfW + this.pedRadius));
+      const outZ = Math.max(0, Math.abs(localZ) - (veh.halfD + this.pedRadius));
       const surfaceDist = Math.hypot(outX, outZ);
 
-      // 進行方向前方にある車両なら手前で一時停止
       const fwdDot = rx * dirX + rz * dirZ;
       if (surfaceDist < 1.35 && fwdDot > -0.4) {
         desiredSpeed = 0;
         break;
       }
       if (surfaceDist < VEHICLE_STOP_DIST && fwdDot > 0.2) {
-        const ratio = Math.max(0, (surfaceDist - 1.1) / (VEHICLE_STOP_DIST - 1.1));
-        desiredSpeed = Math.min(desiredSpeed, this.config.walkSpeedMs * ratio);
+        const ratio = Math.max(
+          0,
+          (surfaceDist - 1.1) / (VEHICLE_STOP_DIST - 1.1),
+        );
+        desiredSpeed = Math.min(desiredSpeed, this.cruiseSpeedMs * ratio);
       }
     }
 
@@ -374,11 +501,10 @@ uniform vec3 uPedStrengths;`,
           if (dist < HUMAN_STOP_DIST) {
             desiredSpeed = 0;
           } else {
-            // 右側（進行方向の右ベクトル (-dirZ, dirX)）へ軽く回避
             const weight = (HUMAN_AVOID_DIST - dist) / HUMAN_AVOID_DIST;
             steerAvoidX += -dirZ * weight * 0.85;
             steerAvoidZ += dirX * weight * 0.85;
-            desiredSpeed = Math.min(desiredSpeed, this.config.walkSpeedMs * 0.72);
+            desiredSpeed = Math.min(desiredSpeed, this.cruiseSpeedMs * 0.72);
           }
         }
       }
@@ -403,11 +529,10 @@ uniform vec3 uPedStrengths;`,
             break;
           }
           const weight = (HUMAN_AVOID_DIST - dist) / HUMAN_AVOID_DIST;
-          // 相手から離れる横方向へ回避
           const sideSign = -dirZ * rx + dirX * rz >= 0 ? -1 : 1;
           steerAvoidX += -dirZ * sideSign * weight * 0.75;
           steerAvoidZ += dirX * sideSign * weight * 0.75;
-          desiredSpeed = Math.min(desiredSpeed, this.config.walkSpeedMs * 0.8);
+          desiredSpeed = Math.min(desiredSpeed, this.cruiseSpeedMs * 0.8);
         }
       }
     }
@@ -432,12 +557,11 @@ uniform vec3 uPedStrengths;`,
       const nextX = this.x + moveX * this.currentSpeed * dt;
       const nextZ = this.z + moveZ * this.currentSpeed * dt;
 
-      // 建物・自販機・信号支柱・全車両 OBB とのめり込み防止解決
       const resolved = this.collisionWorld.resolveHorizontalCollision(
         nextX,
         this.y,
         nextZ,
-        PED_RADIUS,
+        this.pedRadius,
         this.heightMeters,
       );
       this.x = resolved.x;
@@ -447,14 +571,13 @@ uniform vec3 uPedStrengths;`,
       const yawDiff = normalizeAngle(targetYaw - this.yaw);
       this.yaw = normalizeAngle(this.yaw + yawDiff * Math.min(1, dt * 8.5));
     } else if (waitingForSignal) {
-      // 信号待ち中は横断歩道の対岸方向を向いて待つ
       const targetYaw = Math.atan2(dirX, dirZ);
       const yawDiff = normalizeAngle(targetYaw - this.yaw);
       this.yaw = normalizeAngle(this.yaw + yawDiff * Math.min(1, dt * 6.0));
     }
 
     // 5. 歩行者同士およびプレイヤーとの最小距離分離（めり込み絶対防止）
-    const minHumanSep = PED_RADIUS * 2.15;
+    const minHumanSep = this.pedRadius * 2.15;
     if (playerPos) {
       const dx = this.x - playerPos.x;
       const dz = this.z - playerPos.z;
@@ -472,9 +595,10 @@ uniform vec3 uPedStrengths;`,
       const dx = this.x - other.x;
       const dz = this.z - other.z;
       const dSq = dx * dx + dz * dz;
-      if (dSq < minHumanSep * minHumanSep && dSq > 1e-6) {
+      const sep = (this.pedRadius + other.pedRadius) * 1.08;
+      if (dSq < sep * sep && dSq > 1e-6) {
         const d = Math.sqrt(dSq);
-        const push = (minHumanSep - d) * 0.5;
+        const push = (sep - d) * 0.5;
         this.x += (dx / d) * push;
         this.z += (dz / d) * push;
       }
@@ -487,11 +611,15 @@ uniform vec3 uPedStrengths;`,
       this.y = groundY;
     }
 
-    // 7. Walking / Idle アニメーションクロスフェード＆歩行速度連動 timeScale
+    // 7. Walk / Idle アニメーションクロスフェード＆個体別歩調・腕振りテンポ (cadenceFactor) 反映
     const shouldWalk = this.currentSpeed > 0.12;
     if (shouldWalk !== this.isWalkingAnim) {
       this.isWalkingAnim = shouldWalk;
-      if (this.walkAction && this.idleAction && this.walkAction !== this.idleAction) {
+      if (
+        this.walkAction &&
+        this.idleAction &&
+        this.walkAction !== this.idleAction
+      ) {
         if (shouldWalk) {
           this.walkAction.reset().fadeIn(CROSSFADE_SEC).play();
           this.idleAction.fadeOut(CROSSFADE_SEC);
@@ -503,10 +631,9 @@ uniform vec3 uPedStrengths;`,
     }
 
     if (this.walkAction && this.isWalkingAnim) {
-      this.walkAction.timeScale = Math.max(
-        0.55,
-        Math.min(1.45, this.currentSpeed / WALK_ANIM_REF_SPEED),
-      );
+      const rawRate =
+        (this.currentSpeed / WALK_ANIM_REF_SPEED) * this.cadenceFactor;
+      this.walkAction.timeScale = Math.max(0.58, Math.min(1.62, rawRate));
     }
 
     this.mixer.update(dt);

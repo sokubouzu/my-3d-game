@@ -113,9 +113,10 @@ export interface PedestrianConfig {
 }
 
 /**
- * 3-B: 街区の歩道（±7.2m〜±9.4m）および 4 方向横断歩道（±8.4m）を往来・周回する 6 人の AI 歩行者定義。
- * - 信号支柱 (±6.7, ±6.7) や歩道小物（自販機・犬）を避けた自然な歩道レーンを通行。
+ * 3-B / 4-B: 街区の歩道（±7.2m〜±9.5m）および 4 方向横断歩道（±8.4m）を往来・周回する 8 人の AI 歩行者定義。
+ * - 信号支柱 (±6.7, ±6.7) や歩道小物（自販機・犬・ガードレール）を避けた安全な歩道レーンを通行。
  * - 横断歩道の進入手前ウェイポイントに nextCrosswalkAxis を設定し、青信号のときのみ横断開始。
+ * - 4-B では 8 種の CC0 人物モデル（男女・スーツ・カジュアル・シニア・作業着）＋大人/子供体型・3Dパーツを全員へ割り当て。
  */
 export const PEDESTRIAN_CONFIGS: readonly PedestrianConfig[] = [
   {
@@ -254,6 +255,52 @@ export const PEDESTRIAN_CONFIGS: readonly PedestrianConfig[] = [
       { x: 7.1, z: 8.4 },
       { x: 10.5, z: 7.2 },
       { x: 26.0, z: 7.2 },
+    ],
+  },
+  {
+    // 7. 北西〜北東ロング歩道ルート（交差点北側を広めに往復）
+    id: 'ped_north_promenade',
+    walkSpeedMs: 1.24,
+    heightMeters: 1.68,
+    tintHex: 0xe8eff5,
+    startWaypointIndex: 4,
+    animPhaseOffsetSec: 0.27,
+    waypoints: [
+      { x: -46.0, z: -9.5 },
+      { x: -10.5, z: -9.5 },
+      { x: -7.1, z: -8.4, nextCrosswalkAxis: 'EW' },
+      { x: 7.1, z: -8.4 },
+      { x: 10.5, z: -9.5 },
+      { x: 46.0, z: -9.5 },
+      { x: 46.0, z: -7.3 },
+      { x: 10.5, z: -7.3 },
+      { x: 7.1, z: -8.4, nextCrosswalkAxis: 'EW' },
+      { x: -7.1, z: -8.4 },
+      { x: -10.5, z: -7.3 },
+      { x: -46.0, z: -7.3 },
+    ],
+  },
+  {
+    // 8. 南西〜南東ロング歩道ルート（交差点南側・プレイヤー初期視界近くを往復）
+    id: 'ped_south_promenade',
+    walkSpeedMs: 1.32,
+    heightMeters: 1.66,
+    tintHex: 0xf5ece4,
+    startWaypointIndex: 4,
+    animPhaseOffsetSec: 0.91,
+    waypoints: [
+      { x: 44.0, z: 9.5 },
+      { x: 10.5, z: 9.5 },
+      { x: 7.1, z: 8.4, nextCrosswalkAxis: 'EW' },
+      { x: -7.1, z: 8.4 },
+      { x: -10.5, z: 9.5 },
+      { x: -44.0, z: 9.5 },
+      { x: -44.0, z: 7.3 },
+      { x: -10.5, z: 7.3 },
+      { x: -7.1, z: 8.4, nextCrosswalkAxis: 'EW' },
+      { x: 7.1, z: 8.4 },
+      { x: 10.5, z: 7.3 },
+      { x: 44.0, z: 7.3 },
     ],
   },
 ];

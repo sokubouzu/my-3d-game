@@ -1,20 +1,21 @@
 {
-  "schemaVersion": "1.5.0",
-  "taskId": "3-E",
+  "schemaVersion": "1.6.0",
+  "taskId": "4-B",
   "targetDevice": "iPad Air (5th gen, Apple M1 / 8GB RAM)",
   "summary": {
-    "totalAssets": 34,
-    "approvedCount": 25,
+    "totalAssets": 42,
+    "approvedCount": 33,
     "holdCount": 9,
     "dracoCompressedCount": 4,
     "byCategory": {
       "characters": 1,
       "buildings": 14,
       "vehicles": 11,
-      "props": 8
+      "props": 8,
+      "pedestrians": 8
     },
-    "placedApprovedCount": 23,
-    "placedInstanceCount": 27
+    "placedApprovedCount": 31,
+    "placedInstanceCount": 35
   },
   "assets": {
     "characters": [
@@ -2484,6 +2485,603 @@
               "hasCollision": true
             }
           ]
+        }
+      }
+    ],
+    "pedestrians": [
+      {
+        "id": "ped_casual_female",
+        "category": "pedestrians",
+        "path": "public/assets/pedestrians/casual_female.glb",
+        "format": "glb",
+        "fileSizeBytes": 1266688,
+        "title": "Casual Female 1 (Quaternius)",
+        "author": "Quaternius (https://quaternius.com)",
+        "license": "CC0-1.0 (https://creativecommons.org/publicdomain/zero/1.0/)",
+        "source": "https://quaternius.com/packs/ultimatedanimatedcharacter.html",
+        "mirrorSource": "https://github.com/Yametech12/ghostname-3d-assets/blob/main/models/Casual_Female.glb",
+        "placementStatus": "approved",
+        "hasDracoCompression": false,
+        "extensionsUsed": [],
+        "geometry": {
+          "vertices": 8958,
+          "triangles": 6624,
+          "bboxDimensionsMeters": {
+            "x": 3.24,
+            "y": 3.204,
+            "z": 1.529,
+            "min": [
+              -1.62,
+              -0.019,
+              -0.762
+            ],
+            "max": [
+              1.62,
+              3.186,
+              0.767
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 0,
+          "maxTexturePx": 0,
+          "resolutions": []
+        },
+        "materials": [
+          "Skin",
+          "Shirt",
+          "Pants",
+          "Belt",
+          "Face",
+          "Hair"
+        ],
+        "facingAxis": "+Z",
+        "referenceBodyHeightUnits": 3.204,
+        "jointCount": 23,
+        "animationCount": 17,
+        "animationClipNames": [
+          "Death",
+          "Defeat",
+          "Idle",
+          "Jump",
+          "PickUp",
+          "Punch",
+          "RecieveHit",
+          "Roll",
+          "Run",
+          "Run_Carry",
+          "Shoot_OneHanded",
+          "SitDown",
+          "StandUp",
+          "SwordSlash",
+          "Victory",
+          "Walk",
+          "Walk_Carry"
+        ],
+        "verification": {
+          "rank": "B",
+          "note": "Quaternius Ultimate Animated Character Pack (CC0-1.0) より自動取得・GLBバイナリ/スケルトン/In-Place Walk&Idleクリップ検証済み、および 4-B AI歩行者システムへ統合（状態B）。実ブラウザ描画確認（状態C）・歩行/アクセサリー動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
+        }
+      },
+      {
+        "id": "ped_casual2_female",
+        "category": "pedestrians",
+        "path": "public/assets/pedestrians/casual2_female.glb",
+        "format": "glb",
+        "fileSizeBytes": 1273184,
+        "title": "Casual Female 2 (Quaternius)",
+        "author": "Quaternius (https://quaternius.com)",
+        "license": "CC0-1.0 (https://creativecommons.org/publicdomain/zero/1.0/)",
+        "source": "https://quaternius.com/packs/ultimatedanimatedcharacter.html",
+        "mirrorSource": "https://github.com/Yametech12/ghostname-3d-assets/blob/main/models/Casual2_Female.glb",
+        "placementStatus": "approved",
+        "hasDracoCompression": false,
+        "extensionsUsed": [],
+        "geometry": {
+          "vertices": 9090,
+          "triangles": 6752,
+          "bboxDimensionsMeters": {
+            "x": 3.24,
+            "y": 3.204,
+            "z": 1.423,
+            "min": [
+              -1.62,
+              -0.019,
+              -0.762
+            ],
+            "max": [
+              1.62,
+              3.186,
+              0.661
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 0,
+          "maxTexturePx": 0,
+          "resolutions": []
+        },
+        "materials": [
+          "Skin",
+          "Shirt",
+          "Pants",
+          "Belt",
+          "Face",
+          "Hair"
+        ],
+        "facingAxis": "+Z",
+        "referenceBodyHeightUnits": 3.204,
+        "jointCount": 23,
+        "animationCount": 17,
+        "animationClipNames": [
+          "Death",
+          "Defeat",
+          "Idle",
+          "Jump",
+          "PickUp",
+          "Punch",
+          "RecieveHit",
+          "Roll",
+          "Run",
+          "Run_Carry",
+          "Shoot_OneHanded",
+          "SitDown",
+          "StandUp",
+          "SwordSlash",
+          "Victory",
+          "Walk",
+          "Walk_Carry"
+        ],
+        "verification": {
+          "rank": "B",
+          "note": "Quaternius Ultimate Animated Character Pack (CC0-1.0) より自動取得・GLBバイナリ/スケルトン/In-Place Walk&Idleクリップ検証済み、および 4-B AI歩行者システムへ統合（状態B）。実ブラウザ描画確認（状態C）・歩行/アクセサリー動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
+        }
+      },
+      {
+        "id": "ped_suit_female",
+        "category": "pedestrians",
+        "path": "public/assets/pedestrians/suit_female.glb",
+        "format": "glb",
+        "fileSizeBytes": 1279688,
+        "title": "Suit Female (Quaternius)",
+        "author": "Quaternius (https://quaternius.com)",
+        "license": "CC0-1.0 (https://creativecommons.org/publicdomain/zero/1.0/)",
+        "source": "https://quaternius.com/packs/ultimatedanimatedcharacter.html",
+        "mirrorSource": "https://github.com/Yametech12/ghostname-3d-assets/blob/main/models/Suit_Female.glb",
+        "placementStatus": "approved",
+        "hasDracoCompression": false,
+        "extensionsUsed": [],
+        "geometry": {
+          "vertices": 9200,
+          "triangles": 6810,
+          "bboxDimensionsMeters": {
+            "x": 3.24,
+            "y": 3.204,
+            "z": 1.423,
+            "min": [
+              -1.62,
+              -0.019,
+              -0.762
+            ],
+            "max": [
+              1.62,
+              3.186,
+              0.661
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 0,
+          "maxTexturePx": 0,
+          "resolutions": []
+        },
+        "materials": [
+          "Skin",
+          "Black",
+          "Belt",
+          "Shirt",
+          "Details",
+          "Face",
+          "Hair"
+        ],
+        "facingAxis": "+Z",
+        "referenceBodyHeightUnits": 3.204,
+        "jointCount": 23,
+        "animationCount": 17,
+        "animationClipNames": [
+          "Death",
+          "Defeat",
+          "Idle",
+          "Jump",
+          "PickUp",
+          "Punch",
+          "RecieveHit",
+          "Roll",
+          "Run",
+          "Run_Carry",
+          "Shoot_OneHanded",
+          "SitDown",
+          "StandUp",
+          "SwordSlash",
+          "Victory",
+          "Walk",
+          "Walk_Carry"
+        ],
+        "verification": {
+          "rank": "B",
+          "note": "Quaternius Ultimate Animated Character Pack (CC0-1.0) より自動取得・GLBバイナリ/スケルトン/In-Place Walk&Idleクリップ検証済み、および 4-B AI歩行者システムへ統合（状態B）。実ブラウザ描画確認（状態C）・歩行/アクセサリー動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
+        }
+      },
+      {
+        "id": "ped_old_classy_female",
+        "category": "pedestrians",
+        "path": "public/assets/pedestrians/old_classy_female.glb",
+        "format": "glb",
+        "fileSizeBytes": 1299552,
+        "title": "Old Classy Female (Quaternius)",
+        "author": "Quaternius (https://quaternius.com)",
+        "license": "CC0-1.0 (https://creativecommons.org/publicdomain/zero/1.0/)",
+        "source": "https://quaternius.com/packs/ultimatedanimatedcharacter.html",
+        "mirrorSource": "https://github.com/Yametech12/ghostname-3d-assets/blob/main/models/OldClassy_Female.glb",
+        "placementStatus": "approved",
+        "hasDracoCompression": false,
+        "extensionsUsed": [],
+        "geometry": {
+          "vertices": 9594,
+          "triangles": 7008,
+          "bboxDimensionsMeters": {
+            "x": 3.24,
+            "y": 3.772,
+            "z": 1.423,
+            "min": [
+              -1.62,
+              -0.019,
+              -0.762
+            ],
+            "max": [
+              1.62,
+              3.753,
+              0.661
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 0,
+          "maxTexturePx": 0,
+          "resolutions": []
+        },
+        "materials": [
+          "Skin",
+          "Pants",
+          "Shirt",
+          "Detail",
+          "Belt",
+          "Face",
+          "Hat",
+          "Hair"
+        ],
+        "facingAxis": "+Z",
+        "referenceBodyHeightUnits": 3.204,
+        "jointCount": 23,
+        "animationCount": 17,
+        "animationClipNames": [
+          "Death",
+          "Defeat",
+          "Idle",
+          "Jump",
+          "PickUp",
+          "Punch",
+          "RecieveHit",
+          "Roll",
+          "Run",
+          "Run_Carry",
+          "Shoot_OneHanded",
+          "SitDown",
+          "StandUp",
+          "SwordSlash",
+          "Victory",
+          "Walk",
+          "Walk_Carry"
+        ],
+        "verification": {
+          "rank": "B",
+          "note": "Quaternius Ultimate Animated Character Pack (CC0-1.0) より自動取得・GLBバイナリ/スケルトン/In-Place Walk&Idleクリップ検証済み、および 4-B AI歩行者システムへ統合（状態B）。実ブラウザ描画確認（状態C）・歩行/アクセサリー動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
+        }
+      },
+      {
+        "id": "ped_casual_male",
+        "category": "pedestrians",
+        "path": "public/assets/pedestrians/casual_male.glb",
+        "format": "glb",
+        "fileSizeBytes": 1259112,
+        "title": "Casual Male 1 (Quaternius)",
+        "author": "Quaternius (https://quaternius.com)",
+        "license": "CC0-1.0 (https://creativecommons.org/publicdomain/zero/1.0/)",
+        "source": "https://quaternius.com/packs/ultimatedanimatedcharacter.html",
+        "mirrorSource": "https://github.com/Yametech12/ghostname-3d-assets/blob/main/models/Casual_Male.glb",
+        "placementStatus": "approved",
+        "hasDracoCompression": false,
+        "extensionsUsed": [],
+        "geometry": {
+          "vertices": 8804,
+          "triangles": 6492,
+          "bboxDimensionsMeters": {
+            "x": 3.24,
+            "y": 3.325,
+            "z": 1.325,
+            "min": [
+              -1.62,
+              -0.019,
+              -0.606
+            ],
+            "max": [
+              1.62,
+              3.307,
+              0.718
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 0,
+          "maxTexturePx": 0,
+          "resolutions": []
+        },
+        "materials": [
+          "Skin",
+          "Shirt",
+          "Pants",
+          "Belt",
+          "Face",
+          "Hair"
+        ],
+        "facingAxis": "+Z",
+        "referenceBodyHeightUnits": 3.204,
+        "jointCount": 23,
+        "animationCount": 17,
+        "animationClipNames": [
+          "Death",
+          "Defeat",
+          "Idle",
+          "Jump",
+          "PickUp",
+          "Punch",
+          "RecieveHit",
+          "Roll",
+          "Run",
+          "Run_Carry",
+          "Shoot_OneHanded",
+          "SitDown",
+          "StandUp",
+          "SwordSlash",
+          "Victory",
+          "Walk",
+          "Walk_Carry"
+        ],
+        "verification": {
+          "rank": "B",
+          "note": "Quaternius Ultimate Animated Character Pack (CC0-1.0) より自動取得・GLBバイナリ/スケルトン/In-Place Walk&Idleクリップ検証済み、および 4-B AI歩行者システムへ統合（状態B）。実ブラウザ描画確認（状態C）・歩行/アクセサリー動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
+        }
+      },
+      {
+        "id": "ped_casual2_male",
+        "category": "pedestrians",
+        "path": "public/assets/pedestrians/casual2_male.glb",
+        "format": "glb",
+        "fileSizeBytes": 1089240,
+        "title": "Casual Male 2 (Quaternius)",
+        "author": "Quaternius (https://quaternius.com)",
+        "license": "CC0-1.0 (https://creativecommons.org/publicdomain/zero/1.0/)",
+        "source": "https://quaternius.com/packs/ultimatedanimatedcharacter.html",
+        "mirrorSource": "https://github.com/Yametech12/ghostname-3d-assets/blob/main/models/Casual2_Male.glb",
+        "placementStatus": "approved",
+        "hasDracoCompression": false,
+        "extensionsUsed": [],
+        "geometry": {
+          "vertices": 5390,
+          "triangles": 3216,
+          "bboxDimensionsMeters": {
+            "x": 3.24,
+            "y": 3.205,
+            "z": 1.047,
+            "min": [
+              -1.62,
+              -0.019,
+              -0.546
+            ],
+            "max": [
+              1.62,
+              3.186,
+              0.502
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 0,
+          "maxTexturePx": 0,
+          "resolutions": []
+        },
+        "materials": [
+          "Skin",
+          "Shirt",
+          "Pants",
+          "Belt",
+          "Face",
+          "Hair"
+        ],
+        "facingAxis": "+Z",
+        "referenceBodyHeightUnits": 3.204,
+        "jointCount": 23,
+        "animationCount": 17,
+        "animationClipNames": [
+          "Death",
+          "Defeat",
+          "Idle",
+          "Jump",
+          "PickUp",
+          "Punch",
+          "RecieveHit",
+          "Roll",
+          "Run",
+          "Run_Carry",
+          "Shoot_OneHanded",
+          "SitDown",
+          "StandUp",
+          "SwordSlash",
+          "Victory",
+          "Walk",
+          "Walk_Carry"
+        ],
+        "verification": {
+          "rank": "B",
+          "note": "Quaternius Ultimate Animated Character Pack (CC0-1.0) より自動取得・GLBバイナリ/スケルトン/In-Place Walk&Idleクリップ検証済み、および 4-B AI歩行者システムへ統合（状態B）。実ブラウザ描画確認（状態C）・歩行/アクセサリー動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
+        }
+      },
+      {
+        "id": "ped_suit_male",
+        "category": "pedestrians",
+        "path": "public/assets/pedestrians/suit_male.glb",
+        "format": "glb",
+        "fileSizeBytes": 1228360,
+        "title": "Suit Male (Quaternius)",
+        "author": "Quaternius (https://quaternius.com)",
+        "license": "CC0-1.0 (https://creativecommons.org/publicdomain/zero/1.0/)",
+        "source": "https://quaternius.com/packs/ultimatedanimatedcharacter.html",
+        "mirrorSource": "https://github.com/Yametech12/ghostname-3d-assets/blob/main/models/Suit_Male.glb",
+        "placementStatus": "approved",
+        "hasDracoCompression": false,
+        "extensionsUsed": [],
+        "geometry": {
+          "vertices": 8854,
+          "triangles": 6518,
+          "bboxDimensionsMeters": {
+            "x": 3.24,
+            "y": 3.325,
+            "z": 1.325,
+            "min": [
+              -1.62,
+              -0.019,
+              -0.606
+            ],
+            "max": [
+              1.62,
+              3.307,
+              0.718
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 0,
+          "maxTexturePx": 0,
+          "resolutions": []
+        },
+        "materials": [
+          "Skin",
+          "Black",
+          "Belt",
+          "Shirt",
+          "Details",
+          "Face",
+          "Hair"
+        ],
+        "facingAxis": "+Z",
+        "referenceBodyHeightUnits": 3.204,
+        "jointCount": 23,
+        "animationCount": 16,
+        "animationClipNames": [
+          "Death",
+          "Defeat",
+          "Idle",
+          "Jump",
+          "PickUp",
+          "RecieveHit",
+          "Roll",
+          "Run",
+          "Run_Carry",
+          "Shoot_OneHanded",
+          "SitDown",
+          "StandUp",
+          "SwordSlash",
+          "Victory",
+          "Walk",
+          "Walk_Carry"
+        ],
+        "verification": {
+          "rank": "B",
+          "note": "Quaternius Ultimate Animated Character Pack (CC0-1.0) より自動取得・GLBバイナリ/スケルトン/In-Place Walk&Idleクリップ検証済み、および 4-B AI歩行者システムへ統合（状態B）。実ブラウザ描画確認（状態C）・歩行/アクセサリー動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
+        }
+      },
+      {
+        "id": "ped_worker_male",
+        "category": "pedestrians",
+        "path": "public/assets/pedestrians/worker_male.glb",
+        "format": "glb",
+        "fileSizeBytes": 1051200,
+        "title": "Worker Male (Quaternius)",
+        "author": "Quaternius (https://quaternius.com)",
+        "license": "CC0-1.0 (https://creativecommons.org/publicdomain/zero/1.0/)",
+        "source": "https://quaternius.com/packs/ultimatedanimatedcharacter.html",
+        "mirrorSource": "https://github.com/Yametech12/ghostname-3d-assets/blob/main/models/Worker_Male.glb",
+        "placementStatus": "approved",
+        "hasDracoCompression": false,
+        "extensionsUsed": [],
+        "geometry": {
+          "vertices": 4620,
+          "triangles": 2524,
+          "bboxDimensionsMeters": {
+            "x": 3.24,
+            "y": 3.336,
+            "z": 1.281,
+            "min": [
+              -1.62,
+              -0.019,
+              -0.559
+            ],
+            "max": [
+              1.62,
+              3.317,
+              0.722
+            ]
+          }
+        },
+        "textures": {
+          "imageCount": 0,
+          "maxTexturePx": 0,
+          "resolutions": []
+        },
+        "materials": [
+          "Skin",
+          "Shirt",
+          "Vest",
+          "Pants",
+          "Hat",
+          "Face"
+        ],
+        "facingAxis": "+Z",
+        "referenceBodyHeightUnits": 3.204,
+        "jointCount": 23,
+        "animationCount": 17,
+        "animationClipNames": [
+          "Death",
+          "Defeat",
+          "Idle",
+          "Jump",
+          "PickUp",
+          "Punch",
+          "RecieveHit",
+          "Roll",
+          "Run",
+          "Run_Carry",
+          "Shoot_OneHanded",
+          "SitDown",
+          "StandUp",
+          "SwordSlash",
+          "Victory",
+          "Walk",
+          "Walk_Carry"
+        ],
+        "verification": {
+          "rank": "B",
+          "note": "Quaternius Ultimate Animated Character Pack (CC0-1.0) より自動取得・GLBバイナリ/スケルトン/In-Place Walk&Idleクリップ検証済み、および 4-B AI歩行者システムへ統合（状態B）。実ブラウザ描画確認（状態C）・歩行/アクセサリー動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
         }
       }
     ]
