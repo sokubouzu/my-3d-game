@@ -1,6 +1,6 @@
 {
-  "schemaVersion": "1.3.0",
-  "taskId": "2-B",
+  "schemaVersion": "1.4.0",
+  "taskId": "2-C",
   "targetDevice": "iPad Air (5th gen, Apple M1 / 8GB RAM)",
   "summary": {
     "totalAssets": 34,
@@ -1421,6 +1421,14 @@
               "separateMovableNodes": false,
               "note": "ボディパネル(paint.003〜paint.016等)および窓ガラスは車体共通原点の一体構造のため独立した開閉ドアノードはなし。乗降時はドア固定＋車体横からの乗車アニメーション遷移を想定。"
             }
+          },
+          "handlingSpec": {
+            "taskId": "2-C",
+            "maxForwardSpeedMs": 30.6,
+            "maxForwardSpeedKmh": 110,
+            "accelRateMs2": 13.0,
+            "brakeDecelMs2": 24.5,
+            "wheelbaseMeters": 2.78
           }
         }
       },
@@ -1625,8 +1633,9 @@
           "note": "GLBバイナリ検証・用途別配置済み、および1-D街区コード配置・CIビルド＆GitHub Pagesデプロイ成功（状態B）。実ブラウザでの描画確認（状態C）・衝突/動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
         },
         "cityPlacement": {
-          "taskId": "1-D",
+          "taskId": "2-C",
           "instanceCount": 1,
+          "note": "1-D で北側車道に静的配置していた既存個体 (veh_porsche_north) を多重配置せずそのまま運転可能スポーツカー（2台目）へ昇格。",
           "instances": [
             {
               "instanceId": "veh_porsche_north",
@@ -1636,9 +1645,76 @@
               ],
               "fitMode": "length",
               "targetSizeMeters": 4.3,
-              "hasCollision": true
+              "hasCollision": true,
+              "drivable": true
             }
           ]
+        },
+        "drivableVehicleRig": {
+          "taskId": "2-C",
+          "role": "playable_sports_car",
+          "instanceId": "veh_porsche_north",
+          "placement": {
+            "positionXYZ": [
+              -3.6,
+              0.0,
+              -22.0
+            ],
+            "rotationYRad": 3.141593,
+            "targetLengthMeters": 4.3,
+            "hasCollision": true,
+            "colliderShrink": 0.92,
+            "castShadow": false
+          },
+          "coordinateSystem": {
+            "rawModelForwardAxis": "+Z",
+            "normalizedForwardAxis": "+Z",
+            "modelForwardCorrectionYRad": 0.0,
+            "groundedY": 0.0
+          },
+          "handlingSpec": {
+            "maxForwardSpeedMs": 44.5,
+            "maxForwardSpeedKmh": 160,
+            "accelRateMs2": 20.0,
+            "brakeDecelMs2": 32.0,
+            "wheelbaseMeters": 2.33
+          },
+          "movableParts": {
+            "wheels": {
+              "spinAxisVehicleLocal": "+X",
+              "steerAxisVehicleLocal": "+Y",
+              "frontLeft": {
+                "steerable": true,
+                "spinNodes": [
+                  "Circle.051_37",
+                  "Circle.048_52"
+                ],
+                "initialYawCorrectionRad": 0.3236
+              },
+              "frontRight": {
+                "steerable": true,
+                "spinNodes": [
+                  "Circle.037_2"
+                ],
+                "initialYawCorrectionRad": 0.3236
+              },
+              "rearLeft": {
+                "steerable": false,
+                "spinNodes": [
+                  "Circle.050_51"
+                ]
+              },
+              "rearRight": {
+                "steerable": false,
+                "spinNodes": [
+                  "Circle.038_1"
+                ]
+              }
+            },
+            "steeringWheel": {
+              "separateMovableNode": false
+            }
+          }
         }
       },
       {

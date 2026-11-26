@@ -15,6 +15,8 @@ const INITIAL_STATUS: EngineStatus = {
   controlMode: 'foot',
   canEnterVehicle: false,
   canExitVehicle: false,
+  activeVehicleName: null,
+  nearbyVehicleName: null,
   vehicleSpeedKmh: 0,
   vehicleGear: 'P',
   playerLoaded: false,
@@ -37,6 +39,8 @@ const INITIAL_STATUS: EngineStatus = {
   heroVehicleLoaded: false,
   heroVehicleError: null,
   heroVehicleWheels: 0,
+  drivableVehicleCount: 0,
+  drivableVehicleTotal: 2,
 };
 
 export function App() {
@@ -94,6 +98,7 @@ export function App() {
         controlMode={status.controlMode}
         canEnterVehicle={status.canEnterVehicle}
         canExitVehicle={status.canExitVehicle}
+        nearbyVehicleName={status.nearbyVehicleName}
         vehicleSpeedKmh={status.vehicleSpeedKmh}
         vehicleGear={status.vehicleGear}
         onMoveChange={handleMoveChange}

@@ -32,14 +32,17 @@ export function DebugHud({ status }: DebugHudProps) {
 
       {expanded && (
         <div className="hud-details">
-          <div className="hud-title">my-3d-game (Phase 2-B)</div>
+          <div className="hud-title">my-3d-game (Phase 2-C)</div>
           <div>
             API: {status.isWebGL2 ? 'WebGL2' : 'WebGL1'} | DPR:{' '}
             {status.dpr.toFixed(2)}
           </div>
           <div>DRACO: {status.dracoReady ? 'Ready' : 'Init...'}</div>
           <div>
-            Mode: {status.controlMode === 'vehicle' ? 'Driving' : 'On Foot'}
+            Mode:{' '}
+            {status.controlMode === 'vehicle'
+              ? `Driving (${status.activeVehicleName ?? 'Vehicle'})`
+              : 'On Foot'}
             {status.controlMode === 'vehicle'
               ? ` | ${status.vehicleSpeedKmh} km/h (${status.vehicleGear})`
               : ''}
@@ -53,12 +56,12 @@ export function DebugHud({ status }: DebugHudProps) {
                 : 'Loading...'}
           </div>
           <div>
-            HeroCar:{' '}
+            Vehicles: {status.drivableVehicleCount}/{status.drivableVehicleTotal}
             {status.heroVehicleLoaded
-              ? `OK (${status.heroVehicleWheels} wheels)`
+              ? ` OK (${status.heroVehicleWheels} wheels)`
               : status.heroVehicleError
-                ? `Error: ${status.heroVehicleError}`
-                : 'Loading...'}
+                ? ` Error: ${status.heroVehicleError}`
+                : ' Loading...'}
           </div>
           <div>
             City: {status.cityLoadedCount}/{status.cityTotalCount} GLB

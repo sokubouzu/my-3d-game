@@ -11,6 +11,7 @@ export interface TouchControlsProps {
   controlMode: ControlMode;
   canEnterVehicle: boolean;
   canExitVehicle: boolean;
+  nearbyVehicleName: string | null;
   vehicleSpeedKmh: number;
   vehicleGear: VehicleGear;
   onMoveChange: (x: number, y: number) => void;
@@ -26,7 +27,7 @@ export interface TouchControlsProps {
 const STICK_MAX_RADIUS = 46;
 
 /**
- * 1-C / 2-B: iPad 横画面（ランドスケープ）向けマルチタッチ操作 UI。
+ * 1-C / 2-B / 2-C: iPad 横画面（ランドスケープ）向けマルチタッチ操作 UI。
  * - 徒歩モード: 左下移動スティック / 右半分カメラ回転 / 右下 DASH・JUMP・（近接時）乗車ボタン
  * - 運転モード: 左下左右ステアリングボタン / 右半分カメラ回転 / 右下 ブレーキ(バック)・アクセル・降車ボタン / 下部中央スピードメーター
  */
@@ -34,6 +35,7 @@ export function TouchControls({
   controlMode,
   canEnterVehicle,
   canExitVehicle,
+  nearbyVehicleName,
   vehicleSpeedKmh,
   vehicleGear,
   onMoveChange,
@@ -418,7 +420,9 @@ export function TouchControls({
               aria-label="Enter Vehicle"
             >
               <span className="interact-btn-main">乗る</span>
-              <span className="interact-btn-key">E / F</span>
+              <span className="interact-btn-key">
+                {nearbyVehicleName ? `${nearbyVehicleName} (E/F)` : 'E / F'}
+              </span>
             </button>
           )}
 

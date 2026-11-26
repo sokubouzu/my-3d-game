@@ -269,9 +269,23 @@ function buildVehicleRig(
     root.updateMatrixWorld(true);
 
     const attachedNodes: string[] = [];
-    for (const node of spinNodes) {
-      spinPivot.attach(node);
-      attachedNodes.push(node.name);
+    if (binding.initialYawCorrection && binding.initialYawCorrection !== 0) {
+      // 元モデルでステアリングを切った状態の車輪を、spinPivot 内部で直進姿勢へ補正する
+      const alignGroup = new THREE.Group();
+      alignGroup.name = `wheel_${slot}_align`;
+      spinPivot.add(alignGroup);
+      alignGroup.updateMatrixWorld(true);
+      for (const node of spinNodes) {
+        alignGroup.attach(node);
+        attachedNodes.push(node.name);
+      }
+      alignGroup.rotation.y = binding.initialYawCorrection;
+      alignGroup.updateMatrixWorld(true);
+    } else {
+      for (const node of spinNodes) {
+        spinPivot.attach(node);
+        attachedNodes.push(node.name);
+      }
     }
     for (const node of steerOnlyNodes) {
       steerPivot.attach(node);
@@ -290,13 +304,15 @@ function buildVehicleRig(
   }
 
   let steeringWheel: SteeringWheelRig | null = null;
-  const steerNode = model.getObjectByName(config.steeringWheelNodeName);
-  if (steerNode) {
-    steeringWheel = {
-      node: steerNode,
-      baseQuaternion: steerNode.quaternion.clone(),
-      ratio: config.steeringWheelRatio,
-    };
+  if (config.steeringWheelNodeName) {
+    const steerNode = model.getObjectByName(config.steeringWheelNodeName);
+    if (steerNode) {
+      steeringWheel = {
+        node: steerNode,
+        baseQuaternion: steerNode.quaternion.clone(),
+        ratio: config.steeringWheelRatio,
+      };
+    }
   }
 
   return {

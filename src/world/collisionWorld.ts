@@ -393,4 +393,121 @@ export class CollisionWorld {
     }
     return true;
   }
+
+  /**
+   * 2-C: カメラ遮蔽回避用の 3D Ray vs OBB スラブ法レイキャスト。
+   * 注視点 (origin) からカメラ方向 (dir, 正規化済み) へ距離 maxDistance のレイを飛ばし、
+   * 建物・壁・駐車車両・街区外周壁に遮られる場合は最も近いヒット距離 (m) を返す（遮蔽なしは null）。
+   */
+  public raycastCameraOcclusion(
+    originX: number,
+    originY: number,
+    originZ: number,
+    dirX: number,
+    dirY: number,
+    dirZ: number,
+    maxDistance: number,
+    ignoreId?: string,
+    minObstacleHeight = 1.2,
+  ): number | null {
+    if (maxDistance <= 0.01) return null;
+
+    let closestHit = maxDistance;
+    let hasHit = false;
+    const eps = 1e-6;
+
+    // 1. 登録済み OBB コライダー（建物・駐車車両・自販機等）との 3D スラブ交差判定
+    for (const col of this.colliders.values()) {
+      if (ignoreId && col.id === ignoreId) continue;
+      if (col.maxY < minObstacleHeight) continue;
+
+      const relX = originX - col.cx;
+      const relZ = originZ - col.cz;
+      const ox = relX * col.cos - relZ * col.sin;
+      const oz = relX * col.sin + relZ * col.cos;
+      const dx = dirX * col.cos - dirZ * col.sin;
+      const dz = dirX * col.sin + dirZ * col.cos;
+
+      let tMin = 0;
+      let tMax = closestHit;
+
+      // X スラブ [-halfW, +halfW]
+      if (Math.abs(dx) < eps) {
+        if (ox < -col.halfW || ox > col.halfW) continue;
+      } else {
+        const invDx = 1 / dx;
+        let t1 = (-col.halfW - ox) * invDx;
+        let t2 = (col.halfW - ox) * invDx;
+        if (t1 > t2) {
+          const tmp = t1;
+          t1 = t2;
+          t2 = tmp;
+        }
+        if (t1 > tMin) tMin = t1;
+        if (t2 < tMax) tMax = t2;
+        if (tMin > tMax) continue;
+      }
+
+      // Y スラブ [minY, maxY]
+      if (Math.abs(dirY) < eps) {
+        if (originY < col.minY || originY > col.maxY) continue;
+      } else {
+        const invDy = 1 / dirY;
+        let t1 = (col.minY - originY) * invDy;
+        let t2 = (col.maxY - originY) * invDy;
+        if (t1 > t2) {
+          const tmp = t1;
+          t1 = t2;
+          t2 = tmp;
+        }
+        if (t1 > tMin) tMin = t1;
+        if (t2 < tMax) tMax = t2;
+        if (tMin > tMax) continue;
+      }
+
+      // Z スラブ [-halfD, +halfD]
+      if (Math.abs(dz) < eps) {
+        if (oz < -col.halfD || oz > col.halfD) continue;
+      } else {
+        const invDz = 1 / dz;
+        let t1 = (-col.halfD - oz) * invDz;
+        let t2 = (col.halfD - oz) * invDz;
+        if (t1 > t2) {
+          const tmp = t1;
+          t1 = t2;
+          t2 = tmp;
+        }
+        if (t1 > tMin) tMin = t1;
+        if (t2 < tMax) tMax = t2;
+        if (tMin > tMax) continue;
+      }
+
+      // 注視点が外部にあり、レイ前方でヒットした場合のみ採用
+      if (tMin > 0.02 && tMin < closestHit) {
+        closestHit = tMin;
+        hasHit = true;
+      }
+    }
+
+    // 2. 街区外周境界壁との交差判定（カメラの街区外はみ出し防止）
+    const boundary = this.worldHalfExtent;
+    if (Math.abs(dirX) >= eps) {
+      const boundX = dirX > 0 ? boundary : -boundary;
+      const t = (boundX - originX) / dirX;
+      if (t > 0.02 && t < closestHit) {
+        closestHit = t;
+        hasHit = true;
+      }
+    }
+    if (Math.abs(dirZ) >= eps) {
+      const boundZ = dirZ > 0 ? boundary : -boundary;
+      const t = (boundZ - originZ) / dirZ;
+      if (t > 0.02 && t < closestHit) {
+        closestHit = t;
+        hasHit = true;
+      }
+    }
+
+    return hasHit ? closestHit : null;
+  }
 }

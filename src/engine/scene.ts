@@ -19,7 +19,7 @@ import {
   type CityBuildProgress,
 } from '../world/cityBuilder';
 import {
-  HERO_VEHICLE_CONFIG,
+  DRIVABLE_VEHICLES,
   VehicleController,
   loadHeroVehicle,
   type LoadedHeroVehicle,
@@ -36,6 +36,8 @@ export interface EngineStatus {
   controlMode: ControlMode;
   canEnterVehicle: boolean;
   canExitVehicle: boolean;
+  activeVehicleName: string | null;
+  nearbyVehicleName: string | null;
   vehicleSpeedKmh: number;
   vehicleGear: VehicleGear;
   playerLoaded: boolean;
@@ -54,6 +56,8 @@ export interface EngineStatus {
   heroVehicleLoaded: boolean;
   heroVehicleError: string | null;
   heroVehicleWheels: number;
+  drivableVehicleCount: number;
+  drivableVehicleTotal: number;
 }
 
 export interface GameEngineHandle {
@@ -69,8 +73,8 @@ export interface GameEngineHandle {
 }
 
 /**
- * 1-D / 1-E: WebGL2 基盤 + プレイヤー操作 + 160m四方の日本の街区（承認済みGLB全24種配置＆OBB衝突判定）
- * + Poly Haven 1K PBR・HDRI 環境仕上げ
+ * 1-D / 1-E / 2-B / 2-C: WebGL2 基盤 + プレイヤー操作 + 160m四方の日本の街区
+ * + Poly Haven 1K PBR・HDRI 環境 + カメラ遮蔽回避 + 複数運転可能車両（Innova / Porsche 911 Turbo）
  */
 export function startGameEngine(
   canvas: HTMLCanvasElement,
@@ -124,13 +128,31 @@ export function startGameEngine(
   // 1-D: 衝突判定ワールド (160m x 160m 街区 + 歩道段差 + 建物/車両/小物 OBB)
   const collisionWorld = new CollisionWorld(CITY_METRICS.worldHalfExtent);
 
+  // 2-C: 徒歩・運転共通のカメラ遮蔽回避レイキャストを接続
+  tpsCamera.setOcclusionRaycast(
+    (ox, oy, oz, dx, dy, dz, maxDistance, ignoreId) =>
+      collisionWorld.raycastCameraOcclusion(
+        ox,
+        oy,
+        oz,
+        dx,
+        dy,
+        dz,
+        maxDistance,
+        ignoreId,
+      ),
+  );
+
   let isDisposed = false;
   let controlMode: ControlMode = 'foot';
   let loadedPlayer: LoadedPlayerModel | null = null;
   let playerController: PlayerController | null = null;
   let playerError: string | null = null;
-  let loadedHeroVehicle: LoadedHeroVehicle | null = null;
-  let vehicleController: VehicleController | null = null;
+
+  const loadedVehicles: LoadedHeroVehicle[] = [];
+  const vehicleControllers: VehicleController[] = [];
+  let activeVehicle: VehicleController | null = null;
+  let nearbyVehicle: VehicleController | null = null;
   let heroVehicleError: string | null = null;
   let canEnterVehicle = false;
   let canExitVehicle = false;
@@ -157,14 +179,34 @@ export function startGameEngine(
   let lastDprAdjustTime = lastFrameTime;
   let currentFps = 0;
 
+  const findNearestEnterableVehicle = (
+    pos: THREE.Vector3,
+  ): VehicleController | null => {
+    let best: VehicleController | null = null;
+    let bestDist = Infinity;
+    for (const vc of vehicleControllers) {
+      if (!vc.isPlayerNearDoor(pos)) continue;
+      const dist = vc.getDoorDistance(pos);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = vc;
+      }
+    }
+    return best;
+  };
+
   const emitStatus = () => {
     if (isDisposed) return;
     const telemetry = playerController?.getTelemetry();
-    const vehicleTelemetry = vehicleController?.getTelemetry();
+    const vehicleTelemetry = activeVehicle?.getTelemetry();
     const activePos =
       controlMode === 'vehicle' && vehicleTelemetry
         ? vehicleTelemetry.position
         : (telemetry?.position ?? { x: 0, y: 0, z: 0 });
+    const totalBoundWheels = loadedVehicles.reduce(
+      (sum, v) => sum + v.rig.boundWheelCount,
+      0,
+    );
     onStatusUpdate({
       isWebGL2,
       dpr: currentDpr,
@@ -173,6 +215,8 @@ export function startGameEngine(
       controlMode,
       canEnterVehicle,
       canExitVehicle,
+      activeVehicleName: activeVehicle?.getDisplayName() ?? null,
+      nearbyVehicleName: nearbyVehicle?.getDisplayName() ?? null,
       vehicleSpeedKmh: vehicleTelemetry?.speedKmh ?? 0,
       vehicleGear: vehicleTelemetry?.gear ?? 'P',
       playerLoaded: loadedPlayer !== null,
@@ -182,7 +226,7 @@ export function startGameEngine(
       playerState: telemetry?.state ?? 'idle',
       animationName:
         controlMode === 'vehicle'
-          ? `Driving (${vehicleTelemetry?.gear ?? 'P'})`
+          ? `Driving ${activeVehicle?.getDisplayName() ?? ''} (${vehicleTelemetry?.gear ?? 'P'})`
           : (telemetry?.animationName ?? 'Loading...'),
       speed:
         controlMode === 'vehicle'
@@ -194,9 +238,11 @@ export function startGameEngine(
       cityFailedCount: cityProgress.failedCount,
       colliderCount: collisionWorld.getColliderCount(),
       envStatus,
-      heroVehicleLoaded: loadedHeroVehicle !== null,
+      heroVehicleLoaded: loadedVehicles.length > 0,
       heroVehicleError,
-      heroVehicleWheels: loadedHeroVehicle?.rig.boundWheelCount ?? 0,
+      heroVehicleWheels: totalBoundWheels,
+      drivableVehicleCount: loadedVehicles.length,
+      drivableVehicleTotal: DRIVABLE_VEHICLES.length,
     });
   };
 
@@ -218,38 +264,40 @@ export function startGameEngine(
     },
   );
 
-  // 2-A / 2-B: 運転可能な主役車両1台を前方左側車線へ配置 & OBB コライダー・VehicleController 構築
-  collisionWorld.upsertCollider(
-    HERO_VEHICLE_CONFIG.id,
-    HERO_VEHICLE_CONFIG.initialPosition.x,
-    HERO_VEHICLE_CONFIG.initialPosition.z,
-    HERO_VEHICLE_CONFIG.placeholderDimensions.width *
-      HERO_VEHICLE_CONFIG.colliderShrink,
-    HERO_VEHICLE_CONFIG.placeholderDimensions.length *
-      HERO_VEHICLE_CONFIG.colliderShrink,
-    HERO_VEHICLE_CONFIG.initialRotationY,
-    0,
-    HERO_VEHICLE_CONFIG.placeholderDimensions.height,
-  );
+  // 2-A / 2-B / 2-C: 運転可能な全車両（Innova + Porsche 911 Turbo）をロード＆ OBB コライダー・VehicleController 構築
+  for (const vehicleConfig of DRIVABLE_VEHICLES) {
+    collisionWorld.upsertCollider(
+      vehicleConfig.id,
+      vehicleConfig.initialPosition.x,
+      vehicleConfig.initialPosition.z,
+      vehicleConfig.placeholderDimensions.width * vehicleConfig.colliderShrink,
+      vehicleConfig.placeholderDimensions.length * vehicleConfig.colliderShrink,
+      vehicleConfig.initialRotationY,
+      0,
+      vehicleConfig.placeholderDimensions.height,
+    );
 
-  loadHeroVehicle(maxAnisotropy, HERO_VEHICLE_CONFIG)
-    .then((vehicle) => {
-      if (isDisposed) {
-        vehicle.dispose();
-        return;
-      }
-      loadedHeroVehicle = vehicle;
-      scene.add(vehicle.root);
-      vehicleController = new VehicleController(vehicle, collisionWorld);
-      emitStatus();
-    })
-    .catch((err: unknown) => {
-      if (isDisposed) return;
-      collisionWorld.removeCollider(HERO_VEHICLE_CONFIG.id);
-      heroVehicleError =
-        err instanceof Error ? err.message : 'Failed to load hero vehicle GLB';
-      emitStatus();
-    });
+    loadHeroVehicle(maxAnisotropy, vehicleConfig)
+      .then((vehicle) => {
+        if (isDisposed) {
+          vehicle.dispose();
+          return;
+        }
+        loadedVehicles.push(vehicle);
+        scene.add(vehicle.root);
+        vehicleControllers.push(new VehicleController(vehicle, collisionWorld));
+        emitStatus();
+      })
+      .catch((err: unknown) => {
+        if (isDisposed) return;
+        collisionWorld.removeCollider(vehicleConfig.id);
+        heroVehicleError =
+          err instanceof Error
+            ? `${vehicleConfig.displayName}: ${err.message}`
+            : `Failed to load ${vehicleConfig.displayName}`;
+        emitStatus();
+      });
+  }
 
   const inputManager = new InputManager(canvas);
 
@@ -316,20 +364,27 @@ export function startGameEngine(
 
     let modeOrPromptChanged = false;
 
-    // 2-B3: 徒歩 <-> 運転の乗降切替（E/F キーまたはタッチボタン）
-    if (input.interactPressed && playerController && vehicleController) {
-      if (
-        controlMode === 'foot' &&
-        vehicleController.isPlayerNearDoor(playerPos)
+    // 2-B3 / 2-C: 徒歩 <-> 運転の乗降・車両乗換（E/F キーまたはタッチボタン）
+    if (input.interactPressed && playerController) {
+      if (controlMode === 'foot') {
+        const nearest = findNearestEnterableVehicle(playerPos);
+        if (nearest) {
+          controlMode = 'vehicle';
+          activeVehicle = nearest;
+          nearbyVehicle = null;
+          playerController.setVisible(false);
+          activeVehicle.setOccupied(true);
+          tpsCamera.alignBehind(activeVehicle.getYaw());
+          modeOrPromptChanged = true;
+        }
+      } else if (
+        controlMode === 'vehicle' &&
+        activeVehicle &&
+        activeVehicle.canExit()
       ) {
-        controlMode = 'vehicle';
-        playerController.setVisible(false);
-        vehicleController.setOccupied(true);
-        tpsCamera.alignBehind(vehicleController.getYaw());
-        modeOrPromptChanged = true;
-      } else if (controlMode === 'vehicle' && vehicleController.canExit()) {
-        const exit = vehicleController.computeExitTransform();
-        vehicleController.setOccupied(false);
+        const exit = activeVehicle.computeExitTransform();
+        activeVehicle.setOccupied(false);
+        activeVehicle = null;
         playerController.teleportTo(exit.x, exit.y, exit.z, exit.yaw);
         playerController.setVisible(true);
         playerController.getPosition(playerPos);
@@ -339,33 +394,45 @@ export function startGameEngine(
       }
     }
 
-    if (controlMode === 'vehicle' && vehicleController) {
-      vehicleController.update(dt, {
-        steer: input.vehicleSteer,
-        throttle: input.vehicleThrottle,
-        brake: input.vehicleBrake,
-        handbrake: input.vehicleHandbrake,
-      });
-      vehicleController.getPosition(focusPos);
+    if (controlMode === 'vehicle' && activeVehicle) {
+      for (const vc of vehicleControllers) {
+        if (vc === activeVehicle) {
+          vc.update(dt, {
+            steer: input.vehicleSteer,
+            throttle: input.vehicleThrottle,
+            brake: input.vehicleBrake,
+            handbrake: input.vehicleHandbrake,
+          });
+        } else {
+          vc.update(dt, null);
+        }
+      }
+      activeVehicle.getPosition(focusPos);
 
       const groundY = collisionWorld.getGroundHeight(focusPos.x, focusPos.z);
       tpsCamera.updateDriving(
         dt,
         focusPos,
-        vehicleController.getYaw(),
-        vehicleController.getSpeed(),
+        activeVehicle.getYaw(),
+        activeVehicle.getSpeed(),
         groundY,
+        activeVehicle.getId(),
       );
 
-      const nextCanExit = vehicleController.canExit();
-      if (canEnterVehicle !== false || canExitVehicle !== nextCanExit) {
+      const nextCanExit = activeVehicle.canExit();
+      if (
+        canEnterVehicle !== false ||
+        canExitVehicle !== nextCanExit ||
+        nearbyVehicle !== null
+      ) {
         canEnterVehicle = false;
         canExitVehicle = nextCanExit;
+        nearbyVehicle = null;
         modeOrPromptChanged = true;
       }
     } else {
-      if (vehicleController) {
-        vehicleController.update(dt, null);
+      for (const vc of vehicleControllers) {
+        vc.update(dt, null);
       }
       if (playerController) {
         playerController.update(dt, input, tpsCamera.getYaw());
@@ -376,13 +443,19 @@ export function startGameEngine(
       const groundY = collisionWorld.getGroundHeight(playerPos.x, playerPos.z);
       tpsCamera.update(dt, playerPos, groundY);
 
-      const nextCanEnter =
-        playerController !== null &&
-        vehicleController !== null &&
-        vehicleController.isPlayerNearDoor(playerPos);
-      if (canEnterVehicle !== nextCanEnter || canExitVehicle !== false) {
+      const nextNearby =
+        playerController !== null
+          ? findNearestEnterableVehicle(playerPos)
+          : null;
+      const nextCanEnter = nextNearby !== null;
+      if (
+        canEnterVehicle !== nextCanEnter ||
+        canExitVehicle !== false ||
+        nearbyVehicle !== nextNearby
+      ) {
         canEnterVehicle = nextCanEnter;
         canExitVehicle = false;
+        nearbyVehicle = nextNearby;
         modeOrPromptChanged = true;
       }
     }
@@ -469,13 +542,17 @@ export function startGameEngine(
       }
       playerController = null;
 
-      collisionWorld.removeCollider(HERO_VEHICLE_CONFIG.id);
-      if (loadedHeroVehicle) {
-        scene.remove(loadedHeroVehicle.root);
-        loadedHeroVehicle.dispose();
-        loadedHeroVehicle = null;
+      for (const vcConfig of DRIVABLE_VEHICLES) {
+        collisionWorld.removeCollider(vcConfig.id);
       }
-      vehicleController = null;
+      for (const v of loadedVehicles) {
+        scene.remove(v.root);
+        v.dispose();
+      }
+      loadedVehicles.length = 0;
+      vehicleControllers.length = 0;
+      activeVehicle = null;
+      nearbyVehicle = null;
 
       cityBuilder.dispose();
       cityEnv.dispose();

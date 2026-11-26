@@ -24,22 +24,12 @@ export interface VehicleTelemetry {
   position: { x: number; y: number; z: number };
 }
 
-const MAX_FORWARD_SPEED = 18.0; // m/s (~65 km/h)
-const MAX_REVERSE_SPEED = 5.5; // m/s (~20 km/h)
-const ACCEL_RATE = 8.5; // m/s^2
-const REVERSE_ACCEL = 4.8; // m/s^2
-const BRAKE_DECEL = 16.5; // m/s^2
-const HANDBRAKE_DECEL = 24.0; // m/s^2
-const COAST_DRAG = 2.4; // m/s^2
 const REVERSE_HOLD_DELAY = 0.22; // 秒: 停車後のブレーキ長押しでバック移行
-const MAX_STEER_ANGLE = 0.56; // rad (~32 deg)
-const MIN_HIGH_SPEED_STEER = 0.24; // rad (~14 deg)
-const STEER_RESPONSE_SPEED = 8.5; // rad/s
-const WHEELBASE_METERS = 2.78; // Innova 実測前後軸間距離 (1.50 + 1.28)
 const EXIT_MAX_SPEED = 1.2; // m/s (~4.3 km/h 以下で降車可能)
+const DOOR_INTERACT_MARGIN = 2.4; // m: 車体外面からの乗車可能距離（車体中心から約 3.0m 強）
 
 /**
- * 作業ID 2-B: 主役車両の運転物理・車輪回転・ステアリング・OBB衝突解決・乗降位置計算を管理するモジュール。
+ * 作業ID 2-B / 2-C: 運転可能車両の物理・車輪回転・ステアリング・OBB衝突解決・乗降位置計算を管理するモジュール。
  */
 export class VehicleController {
   private readonly vehicle: LoadedHeroVehicle;
@@ -60,6 +50,14 @@ export class VehicleController {
     const fl = vehicle.rig.wheels.frontLeft;
     this.wheelRadius = fl ? fl.radiusMeters : 0.32;
     this.syncCollider();
+  }
+
+  public getId(): string {
+    return this.vehicle.config.id;
+  }
+
+  public getDisplayName(): string {
+    return this.vehicle.config.displayName;
   }
 
   public setOccupied(occupied: boolean): void {
@@ -86,8 +84,8 @@ export class VehicleController {
     return Math.abs(this.speed) <= EXIT_MAX_SPEED;
   }
 
-  /** プレイヤーがドア付近（約 3.0m 以内）にいるか判定 */
-  public isPlayerNearDoor(playerPos: THREE.Vector3): boolean {
+  /** 車体外面からプレイヤーまでの水平距離 (m) を返す */
+  public getDoorDistance(playerPos: THREE.Vector3): number {
     const pos = this.vehicle.root.position;
     const dx = playerPos.x - pos.x;
     const dz = playerPos.z - pos.z;
@@ -101,7 +99,12 @@ export class VehicleController {
     const halfL = this.vehicle.dimensions.length * 0.5;
     const distOutsideX = Math.max(0, Math.abs(localX) - halfW);
     const distOutsideZ = Math.max(0, Math.abs(localZ) - halfL);
-    return Math.hypot(distOutsideX, distOutsideZ) <= 2.4;
+    return Math.hypot(distOutsideX, distOutsideZ);
+  }
+
+  /** プレイヤーがドア付近（約 3.0m 以内）にいるか判定 */
+  public isPlayerNearDoor(playerPos: THREE.Vector3): boolean {
+    return this.getDoorDistance(playerPos) <= DOOR_INTERACT_MARGIN;
   }
 
   /**
@@ -179,6 +182,7 @@ export class VehicleController {
   /** 毎フレームの車両物理・車輪回転・ステアリング・衝突解決を更新 */
   public update(dt: number, input: VehicleControlInput | null): void {
     const clampedDt = Math.min(dt, 0.05);
+    const h = this.vehicle.config.handling;
     const activeInput: VehicleControlInput =
       this.isOccupied && input
         ? input
@@ -191,28 +195,31 @@ export class VehicleController {
     // 1. 縦方向（加減速・ブレーキ・停車後長押しバック）
     if (activeInput.handbrake) {
       this.reverseHoldTimer = 0;
-      this.applyDeceleration(HANDBRAKE_DECEL * clampedDt);
+      this.applyDeceleration(h.handbrakeDecel * clampedDt);
     } else if (throttle > 0.05 && brake <= 0.05) {
       this.reverseHoldTimer = 0;
       if (this.speed < -0.15) {
         // バック中のアクセルはブレーキとして減速
-        this.applyDeceleration(BRAKE_DECEL * clampedDt);
+        this.applyDeceleration(h.brakeDecel * clampedDt);
       } else {
+        // 低中速域は力強く、高速域へ向かって自然に伸びる加速カーブ
+        const speedNorm = Math.min(1, Math.max(0, this.speed) / h.maxForwardSpeed);
+        const accelFactor = 1.0 - 0.42 * speedNorm;
         this.speed = Math.min(
-          MAX_FORWARD_SPEED,
-          this.speed + ACCEL_RATE * throttle * clampedDt,
+          h.maxForwardSpeed,
+          this.speed + h.accelRate * accelFactor * throttle * clampedDt,
         );
       }
     } else if (brake > 0.05) {
       if (this.speed > 0.15) {
         // 前進中はブレーキ減速
         this.reverseHoldTimer = 0;
-        this.applyDeceleration(BRAKE_DECEL * brake * clampedDt);
+        this.applyDeceleration(h.brakeDecel * brake * clampedDt);
       } else if (this.speed < -0.05) {
         // 既にバック中ならそのまま後退加速
         this.speed = Math.max(
-          -MAX_REVERSE_SPEED,
-          this.speed - REVERSE_ACCEL * brake * clampedDt,
+          -h.maxReverseSpeed,
+          this.speed - h.reverseAccel * brake * clampedDt,
         );
       } else {
         // 停車状態での長押しでバックギアへ移行
@@ -220,25 +227,27 @@ export class VehicleController {
         this.reverseHoldTimer += clampedDt;
         if (this.reverseHoldTimer >= REVERSE_HOLD_DELAY) {
           this.speed = Math.max(
-            -MAX_REVERSE_SPEED,
-            this.speed - REVERSE_ACCEL * brake * clampedDt,
+            -h.maxReverseSpeed,
+            this.speed - h.reverseAccel * brake * clampedDt,
           );
         }
       }
     } else {
-      // ペダルオフ時の自然な慣性減速（エンジンブレーキ＋転がり抵抗）
+      // ペダルオフ時の自然な慣性減速（エンジンブレーキ＋空力・転がり抵抗）
       this.reverseHoldTimer = 0;
-      this.applyDeceleration(COAST_DRAG * clampedDt);
+      const aeroExtra = Math.abs(this.speed) * 0.045;
+      this.applyDeceleration((h.coastDrag + aeroExtra) * clampedDt);
     }
 
-    // 2. ステアリング角補間（高速時は最大切れ角を穏やかに制限）
-    const speedRatio = Math.min(1, Math.abs(this.speed) / MAX_FORWARD_SPEED);
+    // 2. ステアリング角補間（高速域では最大切れ角を滑らかに絞って直進安定性を確保）
+    const speedRatio = Math.min(1, Math.abs(this.speed) / h.maxForwardSpeed);
+    const steerCurve = Math.pow(speedRatio, 0.75);
     const maxSteerNow =
-      MAX_STEER_ANGLE - (MAX_STEER_ANGLE - MIN_HIGH_SPEED_STEER) * speedRatio * 0.75;
+      h.maxSteerAngle - (h.maxSteerAngle - h.minHighSpeedSteer) * steerCurve;
     // 左入力(-1) -> +Y回転（左旋回）、右入力(+1) -> -Y回転（右旋回）
     const targetSteerAngle = -steerInput * maxSteerNow;
     const steerDelta = targetSteerAngle - this.steerAngle;
-    const maxSteerStep = STEER_RESPONSE_SPEED * clampedDt;
+    const maxSteerStep = h.steerResponseSpeed * clampedDt;
     if (Math.abs(steerDelta) <= maxSteerStep) {
       this.steerAngle = targetSteerAngle;
     } else {
@@ -248,7 +257,7 @@ export class VehicleController {
     // 3. 自転車モデルによる旋回と移動
     if (Math.abs(this.speed) > 0.02) {
       const angularVelocity =
-        (this.speed / WHEELBASE_METERS) * Math.tan(this.steerAngle);
+        (this.speed / h.wheelbaseMeters) * Math.tan(this.steerAngle);
       this.yaw = normalizeAngle(this.yaw + angularVelocity * clampedDt);
     }
 

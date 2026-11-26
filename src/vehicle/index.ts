@@ -1,6 +1,9 @@
 export {
+  DRIVABLE_VEHICLES,
   HERO_VEHICLE_CONFIG,
+  SPORTS_CAR_VEHICLE_CONFIG,
   type HeroVehicleConfig,
+  type VehicleHandlingSpec,
   type WheelNodeBinding,
   type WheelSlot,
 } from './vehicleConfig';

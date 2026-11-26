@@ -284,23 +284,8 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     castShadow: true,
     priority: 1,
   },
-  {
-    instanceId: 'veh_porsche_north',
-    assetId: 'free_1975_porsche_911_930_turbo',
-    category: 'vehicles',
-    url: './assets/vehicles/free_1975_porsche_911_930_turbo.glb',
-    x: -3.6,
-    z: -22,
-    rotationY: Math.PI,
-    fitMode: 'length',
-    targetSize: 4.3,
-    maxFootprint: 4.5,
-    hasCollision: true,
-    colliderShrink: 0.92,
-    placeholderFootprint: { width: 1.8, depth: 4.3, height: 1.5 },
-    castShadow: false,
-    priority: 2,
-  },
+  // ※ veh_porsche_north (free_1975_porsche_911_930_turbo.glb / x:-3.6, z:-22) は
+  //    作業ID 2-C にて同一位置のまま運転可能スポーツカー（2台目）へ昇格したため静的配置から除外。
   {
     instanceId: 'veh_mazda_furai_east',
     assetId: '2008__mazda_furai',
