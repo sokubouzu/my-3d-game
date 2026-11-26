@@ -1,13 +1,48 @@
 # 開発進捗記録（PROGRESS.md）
 
 ## 現在のステータス
-- **完了済み作業ID**: `0-C`（素材棚卸し）、`1-A`（最小起動基盤・GitHub Pages設定）、`1-B`（人物表示）、`1-C`（徒歩移動・三人称カメラ・iPadタッチ操作）、`1-D`（日本の街区配置と衝突判定 + 単体厳選＆埋まり/浮き解消修正）、`1-E`（Poly Haven 1K PBR・HDRI・環境仕上げ）、**PHASE 1 実機検証完了（残課題：歩道境界つまづき修正済み）**、`2-A`（運転可能な主役車両1台の表示・構造確認・`src/vehicle/` 土台）
-- **次回作業ID**: `2-B`（車両の運転物理・車輪回転・ステアリング・乗降UI）※2-A の iPad 実機表示・接地・歩道境界修正確認後に進行
-- **関連コミットID**: `460bdb6`（2-A 主役車両配置＆リグ土台・歩道境界つまづき修正）、`f3e12dc`（1-D ジオラマ除外＆単体Y=0厳密接地修正）、`6b8976b`（1-D 飛行機除外等）、`b5343ca`（1-D / 1-E 実装）、`abd08be`（1-B / 1-C 実装）、`0c5e527`（0-C / 1-A）
+- **完了済み作業ID**: `0-C`（素材棚卸し）、`1-A`（最小起動基盤・GitHub Pages設定）、`1-B`（人物表示）、`1-C`（徒歩移動・三人称カメラ・iPadタッチ操作）、`1-D`（日本の街区配置と衝突判定 + 単体厳選＆埋まり/浮き解消修正）、`1-E`（Poly Haven 1K PBR・HDRI・環境仕上げ）、**PHASE 1 実機検証完了**、`2-A`（運転可能な主役車両1台の表示・構造確認・`src/vehicle/` 土台）、**`2-B`（主役車両への乗降・運転物理・車輪回転・運転カメラ・iPad運転タッチUI + 3台セットミニチュア車両修正）**
+- **次回作業ID**: `2-C` 以降（iPad Air 第5世代実機での 2-B 乗降・運転・衝突・UI 検証完了後に進行）
+- **関連コミットID**: `7a16542`（2-B 運転物理・乗降・運転カメラ/UI・ミニチュア3台セット車両修正）、`460bdb6`（2-A 主役車両配置＆リグ土台・歩道境界つまづき修正）、`f3e12dc`（1-D ジオラマ除外＆単体Y=0厳密接地修正）、`6b8976b`（1-D 飛行機除外等）、`b5343ca`（1-D / 1-E 実装）、`abd08be`（1-B / 1-C 実装）、`0c5e527`（0-C / 1-A）
 
 ---
 
 ## 作業履歴
+
+### 作業ID: 2-B（主役車両への乗降・運転物理・車輪回転・運転カメラ・iPad運転タッチUI） & ミニチュア3台セット車両修正
+- **実施日**: 2026-11-26
+- **コミットID**: `7a16542`（`7a165427297de52dba5c21162633c4b800b1387c`）
+- **GitHub Actions Run ID**: `45734654615`（`Deploy to GitHub Pages`: `build` = `success`, `deploy` = `success`）
+- **検証ランク**: **状態B**（コード実装・CIビルド＆GitHub Pagesデプロイ成功／実ブラウザ・iPad Air 第5世代実機での描画＝状態C・運転/乗降/衝突動作＝状態D・実機検証＝状態Eは未実施）
+
+#### 実装内容
+1. **街区内の「ミニチュアサイズ3台セット車両」の修正**:
+   - `public/assets/vehicles/low_poly_japan_offroad_car.glb` の内部に同型オフロード車が斜め3台セット（`Cube_5` / `Cube.002_14` / `Cube.004_21`）で格納されており、全体4.4mスケーリングでミニチュア化・実寸化すると車道幅を超過して干渉することを特定。
+   - `src/world/cityLayout.ts` の西側車道配置（`x: -20, z: -3.6`）を単体実車 GLB `2008__mazda_furai.glb`（`veh_mazda_furai_west`、全長 `4.6m`、Y=0厳密接地、OBBコリジョン実測同期）へ差し替え、`docs/ASSET_MANIFEST.json` を更新。
+2. **徒歩⇔運転の乗降システム（2-B3）**:
+   - プレイヤーが主役車両（Toyota Kijang Innova）のドア付近（車体外面から約2.4m以内＝中心から約3.0m強）に近づくと「乗る（E / F）」ボタンを表示。
+   - 乗車時はプレイヤーを非表示にして操作対象を車両へ切り替え、車両がほぼ停止状態（`<= 1.2 m/s`）のときに「降りる（E / F）」を押すと、車の左側（日本の歩道側 = ローカル `+X`）の安全空間をチェックして降車し徒歩操作へ復帰。
+3. **車両の運転物理・車輪回転・ステアリング・衝突判定（2-B1 / 2-B2）**:
+   - `src/vehicle/vehicleController.ts` を新設し、アクセル加速・ブレーキ・停車後長押し（0.22秒）によるバック・速度連動ステアリング旋回（ホイールベース `2.78m`）・慣性減速・地面接地（車道 `Y = 0`）を実装。
+   - 走行速度に応じた4輪 `spinPivot` 回転および前輪 `steerPivot`・車内ハンドル `stir` の切れ角を毎フレーム連動。
+   - `src/world/collisionWorld.ts` に3円カプセル近似 vs OBB 衝突解決（`resolveVehicleCollision`）と降車安全位置判定（`isPointClear`）を追加し、建物・駐車車両・街区外周壁へのすり抜け防止（停止・軽反発）および車両自身 OBB の動的同期を実現。
+4. **運転専用カメラと iPad 横画面運転タッチ UI（2-B2 / 2-B4）**:
+   - `src/camera/thirdPersonCamera.ts` に運転専用三人称追従カメラ（`updateDriving`：走行中は進行方向へ滑らかに追従しつつ、右画面スワイプ／マウスドラッグで周囲見回し可能）を追加。
+   - `src/ui/TouchControls.tsx`・`src/index.css`・`src/input/inputManager.ts` を拡張し、運転中の iPad 横画面 UI（左下：左右ステアリングボタン、右下：アクセルペダル・ブレーキ／バックペダル・降車ボタン、下部中央：ギア＆デジタル速度計）および PC 用 `WASD` + `Space`（強ブレーキ）+ `E`/`F`（乗降）を実装。
+
+#### 変更ファイル一覧
+- `src/world/cityLayout.ts`（3台セットミニチュア車両を単体正寸 `2008__mazda_furai.glb` 4.6m へ差し替え）
+- `src/world/collisionWorld.ts`（車両3円vsOBB衝突解決 `resolveVehicleCollision`・降車安全判定 `isPointClear` 追加）
+- `src/vehicle/vehicleController.ts`（新規作成：運転物理・車輪/ハンドル連動・衝突反発・乗降座標計算）
+- `src/vehicle/index.ts`（`VehicleController` エクスポート追加）
+- `src/player/playerController.ts`（乗降用 `setVisible` / `teleportTo` 追加）
+- `src/camera/thirdPersonCamera.ts`（運転追従カメラ `updateDriving`・`alignBehind` 追加）
+- `src/input/inputManager.ts`（`E`/`F` 乗降・運転用 `WASD`+`Space`・タッチ運転入力統合）
+- `src/engine/scene.ts`（徒歩⇔運転切替・運転ループ・シャドウ追従・HUDテレメトリ連携）
+- `src/ui/TouchControls.tsx`・`src/ui/DebugHud.tsx`・`src/App.tsx`・`src/index.css`（乗降ボタン・iPad運転タッチUI・速度計追加）
+- `docs/ASSET_MANIFEST.json`・`docs/PROGRESS.md`（記録更新）
+
+---
 
 ### 作業ID: 2-A（運転可能な主役車両1台の表示・構造確認） & PHASE 1残課題（歩道境界つまづき修正）
 - **実施日**: 2026-11-26
