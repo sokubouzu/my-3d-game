@@ -149,20 +149,49 @@ export function computeObbObbSeparation(
   return true;
 }
 
-/** 街区レイアウトの道路・歩道定数 (160m x 160m 街区) */
+/** 街区レイアウトの道路・歩道・拡張エリア定数 (360m x 360m 拡張マップ / 内側160mコア街区) */
 export const CITY_METRICS = {
-  /** 街区全体の半幅 (160m 四方 -> 80m) */
-  cityHalfSize: 80,
-  /** プレイヤーの移動可能半幅 */
-  worldHalfExtent: 78,
-  /** 車道の半幅 (全幅 12m: 片側2車線相当) */
+  /** 内側コア市街地の半幅 (既存 160m 四方 -> 80m) */
+  innerCityHalfSize: 80,
+  /** 拡張マップ全体の半幅 (360m 四方 -> 180m) */
+  cityHalfSize: 180,
+  /** プレイヤー・車両の移動可能半幅 */
+  worldHalfExtent: 174,
+  /** 幹線車道の半幅 (全幅 12m: 片側2車線相当) */
   roadHalfWidth: 6.0,
   /** 歩道外側までの半幅 (歩道幅 4m -> 6m..10m) */
   sidewalkOuterHalf: 10.0,
-  /** 歩道の高さ (m) */
+  /** 内側コア街区歩道の高さ (m) — 拡張道路・公園・広場は Y = 0 統一 */
   sidewalkHeight: 0.12,
   /** 歩道縁石の段差補間幅 (m) */
   curbSlopeWidth: 0.45,
+  /** 外周道路ループの中心線半幅 (±132m) */
+  outerRingHalfSpan: 132,
+  /** 外周道路ループの四隅コーナー中心線半径 (m, 直線区間は -94..+94 = 188m) */
+  outerRingCornerRadius: 38,
+  /** 外周道路ループの車道半幅 (全幅 14m: 片側2車線＋路肩) */
+  outerRingHalfWidth: 7.0,
+  /** 外周道路ループの内側歩道幅 (m) */
+  outerRingInnerSidewalkWidth: 3.5,
+  /** 外周道路ループの外側歩道幅 (m) */
+  outerRingOuterSidewalkWidth: 4.0,
+  /** 北東拡張エリアの都市公園（さくら中央公園）矩形範囲 (Y = 0) */
+  parkBounds: {
+    minX: 14,
+    maxX: 96,
+    minZ: -120,
+    maxZ: -84,
+  },
+  /** 南側拡張エリアの駅前ロータリー広場（中央駅南口ロータリー）設定 (Y = 0) */
+  rotaryCenter: { x: 0, z: 104 },
+  rotaryIslandRadius: 10.5,
+  rotaryOuterRoadRadius: 20.5,
+  plazaBounds: {
+    minX: -44,
+    maxX: 44,
+    minZ: 82,
+    maxZ: 122,
+  },
 } as const;
 
 /**
@@ -228,25 +257,33 @@ export class CollisionWorld {
 
   /**
    * 指定 (x, z) における地面の高さを返す。
-   * 車道（|x| < 6 または |z| < 6）は Y = 0、街区・歩道は Y = 0.12。
-   * 縁石付近は滑らかにスロープ補間して段差引っかかりを防ぐ。
+   * - 車道（|x| <= 6 または |z| <= 6）および拡張エリア（|x| >= 80 または |z| >= 80 の外周道路・公園・広場）はすべて Y = 0 に統一。
+   * - 内側コア市街地の4街区（6 < |x| < 80 かつ 6 < |z| < 80）のみ Y = 0.12 の歩道高とし、縁石付近を滑らかに補間する。
    */
   public getGroundHeight(x: number, z: number): number {
     const ax = Math.abs(x);
     const az = Math.abs(z);
     const roadEdge = CITY_METRICS.roadHalfWidth;
+    const innerOuterEdge = CITY_METRICS.innerCityHalfSize;
     const slope = CITY_METRICS.curbSlopeWidth;
     const h = CITY_METRICS.sidewalkHeight;
 
-    const minDistFromRoadAxis = Math.min(ax, az);
-    if (minDistFromRoadAxis <= roadEdge) {
+    if (
+      ax <= roadEdge ||
+      az <= roadEdge ||
+      ax >= innerOuterEdge ||
+      az >= innerOuterEdge
+    ) {
       return 0;
     }
-    if (minDistFromRoadAxis >= roadEdge + slope) {
+
+    const distFromRoad = Math.min(ax - roadEdge, az - roadEdge);
+    const distFromOuter = Math.min(innerOuterEdge - ax, innerOuterEdge - az);
+    const edgeDist = Math.min(distFromRoad, distFromOuter);
+    if (edgeDist >= slope) {
       return h;
     }
-    const t = (minDistFromRoadAxis - roadEdge) / slope;
-    return h * t;
+    return h * (edgeDist / slope);
   }
 
   /**

@@ -13,6 +13,8 @@ export interface EnvironmentStatus {
 
 export interface CityEnvironmentHandle {
   status: EnvironmentStatus;
+  asphaltMaterial: THREE.MeshStandardMaterial;
+  pavementMaterial: THREE.MeshStandardMaterial;
   setDayHdriBackgroundVisible: (visible: boolean) => void;
   hasLoadedHdri: () => boolean;
   dispose: () => void;
@@ -83,10 +85,10 @@ export function createCityEnvironment(
 
   scene.environment = currentEnvTarget.texture;
   scene.background = fallbackBgColor;
-  scene.fog = new THREE.Fog(0xb8d4eb, 55, 195);
+  scene.fog = new THREE.Fog(0xb8d4eb, 95, 350);
 
   // プロシージャル青空スカイドーム (TimeOfDayController 側でシェーダ空を描画するため初期非表示)
-  const skyDomeGeo = new THREE.SphereGeometry(185, 24, 16);
+  const skyDomeGeo = new THREE.SphereGeometry(410, 24, 16);
   const skyDomeTex = createProceduralSkyTexture();
   const skyDomeMat = new THREE.MeshBasicMaterial({
     map: skyDomeTex,
@@ -102,12 +104,13 @@ export function createCityEnvironment(
   disposableTextures.push(skyDomeTex);
 
   // =========================================================================
-  // 2. 車道アスファルト (160m x 160m, Y = 0) & 歩道コンクリート (4街区, Y = 0.12)
+  // 2. 内側コア車道アスファルト (160m x 160m, Y = 0) & 歩道コンクリート (4街区, Y = 0.12)
   // =========================================================================
-  const citySize = CITY_METRICS.cityHalfSize * 2; // 160m
+  const innerHalf = CITY_METRICS.innerCityHalfSize; // 80m
+  const innerCitySize = innerHalf * 2; // 160m
   const roadHalf = CITY_METRICS.roadHalfWidth; // 6m
   const sidewalkH = CITY_METRICS.sidewalkHeight; // 0.12m
-  const blockSize = CITY_METRICS.cityHalfSize - roadHalf; // 74m
+  const blockSize = innerHalf - roadHalf; // 74m
   const blockCenterOffset = roadHalf + blockSize * 0.5; // 43m
 
   const procAsphalt = createProceduralAsphaltTextures(maxAniso);
@@ -127,7 +130,7 @@ export function createCityEnvironment(
   });
   disposableMaterials.push(asphaltMaterial);
 
-  const roadGeo = new THREE.PlaneGeometry(citySize, citySize);
+  const roadGeo = new THREE.PlaneGeometry(innerCitySize, innerCitySize);
   const roadMesh = new THREE.Mesh(roadGeo, asphaltMaterial);
   roadMesh.rotation.x = -Math.PI / 2;
   roadMesh.position.y = 0;
@@ -336,6 +339,8 @@ export function createCityEnvironment(
 
   return {
     status,
+    asphaltMaterial,
+    pavementMaterial,
     setDayHdriBackgroundVisible: (visible: boolean) => {
       allowDayHdriBg = visible;
       if (visible && loadedHdriTexture) {
@@ -448,7 +453,7 @@ function buildJapaneseRoadMarkings(
   materials.push(whiteMat, yellowMat);
 
   const y = 0.012;
-  const halfCity = CITY_METRICS.cityHalfSize; // 80
+  const halfCity = CITY_METRICS.innerCityHalfSize; // 80
   const roadHalf = CITY_METRICS.roadHalfWidth; // 6
 
   const addStrip = (

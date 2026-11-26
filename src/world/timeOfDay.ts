@@ -56,8 +56,8 @@ const PRESETS: Record<TimeOfDayMode, TimeOfDayPreset> = {
     sunDiscStrength: 0.75,
     starStrength: 0.0,
     fogColor: new THREE.Color(0xb8d4eb),
-    fogNear: 55,
-    fogFar: 195,
+    fogNear: 95,
+    fogFar: 350,
     dirColor: new THREE.Color(0xfff4e0),
     dirIntensity: 1.55,
     sunOffset: new THREE.Vector3(18, 30, 14),
@@ -79,8 +79,8 @@ const PRESETS: Record<TimeOfDayMode, TimeOfDayPreset> = {
     sunDiscStrength: 1.35,
     starStrength: 0.12,
     fogColor: new THREE.Color(0xd87b52),
-    fogNear: 42,
-    fogFar: 165,
+    fogNear: 75,
+    fogFar: 280,
     dirColor: new THREE.Color(0xff9248),
     dirIntensity: 1.25,
     sunOffset: new THREE.Vector3(-34, 11, -16),
@@ -102,8 +102,8 @@ const PRESETS: Record<TimeOfDayMode, TimeOfDayPreset> = {
     sunDiscStrength: 0.9,
     starStrength: 1.0,
     fogColor: new THREE.Color(0x0c1428),
-    fogNear: 28,
-    fogFar: 125,
+    fogNear: 48,
+    fogFar: 210,
     dirColor: new THREE.Color(0x7aa4e8),
     dirIntensity: 0.34,
     sunOffset: new THREE.Vector3(22, 26, -24),
@@ -230,7 +230,7 @@ export class TimeOfDayController {
     this.hemiLight = hemiLight;
     this.callbacks = callbacks;
 
-    this.skyGeo = new THREE.SphereGeometry(188, 24, 16);
+    this.skyGeo = new THREE.SphereGeometry(420, 24, 16);
     this.skyMat = new THREE.ShaderMaterial({
       vertexShader: SKY_VERTEX_SHADER,
       fragmentShader: SKY_FRAGMENT_SHADER,

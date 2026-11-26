@@ -27,8 +27,31 @@ export interface MinimapProps {
 
 const MINIMAP_SIZE_PX = 140;
 const MINIMAP_HALF_PX = MINIMAP_SIZE_PX * 0.5;
-const RADAR_RANGE_METERS = 56;
+const RADAR_RANGE_FOOT_METERS = 92;
+const RADAR_RANGE_DRIVE_METERS = 148;
 const FRAME_INTERVAL_MS = 33; // ~30fps 更新で描画負荷を極小化
+
+function strokeRoundedRectPath(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+): void {
+  const rad = Math.max(0, Math.min(r, w * 0.5, h * 0.5));
+  ctx.beginPath();
+  ctx.moveTo(x + rad, y);
+  ctx.lineTo(x + w - rad, y);
+  ctx.arcTo(x + w, y, x + w, y + rad, rad);
+  ctx.lineTo(x + w, y + h - rad);
+  ctx.arcTo(x + w, y + h, x + w - rad, y + h, rad);
+  ctx.lineTo(x + rad, y + h);
+  ctx.arcTo(x, y + h, x, y + h - rad, rad);
+  ctx.lineTo(x, y + rad);
+  ctx.arcTo(x, y, x + rad, y, rad);
+  ctx.closePath();
+}
 
 function createEmptySnapshot(): MinimapSnapshot {
   const drivableVehicles: MinimapVehiclePoint[] = [];
@@ -53,9 +76,10 @@ function createEmptySnapshot(): MinimapSnapshot {
 }
 
 /**
- * 3-C: 画面右上の軽量 2D Canvas レーダーミニマップ。
+ * 3-C / 4-A: 画面右上の軽量 2D Canvas レーダーミニマップ。
  * - 3D カメラの追加レンダリング（マルチパス描画）を一切行わず、2D 図形のみで描画。
- * - 約 30fps スロットリング＆ゼロアロケーションスナップショットで M1 iPad Air の 60FPS を維持。
+ * - 拡張後の 360m マップ（外周道路ループ・都市公園・駅前ロータリー広場）へ表示範囲・スケールを自動同期。
+ * - 徒歩時 92m / 運転時 148m にスムーズズーム切替し、高速走行時も先のカーブを確認可能。
  */
 export function Minimap({ getSnapshot }: MinimapProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -73,11 +97,20 @@ export function Minimap({ getSnapshot }: MinimapProps) {
     canvas.height = Math.round(MINIMAP_SIZE_PX * dpr);
 
     const snapshot = createEmptySnapshot();
-    const scale = (MINIMAP_HALF_PX - 6) / RADAR_RANGE_METERS;
-    const cityHalf = CITY_METRICS.cityHalfSize;
-    const roadHalf = CITY_METRICS.roadHalfWidth;
-    const swOuter = CITY_METRICS.sidewalkOuterHalf;
+    const worldHalf = CITY_METRICS.cityHalfSize; // 180
+    const innerHalf = CITY_METRICS.innerCityHalfSize; // 80
+    const roadHalf = CITY_METRICS.roadHalfWidth; // 6
+    const swOuter = CITY_METRICS.sidewalkOuterHalf; // 10
+    const ringSpan = CITY_METRICS.outerRingHalfSpan; // 132
+    const ringCornerR = CITY_METRICS.outerRingCornerRadius; // 38
+    const ringHalfW = CITY_METRICS.outerRingHalfWidth; // 7
+    const parkB = CITY_METRICS.parkBounds;
+    const plazaB = CITY_METRICS.plazaBounds;
+    const rotC = CITY_METRICS.rotaryCenter;
+    const rotInR = CITY_METRICS.rotaryIslandRadius;
+    const rotOutR = CITY_METRICS.rotaryOuterRoadRadius;
 
+    let currentRangeMeters = RADAR_RANGE_FOOT_METERS;
     let rafId = 0;
     let lastDrawTime = 0;
 
@@ -87,6 +120,12 @@ export function Minimap({ getSnapshot }: MinimapProps) {
       lastDrawTime = now;
 
       getSnapshotRef.current(snapshot);
+
+      const targetRange = snapshot.isDriving
+        ? RADAR_RANGE_DRIVE_METERS
+        : RADAR_RANGE_FOOT_METERS;
+      currentRangeMeters += (targetRange - currentRangeMeters) * 0.14;
+      const scale = (MINIMAP_HALF_PX - 6) / currentRangeMeters;
 
       const cx = MINIMAP_HALF_PX;
       const cy = MINIMAP_HALF_PX;
@@ -102,69 +141,137 @@ export function Minimap({ getSnapshot }: MinimapProps) {
       ctx.arc(cx, cy, MINIMAP_HALF_PX - 2, 0, Math.PI * 2);
       ctx.clip();
 
-      // 背景（街区外周）
-      ctx.fillStyle = '#0b1220';
+      // 背景（ワールド外周外）
+      ctx.fillStyle = '#090f1c';
       ctx.fillRect(0, 0, MINIMAP_SIZE_PX, MINIMAP_SIZE_PX);
 
       // ワールド座標 -> ミニマップ 2D 座標（北上: -Z が上, +X が右）
       const toX = (wx: number) => cx + (wx - px) * scale;
       const toY = (wz: number) => cy + (wz - pz) * scale;
 
-      // 1. 160m × 160m 街区ブロック（4区画）
+      // 1. 拡張マップ全体 (360m × 360m)
+      const worldLeft = toX(-worldHalf);
+      const worldTop = toY(-worldHalf);
+      const worldSpan = worldHalf * 2 * scale;
+      ctx.fillStyle = '#131d2f';
+      ctx.fillRect(worldLeft, worldTop, worldSpan, worldSpan);
+
+      // 2. 内側コア市街地ブロック (160m × 160m)
+      const innerLeft = toX(-innerHalf);
+      const innerTop = toY(-innerHalf);
+      const innerSpan = innerHalf * 2 * scale;
       ctx.fillStyle = '#1e293b';
-      const cityLeft = toX(-cityHalf);
-      const cityTop = toY(-cityHalf);
-      const citySpan = cityHalf * 2 * scale;
-      ctx.fillRect(cityLeft, cityTop, citySpan, citySpan);
+      ctx.fillRect(innerLeft, innerTop, innerSpan, innerSpan);
 
-      // 2. 歩道帯（±10m）
-      ctx.fillStyle = '#475569';
-      ctx.fillRect(toX(-swOuter), cityTop, swOuter * 2 * scale, citySpan);
-      ctx.fillRect(cityLeft, toY(-swOuter), citySpan, swOuter * 2 * scale);
-
-      // 3. 十字車道アスファルト（±6m）
-      ctx.fillStyle = '#334155';
-      ctx.fillRect(toX(-roadHalf), cityTop, roadHalf * 2 * scale, citySpan);
-      ctx.fillRect(cityLeft, toY(-roadHalf), citySpan, roadHalf * 2 * scale);
-
-      // 4. 中央線（破線）
-      ctx.strokeStyle = 'rgba(226, 232, 240, 0.36)';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([4, 4]);
+      // 3. 都市公園エリア（さくら中央公園: 緑の芝生＋遊歩道＋中央噴水）
+      const parkX = toX(parkB.minX);
+      const parkY = toY(parkB.minZ);
+      const parkW = (parkB.maxX - parkB.minX) * scale;
+      const parkH = (parkB.maxZ - parkB.minZ) * scale;
+      ctx.fillStyle = '#166534';
+      ctx.fillRect(parkX, parkY, parkW, parkH);
+      ctx.strokeStyle = 'rgba(134, 239, 172, 0.45)';
+      ctx.lineWidth = 0.9;
+      ctx.strokeRect(parkX, parkY, parkW, parkH);
+      // 公園内十字遊歩道＆中央噴水
+      const parkCx = toX((parkB.minX + parkB.maxX) * 0.5);
+      const parkCy = toY((parkB.minZ + parkB.maxZ) * 0.5);
+      ctx.strokeStyle = 'rgba(214, 211, 209, 0.65)';
+      ctx.lineWidth = Math.max(1.2, 3.0 * scale);
       ctx.beginPath();
-      // 南北中央線（交差点外）
-      ctx.moveTo(toX(0), toY(-cityHalf));
+      ctx.moveTo(parkX, parkCy);
+      ctx.lineTo(parkX + parkW, parkCy);
+      ctx.moveTo(parkCx, parkY);
+      ctx.lineTo(parkCx, parkY + parkH);
+      ctx.stroke();
+      ctx.fillStyle = '#38bdf8';
+      ctx.beginPath();
+      ctx.arc(parkCx, parkCy, Math.max(1.6, 2.8 * scale), 0, Math.PI * 2);
+      ctx.fill();
+
+      // 4. 駅前ロータリー広場（舗装エプロン）
+      ctx.fillStyle = '#3b4759';
+      ctx.fillRect(
+        toX(plazaB.minX),
+        toY(plazaB.minZ),
+        (plazaB.maxX - plazaB.minX) * scale,
+        (plazaB.maxZ - plazaB.minZ) * scale,
+      );
+
+      // 5. 内側歩道帯（±10m）
+      ctx.fillStyle = '#475569';
+      ctx.fillRect(toX(-swOuter), innerTop, swOuter * 2 * scale, innerSpan);
+      ctx.fillRect(innerLeft, toY(-swOuter), innerSpan, swOuter * 2 * scale);
+
+      // 6. 外周道路ループ（直線＋R=38mコーナー、幅14m）
+      const ringLeft = toX(-ringSpan);
+      const ringTop = toY(-ringSpan);
+      const ringSize = ringSpan * 2 * scale;
+      const ringRad = ringCornerR * scale;
+      strokeRoundedRectPath(ctx, ringLeft, ringTop, ringSize, ringSize, ringRad);
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = Math.max(3.5, ringHalfW * 2 * scale);
+      ctx.stroke();
+
+      // 7. 十字幹線車道（外周ループ ±132m まで延長接続）
+      const armSpan = ringSpan * 2 * scale;
+      ctx.fillStyle = '#334155';
+      ctx.fillRect(toX(-roadHalf), ringTop, roadHalf * 2 * scale, armSpan);
+      ctx.fillRect(ringLeft, toY(-roadHalf), armSpan, roadHalf * 2 * scale);
+
+      // 8. 駅前ロータリー環状車道＋中央緑地島
+      const rotX = toX(rotC.x);
+      const rotY = toY(rotC.z);
+      ctx.fillStyle = '#334155';
+      ctx.beginPath();
+      ctx.arc(rotX, rotY, rotOutR * scale, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#166534';
+      ctx.beginPath();
+      ctx.arc(rotX, rotY, rotInR * scale, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(226, 232, 240, 0.55)';
+      ctx.lineWidth = 0.9;
+      ctx.stroke();
+
+      // 9. 中央線（外周ループ＋幹線道路破線）
+      ctx.strokeStyle = 'rgba(226, 232, 240, 0.36)';
+      ctx.lineWidth = 0.9;
+      ctx.setLineDash([3, 3]);
+      strokeRoundedRectPath(ctx, ringLeft, ringTop, ringSize, ringSize, ringRad);
+      ctx.stroke();
+      ctx.beginPath();
+      // 南北中央線
+      ctx.moveTo(toX(0), toY(-ringSpan));
       ctx.lineTo(toX(0), toY(-swOuter));
       ctx.moveTo(toX(0), toY(swOuter));
-      ctx.lineTo(toX(0), toY(cityHalf));
-      // 東西中央線（交差点外）
-      ctx.moveTo(toX(-cityHalf), toY(0));
+      ctx.lineTo(toX(0), toY(rotC.z - rotOutR));
+      // 東西中央線
+      ctx.moveTo(toX(-ringSpan), toY(0));
       ctx.lineTo(toX(-swOuter), toY(0));
       ctx.moveTo(toX(swOuter), toY(0));
-      ctx.lineTo(toX(cityHalf), toY(0));
+      ctx.lineTo(toX(ringSpan), toY(0));
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // 5. 4方向横断歩道マーカー（±8.4m）
+      // 10. 中央交差点4方向横断歩道マーカー（±8.4m）
       ctx.strokeStyle = 'rgba(248, 250, 252, 0.52)';
-      ctx.lineWidth = 1.6;
+      ctx.lineWidth = 1.4;
       ctx.beginPath();
-      // 北・南横断歩道
       ctx.moveTo(toX(-roadHalf + 0.6), toY(-8.4));
       ctx.lineTo(toX(roadHalf - 0.6), toY(-8.4));
       ctx.moveTo(toX(-roadHalf + 0.6), toY(8.4));
       ctx.lineTo(toX(roadHalf - 0.6), toY(8.4));
-      // 西・東横断歩道
       ctx.moveTo(toX(-8.4), toY(-roadHalf + 0.6));
       ctx.lineTo(toX(-8.4), toY(roadHalf - 0.6));
       ctx.moveTo(toX(8.4), toY(-roadHalf + 0.6));
       ctx.lineTo(toX(8.4), toY(roadHalf - 0.6));
       ctx.stroke();
 
-      // 街区外周枠線
-      ctx.strokeStyle = 'rgba(148, 163, 184, 0.45)';
-      ctx.lineWidth = 1.2;
-      ctx.strokeRect(cityLeft, cityTop, citySpan, citySpan);
+      // 拡張マップ外周枠線
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.42)';
+      ctx.lineWidth = 1.1;
+      ctx.strokeRect(worldLeft, worldTop, worldSpan, worldSpan);
 
       // 6. AI 交通車両（オレンジの向き付き矩形）
       for (let i = 0; i < snapshot.trafficCount; i += 1) {

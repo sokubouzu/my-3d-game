@@ -19,6 +19,8 @@ import {
   type CityBuildProgress,
 } from '../world/cityBuilder';
 import { StreetLightSystem } from '../world/streetLights';
+import { buildExpandedWorld } from '../world/expandedWorld';
+import { buildJapaneseStreetProps } from '../world/japaneseProps';
 import {
   TimeOfDayController,
   type TimeOfDayMode,
@@ -132,7 +134,7 @@ export function startGameEngine(
     55,
     window.innerWidth / window.innerHeight,
     0.1,
-    260,
+    480,
   );
   const tpsCamera = new ThirdPersonCamera(camera, {
     initialDistance: 4.2,
@@ -377,6 +379,20 @@ export function startGameEngine(
       cityProgress = progress;
       emitStatus();
     },
+  );
+
+  // 4-A: 街区拡張（外周道路ループ・都市公園・駅前ロータリー広場、Y = 0 統一）& 日本の街並み装飾
+  const expandedWorld = buildExpandedWorld(
+    scene,
+    collisionWorld,
+    cityEnv.asphaltMaterial,
+    cityEnv.pavementMaterial,
+    maxAnisotropy,
+  );
+  const japaneseProps = buildJapaneseStreetProps(
+    scene,
+    collisionWorld,
+    maxAnisotropy,
   );
 
   // 2-A / 2-B / 2-C: 運転可能な全車両（Innova + Porsche 911 Turbo + Harley Bike）をロード＆ OBB コライダー・VehicleController 構築
@@ -726,6 +742,8 @@ export function startGameEngine(
       streetLights.setNightFactor(nightFactor);
       trafficLights.setNightFactor(nightFactor);
       cityBuilder.setNightFactor(nightFactor);
+      expandedWorld.setNightFactor(nightFactor);
+      japaneseProps.setNightFactor(nightFactor);
       trafficManager.setLightsIntensity(headlightFactor);
       for (let i = 0; i < vehicleControllers.length; i += 1) {
         vehicleControllers[i].setLightsIntensity(headlightFactor);
@@ -943,6 +961,8 @@ export function startGameEngine(
       activeVehicle = null;
       nearbyVehicle = null;
 
+      japaneseProps.dispose();
+      expandedWorld.dispose();
       cityBuilder.dispose();
       cityEnv.dispose();
       rendererBundle.dispose();
