@@ -1,13 +1,47 @@
 # 開発進捗記録（PROGRESS.md）
 
 ## 現在のステータス
-- **完了済み作業ID**: `0-C`（素材棚卸し）、`1-A`（最小起動基盤・GitHub Pages設定）、`1-B`（人物表示）、`1-C`（徒歩移動・三人称カメラ・iPadタッチ操作）、`1-D`（日本の街区配置と衝突判定 + 単体厳選＆埋まり/浮き解消修正）、`1-E`（Poly Haven 1K PBR・HDRI・環境仕上げ）、**PHASE 1 実機検証完了**、`2-A`（運転可能な主役車両1台の表示・構造確認・`src/vehicle/` 土台）、`2-B`（主役車両への乗降・運転物理・車輪回転・運転カメラ・iPad運転タッチUI + 3台セットミニチュア車両修正）、**`2-C`（カメラの建物遮蔽回避・主役車両110km/h化・街区配置済みスポーツカーの運転車両化160km/h）**
-- **次回作業ID**: `2-D` 以降（iPad Air 第5世代実機での `2-C` カメラ遮蔽回避・高速走行・2台乗換検証完了後に進行）
-- **関連コミットID**: `2156aa0`（2-C カメラ遮蔽回避・110km/h化・Porsche 911 Turbo 運転車両化160km/h）、`7a16542`（2-B 運転物理・乗降・運転カメラ/UI・ミニチュア3台セット車両修正）、`460bdb6`（2-A 主役車両配置＆リグ土台・歩道境界つまづき修正）、`f3e12dc`（1-D ジオラマ除外＆単体Y=0厳密接地修正）、`6b8976b`（1-D 飛行機除外等）、`b5343ca`（1-D / 1-E 実装）、`abd08be`（1-B / 1-C 実装）、`0c5e527`（0-C / 1-A）
+- **完了済み作業ID**: `0-C`（素材棚卸し）、`1-A`（最小起動基盤・GitHub Pages設定）、`1-B`（人物表示）、`1-C`（徒歩移動・三人称カメラ・iPadタッチ操作）、`1-D`（日本の街区配置と衝突判定 + 単体厳選＆埋まり/浮き解消修正）、`1-E`（Poly Haven 1K PBR・HDRI・環境仕上げ）、**PHASE 1 実機検証完了**、`2-A`（運転可能な主役車両1台の表示・構造確認・`src/vehicle/` 土台）、`2-B`（主役車両への乗降・運転物理・車輪回転・運転カメラ・iPad運転タッチUI + 3台セットミニチュア車両修正）、`2-C`（カメラの建物遮蔽回避・主役車両110km/h化・街区配置済みスポーツカーの運転車両化160km/h）、**`3-A`（iPadタッチ操作UI消失不具合修正 + AI交通車両4台の左側通行自動走行システム）**
+- **次回作業ID**: `3-B` 以降（iPad Air 第5世代実機でのタッチUI常時表示維持・AI交通車両の左側通行/車間距離維持/衝突回避検証完了後に進行）
+- **関連コミットID**: `7c84879`（3-A iPadタッチUI消失修正・AI交通車両4台の自動走行システム）、`2156aa0`（2-C カメラ遮蔽回避・110km/h化・Porsche 911 Turbo 運転車両化160km/h）、`7a16542`（2-B 運転物理・乗降・運転カメラ/UI・ミニチュア3台セット車両修正）、`460bdb6`（2-A 主役車両配置＆リグ土台・歩道境界つまづき修正）、`f3e12dc`（1-D ジオラマ除外＆単体Y=0厳密接地修正）、`6b8976b`（1-D 飛行機除外等）、`b5343ca`（1-D / 1-E 実装）、`abd08be`（1-B / 1-C 実装）、`0c5e527`（0-C / 1-A）
 
 ---
 
 ## 作業履歴
+
+### 作業ID: 3-A（iPadタッチ操作UI消失不具合修正 & AI交通車両の自動走行システム）
+- **実施日**: 2026-11-26
+- **コミットID**: `7c84879`（`7c84879cdb1ed1b3f257c31b9f1905a371753af0`）
+- **GitHub Actions Run ID**: `45745122647`（`Deploy to GitHub Pages`: `build` = `success`, `deploy` = `success`）
+- **検証ランク**: **状態B**（コード実装・CIビルド＆GitHub Pagesデプロイ成功／実ブラウザ・iPad Air 第5世代実機での描画＝状態C・タッチUI維持/AI交通走行/前方停止動作＝状態D・実機検証＝状態Eは未実施）
+
+#### 実装内容
+1. **iPadタッチ操作UI（移動スティック・車ステアリングアイコン）が途中で消える不具合の修正**:
+   - `src/input/inputManager.ts` にタッチ対応端末判定 `isTouchCapableDevice()`（`'ontouchstart' in window || navigator.maxTouchPoints > 0`）を追加し、タッチ対応端末ではマウスやキーボードイベントが発生してもタッチ入力を無効化しないこと、またタッチ直後にブラウザが発火する互換マウスイベントの干渉を防止するよう修正。
+   - `src/ui/TouchControls.tsx` から徒歩／運転 UI の条件付きアンマウントおよび `opacity: 0` を廃止し、移動スティック（ベースリング＋ノブ）および運転時左右ステアリングボタンを常時 DOM マウント・固定表示化。
+   - マルチタッチ・`pointercancel`・`touchcancel`・`lostpointercapture`・`blur`・`visibilitychange` 発生時はポインタID解放とノブ原点復帰のみを行い描画自体を絶対に消さない保護処理、および iPadOS Safari のマルチタッチ時ピンチ誤爆を防ぐ `gesturestart` / `gesturechange` / `gestureend` 抑止を追加。
+   - `src/index.css` にて `.viewport-root`（`100dvw` / `100dvh` 固定）と `.touch-layer`（`position: fixed; isolation: isolate; transform: translate3d(0, 0, 0)`）を補強し、WebGL キャンバス上でのコンポジット欠落を防止。
+2. **AI交通車両の自動走行システム（作業ID: 3-A）**:
+   - `src/traffic/` モジュール（`roadNetwork.ts` / `trafficConfig.ts` / `trafficVehicle.ts` / `trafficManager.ts` / `index.ts`）を新規作成。
+   - 既存の承認済み実車 GLB（`2011_-_13_toyota_kijang_innova_2.0_g_tgn40.glb` × 2台、`thunderbolt_96_interceptor_-_low_poly_model.glb` × 2台、計 **4台**）を URL 単位のテンプレートキャッシュから `clone(true)` で軽量ロード（M1 iPad Air 最適化、`castShadow: false`）。
+   - **日本の左側通行**（内側走行レーン中心 `±1.65m`）に基づく十字路道路ネットワーク（直進・小回り左折・大回り右折の2次ベジェ曲線＋街区端折り返しループ）を構築し、4輪独立回転と曲率連動の前輪ステアリングで **約 32〜38 km/h** にて自動走行。
+   - 毎フレーム前方障害物（歩行中プレイヤー・運転可能車両2台・他のAI交通車両・交差点内交差車両）を OBB ベースの前方コリドーで検知し、衝突せず手前で滑らかに減速・完全停止・車間距離維持（交差点デッドロック防止ロジック付き）。
+   - 全 AI 車両の OBB コライダーを毎フレーム `CollisionWorld` へ動的同期し、プレイヤーや自車がすり抜けないように実装。あわせて既存路肩駐車車両および運転可能車両2台の初期位置を路肩側（`±4.1m〜±4.35m`）へ微調整し、走行レーンとの干渉を解消。
+
+#### 変更ファイル一覧
+- `src/input/inputManager.ts`（タッチ対応端末判定・互換マウスイベント干渉防止）
+- `src/ui/TouchControls.tsx`（条件付きアンマウント廃止・マルチタッチ/`pointercancel`/`touchcancel`保護・Safariジェスチャー抑止）
+- `src/index.css`（固定ビューポート・コンポジットレイヤー固定・`opacity: 1` 固定表示スタイル）
+- `src/traffic/roadNetwork.ts`（新規作成：日本の左側通行十字路ネットワーク・交差点ベジェ曲線・折り返しループ）
+- `src/traffic/trafficConfig.ts`（新規作成：承認済み車両GLB 4台の設定・4輪独立ノード定義）
+- `src/traffic/trafficVehicle.ts`（新規作成：自動走行・車輪回転・前方障害物検知・車間距離維持・OBB同期）
+- `src/traffic/trafficManager.ts`（新規作成：テンプレートキャッシュ＆クローンによる4台統括管理）
+- `src/traffic/index.ts`（新規作成：モジュールエクスポート）
+- `src/vehicle/vehicleConfig.ts`・`src/vehicle/vehicleController.ts`・`src/world/cityLayout.ts`（路肩駐車位置の微調整・`getDimensions()` 追加）
+- `src/engine/scene.ts`・`src/App.tsx`・`src/ui/DebugHud.tsx`（`TrafficManager` 統合・HUD に Phase 3-A / AI Traffic 稼働数追加）
+- `docs/PROGRESS.md`（本記録を更新）
+
+---
 
 ### 作業ID: 2-C（カメラの建物遮蔽回避・走行速度向上・街区配置済みスポーツカーの運転車両化）
 - **実施日**: 2026-11-26
