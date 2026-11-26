@@ -41,6 +41,7 @@ export class VehicleController {
   private steerAngle = 0; // + = 左切れ, - = 右切れ
   private reverseHoldTimer = 0;
   private isOccupied = false;
+  private pendingImpactSpeed = 0;
 
   constructor(vehicle: LoadedHeroVehicle, collisionWorld: CollisionWorld) {
     this.vehicle = vehicle;
@@ -58,6 +59,21 @@ export class VehicleController {
 
   public getDisplayName(): string {
     return this.vehicle.config.displayName;
+  }
+
+  public getAudioProfile(): 'standard' | 'sports' {
+    return this.vehicle.config.audioProfile;
+  }
+
+  public getMaxForwardSpeedKmh(): number {
+    return this.vehicle.config.handling.maxForwardSpeed * 3.6;
+  }
+
+  /** 直近フレームで発生した衝突の衝撃速度 (m/s) を取得してリセット */
+  public consumeImpactSpeed(): number {
+    const val = this.pendingImpactSpeed;
+    this.pendingImpactSpeed = 0;
+    return val;
   }
 
   public setOccupied(occupied: boolean): void {
@@ -291,6 +307,9 @@ export class VehicleController {
       if (vn < 0) {
         // 衝突方向への突っ込み成分を打ち消し、高速時は軽く反発・低速時は停止
         const impactSpeed = -vn;
+        if (impactSpeed > 0.85) {
+          this.pendingImpactSpeed = Math.max(this.pendingImpactSpeed, impactSpeed);
+        }
         if (impactSpeed > 3.0) {
           this.speed = -Math.sign(this.speed) * Math.min(2.2, impactSpeed * 0.25);
         } else {

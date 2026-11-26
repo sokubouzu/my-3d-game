@@ -63,6 +63,7 @@ export class PlayerController {
   private state: PlayerLocomotionState = 'idle';
   private activeAction: THREE.AnimationAction | null = null;
   private activeClipName = 'None';
+  private pendingLandingSpeed = 0;
 
   constructor(
     player: LoadedPlayerModel,
@@ -92,12 +93,35 @@ export class PlayerController {
     return this.yaw;
   }
 
+  /** 現在の水平移動速度 (m/s) を取得（ゼロアロケーション） */
+  public getHorizontalSpeed(): number {
+    return Math.hypot(this.velocity.x, this.velocity.z);
+  }
+
+  /** 現在の接地状態を取得 */
+  public getIsGrounded(): boolean {
+    return this.isGrounded;
+  }
+
+  /** 現在の移動ステートを取得 */
+  public getLocomotionState(): PlayerLocomotionState {
+    return this.state;
+  }
+
+  /** 直近フレームのジャンプ着地速度 (m/s) を取得してリセット */
+  public consumeLandingSpeed(): number {
+    const val = this.pendingLandingSpeed;
+    this.pendingLandingSpeed = 0;
+    return val;
+  }
+
   /** 乗車・降車時のプレイヤー表示切替 */
   public setVisible(visible: boolean): void {
     this.player.root.visible = visible;
     if (!visible) {
       this.velocity.set(0, 0, 0);
       this.verticalVelocity = 0;
+      this.pendingLandingSpeed = 0;
     }
   }
 
@@ -235,6 +259,15 @@ export class PlayerController {
     const heightAboveGround = pos.y - groundY;
 
     if (this.verticalVelocity <= 0 && heightAboveGround <= 0) {
+      if (!wasGrounded && (this.isJumping || this.airborneTime > 0.12)) {
+        const landingSpeed = Math.abs(this.verticalVelocity);
+        if (landingSpeed > 1.2) {
+          this.pendingLandingSpeed = Math.max(
+            this.pendingLandingSpeed,
+            landingSpeed,
+          );
+        }
+      }
       pos.y = groundY;
       this.verticalVelocity = 0;
       this.isGrounded = true;

@@ -47,6 +47,8 @@ const INITIAL_STATUS: EngineStatus = {
   pedestrianLoadedCount: 0,
   pedestrianTotalCount: 6,
   trafficLightLabel: '南北:青 / 東西:赤',
+  audioMuted: false,
+  audioUnlocked: false,
 };
 
 export function App() {
@@ -59,7 +61,28 @@ export function App() {
     if (!canvas) return;
     const handle = startGameEngine(canvas, setStatus);
     engineRef.current = handle;
+
+    // 3-D: iPadOS Safari 自動再生制限解除（初回タップ／キー操作で AudioContext.resume()）
+    const handleFirstGesture = () => {
+      handle.unlockAudio();
+    };
+    window.addEventListener('pointerdown', handleFirstGesture, {
+      capture: true,
+      passive: true,
+    });
+    window.addEventListener('touchstart', handleFirstGesture, {
+      capture: true,
+      passive: true,
+    });
+    window.addEventListener('keydown', handleFirstGesture, {
+      capture: true,
+      passive: true,
+    });
+
     return () => {
+      window.removeEventListener('pointerdown', handleFirstGesture, true);
+      window.removeEventListener('touchstart', handleFirstGesture, true);
+      window.removeEventListener('keydown', handleFirstGesture, true);
       engineRef.current = null;
       handle.dispose();
     };
@@ -101,6 +124,11 @@ export function App() {
     engineRef.current?.getMinimapSnapshot(out);
   }, []);
 
+  const handleToggleAudioMute = useCallback(() => {
+    engineRef.current?.unlockAudio();
+    engineRef.current?.toggleAudioMute();
+  }, []);
+
   return (
     <div className="viewport-root">
       <canvas ref={canvasRef} className="webgl-canvas" />
@@ -121,6 +149,49 @@ export function App() {
         onVehicleBrakeChange={handleVehicleBrakeChange}
       />
       <DebugHud status={status} />
+      <button
+        type="button"
+        className={`audio-mute-btn${status.audioMuted ? ' is-muted' : ''}`}
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={handleToggleAudioMute}
+        aria-label={status.audioMuted ? '音声をオンにする' : '音声をミュートにする'}
+        aria-pressed={status.audioMuted}
+        title={status.audioMuted ? 'Sound OFF' : 'Sound ON'}
+      >
+        {status.audioMuted ? (
+          <svg
+            viewBox="0 0 24 24"
+            width="20"
+            height="20"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.1"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+            <line x1="22" y1="9" x2="16" y2="15" />
+            <line x1="16" y1="9" x2="22" y2="15" />
+          </svg>
+        ) : (
+          <svg
+            viewBox="0 0 24 24"
+            width="20"
+            height="20"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.1"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+            <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+          </svg>
+        )}
+      </button>
       <Minimap getSnapshot={handleGetMinimapSnapshot} />
     </div>
   );

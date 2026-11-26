@@ -62,6 +62,8 @@ export interface HeroVehicleConfig {
   placeholderDimensions: { width: number; height: number; length: number };
   /** リアルタイムシャドウ投影の有無 */
   castShadow: boolean;
+  /** 3-D: エンジン音プロファイル（standard = 乗用車 / sports = スポーツカー） */
+  audioProfile: 'standard' | 'sports';
   /** 走行・操舵スペック */
   handling: VehicleHandlingSpec;
   /** 4輪の独立ノード定義 */
@@ -88,6 +90,7 @@ export const HERO_VEHICLE_CONFIG: HeroVehicleConfig = {
   colliderShrink: 0.92,
   placeholderDimensions: { width: 1.89, height: 1.74, length: 4.6 },
   castShadow: true,
+  audioProfile: 'standard',
   handling: {
     maxForwardSpeed: 30.6, // ~110 km/h
     maxReverseSpeed: 7.0, // ~25 km/h
@@ -145,6 +148,7 @@ export const SPORTS_CAR_VEHICLE_CONFIG: HeroVehicleConfig = {
   colliderShrink: 0.92,
   placeholderDimensions: { width: 1.8, height: 1.35, length: 4.3 },
   castShadow: false,
+  audioProfile: 'sports',
   handling: {
     maxForwardSpeed: 44.5, // ~160 km/h
     maxReverseSpeed: 8.5, // ~30 km/h

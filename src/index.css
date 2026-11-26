@@ -364,6 +364,41 @@ body,
   pointer-events: none;
 }
 
+/* --- 3-D: 画面上部（ミニマップ左隣）ワンタップ音声ミュートボタン --- */
+.audio-mute-btn {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  right: calc(env(safe-area-inset-right, 0px) + 164px);
+  z-index: 32;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1.5px solid rgba(148, 163, 184, 0.5);
+  background: rgba(15, 23, 42, 0.74);
+  color: #f8fafc;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.36);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition: transform 0.08s ease, background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+
+.audio-mute-btn:active {
+  transform: scale(0.92);
+}
+
+.audio-mute-btn.is-muted {
+  background: rgba(127, 29, 29, 0.72);
+  border-color: rgba(248, 113, 113, 0.75);
+  color: #fecaca;
+}
+
 /* --- 3-C: 画面右上 軽量2D Canvas レーダーミニマップ --- */
 .minimap-container {
   position: fixed;

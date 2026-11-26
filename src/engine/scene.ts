@@ -38,6 +38,10 @@ import {
   type PedestrianStatus,
 } from '../pedestrians';
 import type { MinimapSnapshot } from '../ui/Minimap';
+import {
+  SoundManager,
+  type VehicleAudioFrame,
+} from '../audio/soundManager';
 
 export type ControlMode = 'foot' | 'vehicle';
 
@@ -76,6 +80,8 @@ export interface EngineStatus {
   pedestrianLoadedCount: number;
   pedestrianTotalCount: number;
   trafficLightLabel: string;
+  audioMuted: boolean;
+  audioUnlocked: boolean;
 }
 
 export interface GameEngineHandle {
@@ -88,6 +94,8 @@ export interface GameEngineHandle {
   setTouchVehicleThrottle: (throttle: number) => void;
   setTouchVehicleBrake: (brake: number) => void;
   getMinimapSnapshot: (out: MinimapSnapshot) => void;
+  unlockAudio: () => void;
+  toggleAudioMute: () => boolean;
   dispose: () => void;
 }
 
@@ -208,6 +216,25 @@ export function startGameEngine(
   // 3-B: 日本式交差点信号機（4隅設置・青/黄/赤サイクル制御）
   const trafficLights = new TrafficLightController(scene, collisionWorld);
 
+  // 3-D: iPad Safari 対応 Web Audio 音響エンジン（ゼロアロケーション更新用フレームを事前確保）
+  const vehicleAudioFrame: VehicleAudioFrame = {
+    isDriving: false,
+    speedKmh: 0,
+    maxSpeedKmh: 110,
+    throttle: 0,
+    brake: 0,
+    handbrake: false,
+    isReversing: false,
+    profile: 'standard',
+  };
+  let audioMuted = false;
+  let audioUnlocked = false;
+  const soundManager = new SoundManager((audioState) => {
+    audioMuted = audioState.muted;
+    audioUnlocked = audioState.unlocked;
+    emitStatus();
+  });
+
   let rafId = 0;
   let frameCount = 0;
   let lastFrameTime = performance.now();
@@ -285,6 +312,8 @@ export function startGameEngine(
       pedestrianLoadedCount: pedestrianStatus.loadedCount,
       pedestrianTotalCount: pedestrianStatus.totalCount,
       trafficLightLabel: trafficLights.getHudLabel(),
+      audioMuted,
+      audioUnlocked,
     });
   };
 
@@ -503,6 +532,24 @@ export function startGameEngine(
         nearbyVehicle = null;
         modeOrPromptChanged = true;
       }
+
+      // 3-D: 乗車中サウンド（エンジン音・走行音・急ブレーキスキッド音・衝突音）
+      const vSpeedMs = activeVehicle.getSpeed();
+      vehicleAudioFrame.isDriving = true;
+      vehicleAudioFrame.speedKmh = Math.abs(vSpeedMs) * 3.6;
+      vehicleAudioFrame.maxSpeedKmh = activeVehicle.getMaxForwardSpeedKmh();
+      vehicleAudioFrame.throttle = input.vehicleThrottle;
+      vehicleAudioFrame.brake = input.vehicleBrake;
+      vehicleAudioFrame.handbrake = input.vehicleHandbrake;
+      vehicleAudioFrame.isReversing = vSpeedMs < -0.15;
+      vehicleAudioFrame.profile = activeVehicle.getAudioProfile();
+      soundManager.updateVehicleAudio(vehicleAudioFrame);
+      soundManager.updateFootsteps(dt, false, 0, false);
+
+      const impactSpeed = activeVehicle.consumeImpactSpeed();
+      if (impactSpeed > 0) {
+        soundManager.playVehicleImpact(impactSpeed);
+      }
     } else {
       for (const vc of vehicleControllers) {
         vc.update(dt, null);
@@ -530,6 +577,28 @@ export function startGameEngine(
         canExitVehicle = false;
         nearbyVehicle = nextNearby;
         modeOrPromptChanged = true;
+      }
+
+      // 3-D: 降車時はエンジン音を滑らかに停止し、徒歩の足音＆着地音を連動
+      vehicleAudioFrame.isDriving = false;
+      vehicleAudioFrame.speedKmh = 0;
+      vehicleAudioFrame.throttle = 0;
+      vehicleAudioFrame.brake = 0;
+      vehicleAudioFrame.handbrake = false;
+      vehicleAudioFrame.isReversing = false;
+      soundManager.updateVehicleAudio(vehicleAudioFrame);
+
+      if (playerController) {
+        const landingSpeed = playerController.consumeLandingSpeed();
+        if (landingSpeed > 0) {
+          soundManager.playLanding(landingSpeed);
+        }
+        soundManager.updateFootsteps(
+          dt,
+          playerController.getIsGrounded(),
+          playerController.getHorizontalSpeed(),
+          playerController.getLocomotionState() === 'run',
+        );
       }
     }
 
@@ -701,11 +770,16 @@ export function startGameEngine(
         slot.isActive = false;
       }
     },
+    unlockAudio: () => {
+      soundManager.unlock();
+    },
+    toggleAudioMute: () => soundManager.toggleMute(),
     dispose: () => {
       isDisposed = true;
       cancelAnimationFrame(rafId);
       window.removeEventListener('resize', handleResize);
       inputManager.dispose();
+      soundManager.dispose();
 
       if (loadedPlayer) {
         scene.remove(loadedPlayer.root);

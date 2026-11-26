@@ -32,10 +32,15 @@ export function DebugHud({ status }: DebugHudProps) {
 
       {expanded && (
         <div className="hud-details">
-          <div className="hud-title">my-3d-game (Phase 3-C)</div>
+          <div className="hud-title">my-3d-game (Phase 3-D)</div>
           <div>
             API: {status.isWebGL2 ? 'WebGL2' : 'WebGL1'} | DPR:{' '}
-            {status.dpr.toFixed(2)}
+            {status.dpr.toFixed(2)} | Audio:{' '}
+            {status.audioMuted
+              ? 'Muted'
+              : status.audioUnlocked
+                ? 'ON'
+                : 'Tap to Unlock'}
           </div>
           <div>DRACO: {status.dracoReady ? 'Ready' : 'Init...'}</div>
           <div>
