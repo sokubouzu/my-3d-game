@@ -7,13 +7,102 @@ export interface PedestrianWaypoint {
   nextCrosswalkAxis?: TrafficAxis;
 }
 
+export interface PedestrianAppearance {
+  /** スタイル識別名 */
+  label: string;
+  /** トップス（上着・シャツ）カラー */
+  topHex: number;
+  /** ボトムス（ズボン）カラー */
+  bottomHex: number;
+  /** 髪色トーン */
+  hairHex: number;
+  /** 上着のカラー適用強度 (0..1) */
+  topStrength: number;
+  /** ボトムスのカラー適用強度 (0..1) */
+  bottomStrength: number;
+  /** 髪色のカラー適用強度 (0..1) */
+  hairStrength: number;
+}
+
+export const PEDESTRIAN_MIN_HEIGHT_METERS = 1.55;
+export const PEDESTRIAN_MAX_HEIGHT_METERS = 1.8;
+
+/** 歩行者ごとの身長を 1.55m〜1.80m の範囲でランダム生成 */
+export function pickRandomPedestrianHeight(): number {
+  const raw =
+    PEDESTRIAN_MIN_HEIGHT_METERS +
+    Math.random() * (PEDESTRIAN_MAX_HEIGHT_METERS - PEDESTRIAN_MIN_HEIGHT_METERS);
+  return Math.round(raw * 100) / 100;
+}
+
+/**
+ * 3-C: クローン感を解消するための服装・髪色バリエーションパレット。
+ * ビジネス風（紺・グレー系）およびカジュアル（白・青・ベージュ・赤系）＋髪色トーン変化。
+ */
+export const PEDESTRIAN_APPEARANCES: readonly PedestrianAppearance[] = [
+  {
+    label: 'business_navy',
+    topHex: 0x1e3557, // ビジネス風ネイビー
+    bottomHex: 0x1b2432, // ダークスラックス
+    hairHex: 0x181412, // 黒髪
+    topStrength: 0.92,
+    bottomStrength: 0.9,
+    hairStrength: 0.85,
+  },
+  {
+    label: 'business_gray',
+    topHex: 0x5c6470, // ビジネス風チャコールグレー
+    bottomHex: 0x2d333d, // チャコールパンツ
+    hairHex: 0x3b2a20, // ダークブラウン
+    topStrength: 0.92,
+    bottomStrength: 0.9,
+    hairStrength: 0.82,
+  },
+  {
+    label: 'casual_white',
+    topHex: 0xebe8e1, // カジュアル白（オフホワイト）
+    bottomHex: 0x2d4a6e, // インディゴデニム
+    hairHex: 0x5a3b26, // 栗色ブラウン
+    topStrength: 0.9,
+    bottomStrength: 0.88,
+    hairStrength: 0.82,
+  },
+  {
+    label: 'casual_blue',
+    topHex: 0x2e6ba8, // カジュアルブルー
+    bottomHex: 0xb7a082, // チノベージュ
+    hairHex: 0x241d18, // 暗めナチュラルブラック
+    topStrength: 0.92,
+    bottomStrength: 0.88,
+    hairStrength: 0.84,
+  },
+  {
+    label: 'casual_beige',
+    topHex: 0xcab393, // カジュアルベージュ
+    bottomHex: 0x2a313c, // ダークネイビーパンツ
+    hairHex: 0x6b4b32, // 明るめブラウン
+    topStrength: 0.9,
+    bottomStrength: 0.9,
+    hairStrength: 0.82,
+  },
+  {
+    label: 'casual_red',
+    topHex: 0xa83232, // カジュアル赤（落ち着いたワイン/ブリックレッド）
+    bottomHex: 0x2c3038, // チャコールデニム
+    hairHex: 0x45342a, // アッシュブラウン
+    topStrength: 0.92,
+    bottomStrength: 0.9,
+    hairStrength: 0.82,
+  },
+];
+
 export interface PedestrianConfig {
   id: string;
   /** 巡航歩行速度 (m/s) — 約 4.1〜4.9 km/h (1.15〜1.36 m/s) */
   walkSpeedMs: number;
-  /** 身長 (m) */
+  /** 基準身長 (m) — 実際はスポーン時に 1.55m〜1.80m でランダム決定 */
   heightMeters: number;
-  /** 衣装の自然な色調バリエーション (乗算ティント RGB) */
+  /** 衣装の基本乗算ティント RGB（フォールバック用） */
   tintHex: number;
   /** 初期ウェイポイントインデックス */
   startWaypointIndex: number;

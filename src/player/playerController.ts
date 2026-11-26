@@ -87,6 +87,11 @@ export class PlayerController {
     return target.copy(this.player.root.position);
   }
 
+  /** プレイヤーの現在向き (Y軸回転ラジアン、0=+Z) を取得 */
+  public getYaw(): number {
+    return this.yaw;
+  }
+
   /** 乗車・降車時のプレイヤー表示切替 */
   public setVisible(visible: boolean): void {
     this.player.root.visible = visible;

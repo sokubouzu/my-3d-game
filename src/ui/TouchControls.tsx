@@ -614,16 +614,7 @@ export function TouchControls({
           </button>
         </div>
 
-        {/* 運転: 画面下部中央 軽量デジタル速度計 */}
-        <div className="drive-speedometer" aria-label="Speedometer">
-          <span className={`drive-gear drive-gear-${vehicleGear.toLowerCase()}`}>
-            {vehicleGear}
-          </span>
-          <span className="drive-speed-value">{vehicleSpeedKmh}</span>
-          <span className="drive-speed-unit">km/h</span>
-        </div>
-
-        {/* 運転: 画面右下 降車ボタン + ブレーキ/バック + アクセルペダル */}
+        {/* 運転: 画面右下 降車ボタン + デジタルスピードメーター + ブレーキ/バック + アクセルペダル */}
         <div className="drive-right-controls">
           <button
             type="button"
@@ -637,6 +628,29 @@ export function TouchControls({
               {canExitVehicle ? 'E / F' : '停車で降車'}
             </span>
           </button>
+
+          {/* 3-C: 乗車中のみ画面右下（ペダルUIの上）にデジタル速度計・ギア表示 */}
+          {isVehicleMode && (
+            <div className="drive-speedometer" aria-label="Speedometer">
+              <div className="drive-speedometer-row">
+                <span
+                  className={`drive-gear drive-gear-${vehicleGear.toLowerCase()}`}
+                >
+                  {vehicleGear}
+                </span>
+                <span className="drive-speed-value">{vehicleSpeedKmh}</span>
+                <span className="drive-speed-unit">km/h</span>
+              </div>
+              <div className="drive-speed-bar" aria-hidden="true">
+                <div
+                  className={`drive-speed-bar-fill drive-speed-bar-${vehicleGear.toLowerCase()}`}
+                  style={{
+                    width: `${Math.min(100, Math.round((vehicleSpeedKmh / 160) * 100))}%`,
+                  }}
+                />
+              </div>
+            </div>
+          )}
 
           <div className="drive-pedal-group">
             <button

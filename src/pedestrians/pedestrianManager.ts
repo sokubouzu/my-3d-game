@@ -9,7 +9,13 @@ import type { TrafficLightController } from '../traffic/trafficLights';
 import type { TrafficObstacle } from '../traffic/trafficVehicle';
 import type { CollisionWorld } from '../world/collisionWorld';
 import { PedestrianAgent } from './pedestrianAgent';
-import { PEDESTRIAN_CONFIGS, type PedestrianConfig } from './pedestrianRoutes';
+import {
+  PEDESTRIAN_APPEARANCES,
+  PEDESTRIAN_CONFIGS,
+  pickRandomPedestrianHeight,
+  type PedestrianAppearance,
+  type PedestrianConfig,
+} from './pedestrianRoutes';
 
 export interface PedestrianStatus {
   loadedCount: number;
@@ -112,9 +118,23 @@ export class PedestrianManager {
           }
         });
 
+        // 服装・髪色パレットを重複しないようシャッフルして各個体へ割り当て
+        const shuffledAppearances: PedestrianAppearance[] = [
+          ...PEDESTRIAN_APPEARANCES,
+        ];
+        for (let i = shuffledAppearances.length - 1; i > 0; i -= 1) {
+          const j = Math.floor(Math.random() * (i + 1));
+          const tmp = shuffledAppearances[i];
+          shuffledAppearances[i] = shuffledAppearances[j];
+          shuffledAppearances[j] = tmp;
+        }
+
         for (let i = 0; i < this.configs.length; i += 1) {
           const cfg = this.configs[i];
           const cloned = SkeletonUtils.clone(template);
+          const randomHeight = pickRandomPedestrianHeight();
+          const appearance =
+            shuffledAppearances[i % shuffledAppearances.length];
           const agent = new PedestrianAgent(
             cfg,
             cloned,
@@ -122,6 +142,8 @@ export class PedestrianManager {
             this.collisionWorld,
             baseScaleFactor,
             baseMinYOffset,
+            randomHeight,
+            appearance,
           );
           this.agents.push(agent);
           this.scene.add(agent.root);

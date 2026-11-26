@@ -5,6 +5,7 @@ import {
   type GameEngineHandle,
 } from './engine/scene';
 import { DebugHud } from './ui/DebugHud';
+import { Minimap, type MinimapSnapshot } from './ui/Minimap';
 import { TouchControls } from './ui/TouchControls';
 
 const INITIAL_STATUS: EngineStatus = {
@@ -96,6 +97,10 @@ export function App() {
     engineRef.current?.setTouchVehicleBrake(brake);
   }, []);
 
+  const handleGetMinimapSnapshot = useCallback((out: MinimapSnapshot) => {
+    engineRef.current?.getMinimapSnapshot(out);
+  }, []);
+
   return (
     <div className="viewport-root">
       <canvas ref={canvasRef} className="webgl-canvas" />
@@ -116,6 +121,7 @@ export function App() {
         onVehicleBrakeChange={handleVehicleBrakeChange}
       />
       <DebugHud status={status} />
+      <Minimap getSnapshot={handleGetMinimapSnapshot} />
     </div>
   );
 }

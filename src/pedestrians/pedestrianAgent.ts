@@ -2,7 +2,10 @@ import * as THREE from 'three';
 import type { TrafficLightController } from '../traffic/trafficLights';
 import type { TrafficObstacle } from '../traffic/trafficVehicle';
 import type { CollisionWorld } from '../world/collisionWorld';
-import type { PedestrianConfig } from './pedestrianRoutes';
+import type {
+  PedestrianAppearance,
+  PedestrianConfig,
+} from './pedestrianRoutes';
 
 const PED_RADIUS = 0.34;
 const WALK_ANIM_REF_SPEED = 1.28; // Walking クリップの標準速度基準 (m/s)
@@ -11,6 +14,7 @@ const VEHICLE_STOP_DIST = 2.8;
 const HUMAN_AVOID_DIST = 1.85;
 const HUMAN_STOP_DIST = 0.82;
 const CROSSFADE_SEC = 0.22;
+const WARDROBE_SHADER_KEY = 'pedestrian-wardrobe-v1';
 
 function normalizeAngle(rad: number): number {
   let a = rad;
@@ -20,14 +24,16 @@ function normalizeAngle(rad: number): number {
 }
 
 /**
- * 3-B: 歩道および横断歩道を歩行する単体 AI 歩行者エージェント。
+ * 3-B / 3-C: 歩道および横断歩道を歩行する単体 AI 歩行者エージェント。
  * - SkeletonUtils.clone で複製したスキニングモデル + 個体別 AnimationMixer（Walking / Idle クロスフェード）
+ * - 個体ごとに material.clone() を行い、服（上下）と髪色のバリエーション＋身長 1.55m〜1.80m を適用
  * - 信号連動（横断歩道が青のときのみ進入、横断中は対岸まで渡り切る）
  * - プレイヤー・車両・他歩行者への一時停止 / 軽回避 / めり込み防止分離
  */
 export class PedestrianAgent {
   public readonly config: PedestrianConfig;
   public readonly root: THREE.Group;
+  public readonly heightMeters: number;
 
   private readonly model: THREE.Object3D;
   private readonly mixer: THREE.AnimationMixer;
@@ -56,20 +62,26 @@ export class PedestrianAgent {
     collisionWorld: CollisionWorld,
     baseScaleFactor: number,
     baseMinYOffset: number,
+    heightMeters: number,
+    appearance: PedestrianAppearance,
   ) {
     this.config = config;
     this.collisionWorld = collisionWorld;
     this.model = clonedModel;
+    this.heightMeters = heightMeters;
 
-    // 身長バリエーションを反映しつつ足裏 Y=0 接地を維持
-    const heightRatio = config.heightMeters / 1.7;
+    // 身長バリエーション（1.55m〜1.80m）を反映しつつ足裏 Y=0 接地を維持
+    const heightRatio = heightMeters / 1.7;
     const finalScale = baseScaleFactor * heightRatio;
     clonedModel.scale.setScalar(finalScale);
     clonedModel.position.set(0, baseMinYOffset * heightRatio, 0);
 
-    // M1 iPad Air 最適化: AI 歩行者は castShadow = false、テクスチャは完全共有しマテリアルティントのみ軽量複製
-    const tint = new THREE.Color(config.tintHex);
-    const shouldTint = config.tintHex !== 0xffffff;
+    // M1 iPad Air 最適化: AI 歩行者は castShadow = false、テクスチャは完全共有し
+    // 各個体のマテリアルのみ material.clone() して服・髪色のバリエーションを適用
+    const topColor = new THREE.Color(appearance.topHex);
+    const bottomColor = new THREE.Color(appearance.bottomHex);
+    const hairColor = new THREE.Color(appearance.hairHex);
+
     clonedModel.traverse((node) => {
       if (node instanceof THREE.SkinnedMesh) {
         node.frustumCulled = false;
@@ -78,14 +90,24 @@ export class PedestrianAgent {
         node.castShadow = false;
         node.receiveShadow = true;
 
-        if (shouldTint) {
-          if (Array.isArray(node.material)) {
-            node.material = node.material.map((m) =>
-              this.cloneTintedMaterial(m, tint),
-            );
-          } else if (node.material) {
-            node.material = this.cloneTintedMaterial(node.material, tint);
-          }
+        if (Array.isArray(node.material)) {
+          node.material = node.material.map((m) =>
+            this.cloneVariedMaterial(
+              m,
+              topColor,
+              bottomColor,
+              hairColor,
+              appearance,
+            ),
+          );
+        } else if (node.material) {
+          node.material = this.cloneVariedMaterial(
+            node.material,
+            topColor,
+            bottomColor,
+            hairColor,
+            appearance,
+          );
         }
       }
     });
@@ -106,7 +128,9 @@ export class PedestrianAgent {
 
     if (this.walkAction) {
       this.walkAction.play();
-      this.walkAction.time = config.animPhaseOffsetSec % Math.max(0.1, this.walkAction.getClip().duration);
+      this.walkAction.time =
+        config.animPhaseOffsetSec %
+        Math.max(0.1, this.walkAction.getClip().duration);
       this.isWalkingAnim = true;
     } else if (this.idleAction) {
       this.idleAction.play();
@@ -139,17 +163,103 @@ export class PedestrianAgent {
     this.syncTransform();
   }
 
-  private cloneTintedMaterial(
+  /**
+   * テクスチャを共有したままマテリアルを個別複製 (material.clone()) し、
+   * 肌色を保護しつつ上半身・下半身の服装カラーと髪色トーンを軽量シェーダで個体別に変化させる。
+   * 全歩行者で単一の shader program cache key を共有するため、M1 iPad Air でもコンパイル負荷ゼロ。
+   */
+  private cloneVariedMaterial(
     mat: THREE.Material,
-    tint: THREE.Color,
+    topColor: THREE.Color,
+    bottomColor: THREE.Color,
+    hairColor: THREE.Color,
+    appearance: PedestrianAppearance,
   ): THREE.Material {
-    if (mat instanceof THREE.MeshStandardMaterial && !mat.transparent) {
+    if (!(mat instanceof THREE.MeshStandardMaterial)) {
       const cloned = mat.clone();
-      cloned.color.multiply(tint);
       this.clonedMaterials.push(cloned);
       return cloned;
     }
-    return mat;
+
+    const cloned = mat.clone();
+    this.clonedMaterials.push(cloned);
+
+    // 眉マテリアルは髪色トーンに軽く調和させる
+    const lowerName = cloned.name.toLowerCase();
+    if (cloned.transparent) {
+      if (lowerName.includes('brow') || lowerName.includes('hair')) {
+        cloned.color.copy(hairColor).lerp(new THREE.Color(0xffffff), 0.35);
+      }
+      return cloned;
+    }
+
+    // 本体マテリアル: バインドポーズの高さ (0..1.7m) と肌色マスクを用いて服・髪色のみを自然にリカラー
+    cloned.customProgramCacheKey = () => WARDROBE_SHADER_KEY;
+    cloned.onBeforeCompile = (shader) => {
+      shader.uniforms.uPedTopColor = { value: topColor };
+      shader.uniforms.uPedBottomColor = { value: bottomColor };
+      shader.uniforms.uPedHairColor = { value: hairColor };
+      shader.uniforms.uPedStrengths = {
+        value: new THREE.Vector3(
+          appearance.topStrength,
+          appearance.bottomStrength,
+          appearance.hairStrength,
+        ),
+      };
+
+      shader.vertexShader = shader.vertexShader
+        .replace(
+          '#include <common>',
+          `#include <common>
+varying float vPedNormY;`,
+        )
+        .replace(
+          '#include <begin_vertex>',
+          `#include <begin_vertex>
+vPedNormY = clamp(position.y / 1.7, 0.0, 1.0);`,
+        );
+
+      shader.fragmentShader = shader.fragmentShader
+        .replace(
+          '#include <common>',
+          `#include <common>
+varying float vPedNormY;
+uniform vec3 uPedTopColor;
+uniform vec3 uPedBottomColor;
+uniform vec3 uPedHairColor;
+uniform vec3 uPedStrengths;`,
+        )
+        .replace(
+          '#include <map_fragment>',
+          `#include <map_fragment>
+{
+  // 肌色（顔・手）を保護するための滑らかなマスク（リニア色空間）
+  float rgDiff = smoothstep(0.02, 0.085, diffuseColor.r - diffuseColor.g);
+  float gbDiff = smoothstep(0.01, 0.065, diffuseColor.g - diffuseColor.b);
+  float skinBright = smoothstep(0.11, 0.26, diffuseColor.r);
+  float skinMask = rgDiff * gbDiff * skinBright;
+  float nonSkin = 1.0 - skinMask;
+
+  // 元の布地・髪の陰影（明度）を保持して自然にリカラー
+  float luma = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+  float clothShade = 0.24 + luma * 1.48;
+  float hairShade = 0.20 + luma * 1.55;
+
+  // 領域マスク: ズボン (0.10..0.44) / 上着 (0.44..0.74) / 髪・頭部 (0.74..1.00)
+  float bottomMask = smoothstep(0.08, 0.13, vPedNormY) * (1.0 - smoothstep(0.42, 0.46, vPedNormY));
+  float topMask = smoothstep(0.42, 0.46, vPedNormY) * (1.0 - smoothstep(0.72, 0.76, vPedNormY));
+  float hairMask = smoothstep(0.73, 0.78, vPedNormY);
+
+  vec3 col = diffuseColor.rgb;
+  col = mix(col, uPedBottomColor * clothShade, bottomMask * nonSkin * uPedStrengths.y);
+  col = mix(col, uPedTopColor * clothShade, topMask * nonSkin * uPedStrengths.x);
+  col = mix(col, uPedHairColor * hairShade, hairMask * nonSkin * uPedStrengths.z);
+  diffuseColor.rgb = col;
+}`,
+        );
+    };
+    cloned.needsUpdate = true;
+    return cloned;
   }
 
   public getObstacleSnapshot(): TrafficObstacle {
@@ -328,7 +438,7 @@ export class PedestrianAgent {
         this.y,
         nextZ,
         PED_RADIUS,
-        this.config.heightMeters,
+        this.heightMeters,
       );
       this.x = resolved.x;
       this.z = resolved.z;

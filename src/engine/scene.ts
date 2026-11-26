@@ -37,6 +37,7 @@ import {
   PedestrianManager,
   type PedestrianStatus,
 } from '../pedestrians';
+import type { MinimapSnapshot } from '../ui/Minimap';
 
 export type ControlMode = 'foot' | 'vehicle';
 
@@ -86,6 +87,7 @@ export interface GameEngineHandle {
   setTouchVehicleSteer: (steer: number) => void;
   setTouchVehicleThrottle: (throttle: number) => void;
   setTouchVehicleBrake: (brake: number) => void;
+  getMinimapSnapshot: (out: MinimapSnapshot) => void;
   dispose: () => void;
 }
 
@@ -623,6 +625,9 @@ export function startGameEngine(
 
   rafId = requestAnimationFrame(animate);
 
+  const minimapTrafficScratch: TrafficObstacle[] = [];
+  const minimapPosScratch = new THREE.Vector3();
+
   return {
     setTouchMove: (x: number, y: number) => {
       inputManager.setTouchMove(x, y);
@@ -647,6 +652,54 @@ export function startGameEngine(
     },
     setTouchVehicleBrake: (brake: number) => {
       inputManager.setTouchVehicleBrake(brake);
+    },
+    getMinimapSnapshot: (out: MinimapSnapshot) => {
+      if (controlMode === 'vehicle' && activeVehicle) {
+        activeVehicle.getPosition(minimapPosScratch);
+        out.playerX = minimapPosScratch.x;
+        out.playerZ = minimapPosScratch.z;
+        out.playerYaw = activeVehicle.getYaw();
+        out.isDriving = true;
+      } else {
+        out.playerX = playerPos.x;
+        out.playerZ = playerPos.z;
+        out.playerYaw = playerController ? playerController.getYaw() : 0;
+        out.isDriving = false;
+      }
+      out.cameraYaw = tpsCamera.getYaw();
+
+      const drivableLimit = Math.min(
+        vehicleControllers.length,
+        out.drivableVehicles.length,
+      );
+      out.drivableCount = drivableLimit;
+      for (let i = 0; i < drivableLimit; i += 1) {
+        const vc = vehicleControllers[i];
+        vc.getPosition(minimapPosScratch);
+        const slot = out.drivableVehicles[i];
+        slot.id = vc.getId();
+        slot.x = minimapPosScratch.x;
+        slot.z = minimapPosScratch.z;
+        slot.yaw = vc.getYaw();
+        slot.isActive = vc === activeVehicle;
+      }
+
+      minimapTrafficScratch.length = 0;
+      trafficManager.appendVehicleObstacles(minimapTrafficScratch);
+      const trafficLimit = Math.min(
+        minimapTrafficScratch.length,
+        out.trafficVehicles.length,
+      );
+      out.trafficCount = trafficLimit;
+      for (let i = 0; i < trafficLimit; i += 1) {
+        const tv = minimapTrafficScratch[i];
+        const slot = out.trafficVehicles[i];
+        slot.id = tv.id;
+        slot.x = tv.x;
+        slot.z = tv.z;
+        slot.yaw = tv.yaw;
+        slot.isActive = false;
+      }
     },
     dispose: () => {
       isDisposed = true;
