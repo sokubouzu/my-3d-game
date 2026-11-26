@@ -87,6 +87,32 @@ export class PlayerController {
     return target.copy(this.player.root.position);
   }
 
+  /** 乗車・降車時のプレイヤー表示切替 */
+  public setVisible(visible: boolean): void {
+    this.player.root.visible = visible;
+    if (!visible) {
+      this.velocity.set(0, 0, 0);
+      this.verticalVelocity = 0;
+    }
+  }
+
+  /** 降車時等にプレイヤーを指定位置・向きへ安全に再配置する */
+  public teleportTo(x: number, y: number, z: number, yaw?: number): void {
+    this.player.root.position.set(x, y, z);
+    if (yaw !== undefined) {
+      this.yaw = normalizeAngle(yaw);
+      this.player.root.rotation.y = this.yaw;
+    }
+    this.velocity.set(0, 0, 0);
+    this.verticalVelocity = 0;
+    this.isGrounded = true;
+    this.isJumping = false;
+    this.coyoteTimer = COYOTE_TIME;
+    this.airborneTime = 0;
+    this.state = 'idle';
+    this.transitionToClip('Idle', true, 0.0);
+  }
+
   /** 現在の状態スナップショットを取得 */
   public getTelemetry(): PlayerTelemetry {
     const pos = this.player.root.position;

@@ -11,7 +11,10 @@ export interface DebugHudProps {
 export function DebugHud({ status }: DebugHudProps) {
   const [expanded, setExpanded] = useState(false);
 
-  const stateLabel = status.playerState.toUpperCase();
+  const stateLabel =
+    status.controlMode === 'vehicle'
+      ? `DRIVE ${status.vehicleSpeedKmh}km/h`
+      : status.playerState.toUpperCase();
   const fpsLabel = status.fps > 0 ? `${status.fps} FPS` : '-- FPS';
 
   return (
@@ -29,12 +32,18 @@ export function DebugHud({ status }: DebugHudProps) {
 
       {expanded && (
         <div className="hud-details">
-          <div className="hud-title">my-3d-game (Phase 2-A)</div>
+          <div className="hud-title">my-3d-game (Phase 2-B)</div>
           <div>
             API: {status.isWebGL2 ? 'WebGL2' : 'WebGL1'} | DPR:{' '}
             {status.dpr.toFixed(2)}
           </div>
           <div>DRACO: {status.dracoReady ? 'Ready' : 'Init...'}</div>
+          <div>
+            Mode: {status.controlMode === 'vehicle' ? 'Driving' : 'On Foot'}
+            {status.controlMode === 'vehicle'
+              ? ` | ${status.vehicleSpeedKmh} km/h (${status.vehicleGear})`
+              : ''}
+          </div>
           <div>
             Player:{' '}
             {status.playerLoaded
@@ -69,7 +78,7 @@ export function DebugHud({ status }: DebugHudProps) {
             , {status.position.z.toFixed(1)})
           </div>
           <div className="hud-hint">
-            PC: WASD / Shift / Space / Drag+Wheel
+            PC: WASD / Shift / Space(Jump・Brake) / E・F(乗降)
           </div>
         </div>
       )}

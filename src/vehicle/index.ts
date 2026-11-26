@@ -12,3 +12,9 @@ export {
   type VehicleRig,
   type WheelRig,
 } from './vehicleModel';
+export {
+  VehicleController,
+  type VehicleControlInput,
+  type VehicleGear,
+  type VehicleTelemetry,
+} from './vehicleController';

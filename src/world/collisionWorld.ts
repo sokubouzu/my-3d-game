@@ -24,6 +24,16 @@ export interface HorizontalCollisionResult {
   collided: boolean;
 }
 
+export interface VehicleCollisionResult {
+  x: number;
+  z: number;
+  collided: boolean;
+  /** 衝突押し出し方向（正規化法線 X） */
+  normalX: number;
+  /** 衝突押し出し方向（正規化法線 Z） */
+  normalZ: number;
+}
+
 /** 街区レイアウトの道路・歩道定数 (160m x 160m 街区) */
 export const CITY_METRICS = {
   /** 街区全体の半幅 (160m 四方 -> 80m) */
@@ -215,5 +225,172 @@ export class CollisionWorld {
     }
 
     return { x: px, z: pz, collided };
+  }
+
+  /**
+   * 2-B: 車両用の3円（前・中・後）vs OBB 衝突解決。
+   * 建物・他車両・小物・街区外周壁とのすり抜けを防ぎ、押し出し法線を返す。
+   */
+  public resolveVehicleCollision(
+    x: number,
+    z: number,
+    yaw: number,
+    width: number,
+    length: number,
+    ignoreId?: string,
+  ): VehicleCollisionResult {
+    let cx = x;
+    let cz = z;
+    let collided = false;
+    let totalPushX = 0;
+    let totalPushZ = 0;
+
+    const fwdX = Math.sin(yaw);
+    const fwdZ = Math.cos(yaw);
+    const radius = Math.max(0.45, width * 0.46);
+    const longitudinalOffset = Math.max(0, length * 0.5 - radius);
+    const offsets = [-longitudinalOffset, 0, longitudinalOffset];
+    const limit = this.worldHalfExtent - radius;
+
+    for (let iter = 0; iter < 3; iter += 1) {
+      let movedThisIter = false;
+
+      for (const offset of offsets) {
+        let sx = cx + fwdX * offset;
+        let sz = cz + fwdZ * offset;
+        let spherePushX = 0;
+        let spherePushZ = 0;
+
+        for (const col of this.colliders.values()) {
+          if (ignoreId && col.id === ignoreId) continue;
+          if (col.maxY < 0.25) continue;
+
+          const dx = sx - col.cx;
+          const dz = sz - col.cz;
+          const localX = dx * col.cos - dz * col.sin;
+          const localZ = dx * col.sin + dz * col.cos;
+
+          if (
+            Math.abs(localX) >= col.halfW + radius ||
+            Math.abs(localZ) >= col.halfD + radius
+          ) {
+            continue;
+          }
+
+          const clampedX = Math.max(-col.halfW, Math.min(col.halfW, localX));
+          const clampedZ = Math.max(-col.halfD, Math.min(col.halfD, localZ));
+
+          const diffX = localX - clampedX;
+          const diffZ = localZ - clampedZ;
+          const distSq = diffX * diffX + diffZ * diffZ;
+          if (distSq >= radius * radius) continue;
+
+          let pushLocalX = 0;
+          let pushLocalZ = 0;
+          if (distSq > 1e-8) {
+            const dist = Math.sqrt(distSq);
+            const overlap = radius - dist;
+            pushLocalX = (diffX / dist) * overlap;
+            pushLocalZ = (diffZ / dist) * overlap;
+          } else {
+            const penX = col.halfW - Math.abs(localX) + radius;
+            const penZ = col.halfD - Math.abs(localZ) + radius;
+            if (penX < penZ) {
+              pushLocalX = localX >= 0 ? penX : -penX;
+            } else {
+              pushLocalZ = localZ >= 0 ? penZ : -penZ;
+            }
+          }
+
+          const pushWorldX = pushLocalX * col.cos + pushLocalZ * col.sin;
+          const pushWorldZ = -pushLocalX * col.sin + pushLocalZ * col.cos;
+
+          sx += pushWorldX;
+          sz += pushWorldZ;
+          spherePushX += pushWorldX;
+          spherePushZ += pushWorldZ;
+        }
+
+        // 街区外周壁クランプ
+        if (sx < -limit) {
+          spherePushX += -limit - sx;
+          sx = -limit;
+        } else if (sx > limit) {
+          spherePushX += limit - sx;
+          sx = limit;
+        }
+        if (sz < -limit) {
+          spherePushZ += -limit - sz;
+          sz = -limit;
+        } else if (sz > limit) {
+          spherePushZ += limit - sz;
+          sz = limit;
+        }
+
+        if (Math.abs(spherePushX) > 1e-6 || Math.abs(spherePushZ) > 1e-6) {
+          cx += spherePushX;
+          cz += spherePushZ;
+          totalPushX += spherePushX;
+          totalPushZ += spherePushZ;
+          collided = true;
+          movedThisIter = true;
+        }
+      }
+
+      if (!movedThisIter) break;
+    }
+
+    const pushLen = Math.hypot(totalPushX, totalPushZ);
+    const normalX = pushLen > 1e-6 ? totalPushX / pushLen : 0;
+    const normalZ = pushLen > 1e-6 ? totalPushZ / pushLen : 0;
+
+    return {
+      x: cx,
+      z: cz,
+      collided,
+      normalX,
+      normalZ,
+    };
+  }
+
+  /**
+   * 指定座標 (x, z) が障害物および街区境界から安全に空いているか判定する（降車位置検証用）。
+   */
+  public isPointClear(
+    x: number,
+    z: number,
+    radius: number,
+    ignoreId?: string,
+  ): boolean {
+    const limit = this.worldHalfExtent - radius;
+    if (x < -limit || x > limit || z < -limit || z > limit) {
+      return false;
+    }
+
+    for (const col of this.colliders.values()) {
+      if (ignoreId && col.id === ignoreId) continue;
+      if (col.maxY < 0.28) continue;
+
+      const dx = x - col.cx;
+      const dz = z - col.cz;
+      const localX = dx * col.cos - dz * col.sin;
+      const localZ = dx * col.sin + dz * col.cos;
+
+      if (
+        Math.abs(localX) >= col.halfW + radius ||
+        Math.abs(localZ) >= col.halfD + radius
+      ) {
+        continue;
+      }
+
+      const clampedX = Math.max(-col.halfW, Math.min(col.halfW, localX));
+      const clampedZ = Math.max(-col.halfD, Math.min(col.halfD, localZ));
+      const diffX = localX - clampedX;
+      const diffZ = localZ - clampedZ;
+      if (diffX * diffX + diffZ * diffZ < radius * radius) {
+        return false;
+      }
+    }
+    return true;
   }
 }

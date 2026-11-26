@@ -12,6 +12,11 @@ const INITIAL_STATUS: EngineStatus = {
   dpr: 1.0,
   dracoReady: false,
   fps: 0,
+  controlMode: 'foot',
+  canEnterVehicle: false,
+  canExitVehicle: false,
+  vehicleSpeedKmh: 0,
+  vehicleGear: 'P',
   playerLoaded: false,
   playerError: null,
   playerHeight: 0,
@@ -66,14 +71,39 @@ export function App() {
     engineRef.current?.triggerJump();
   }, []);
 
+  const handleInteract = useCallback(() => {
+    engineRef.current?.triggerInteract();
+  }, []);
+
+  const handleVehicleSteerChange = useCallback((steer: number) => {
+    engineRef.current?.setTouchVehicleSteer(steer);
+  }, []);
+
+  const handleVehicleThrottleChange = useCallback((throttle: number) => {
+    engineRef.current?.setTouchVehicleThrottle(throttle);
+  }, []);
+
+  const handleVehicleBrakeChange = useCallback((brake: number) => {
+    engineRef.current?.setTouchVehicleBrake(brake);
+  }, []);
+
   return (
     <div className="viewport-root">
       <canvas ref={canvasRef} className="webgl-canvas" />
       <TouchControls
+        controlMode={status.controlMode}
+        canEnterVehicle={status.canEnterVehicle}
+        canExitVehicle={status.canExitVehicle}
+        vehicleSpeedKmh={status.vehicleSpeedKmh}
+        vehicleGear={status.vehicleGear}
         onMoveChange={handleMoveChange}
         onLookDelta={handleLookDelta}
         onSprintChange={handleSprintChange}
         onJump={handleJump}
+        onInteract={handleInteract}
+        onVehicleSteerChange={handleVehicleSteerChange}
+        onVehicleThrottleChange={handleVehicleThrottleChange}
+        onVehicleBrakeChange={handleVehicleBrakeChange}
       />
       <DebugHud status={status} />
     </div>

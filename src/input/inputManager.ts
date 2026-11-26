@@ -7,6 +7,16 @@ export interface InputSnapshot {
   sprint: boolean;
   /** 今回のフレームでジャンプが要求されたか（消費型） */
   jumpPressed: boolean;
+  /** 今回のフレームで乗降インタラクト（E/F/タッチボタン）が要求されたか（消費型） */
+  interactPressed: boolean;
+  /** 車両ステアリング (-1 = 左, +1 = 右) */
+  vehicleSteer: number;
+  /** 車両アクセル (0..1) */
+  vehicleThrottle: number;
+  /** 車両ブレーキ / 停車後長押しでバック (0..1) */
+  vehicleBrake: number;
+  /** 車両サイドブレーキ / 強ブレーキ (Space) */
+  vehicleHandbrake: boolean;
   /** 今回のフレームのカメラ水平回転量（px 相当、消費型） */
   lookDeltaX: number;
   /** 今回のフレームのカメラ垂直回転量（px 相当、消費型） */
@@ -16,7 +26,7 @@ export interface InputSnapshot {
 }
 
 /**
- * iPad タッチUI と PC（WASD + マウス）の入力を統合する独立モジュール。
+ * iPad タッチUI と PC（WASD + マウス + E/F + Space）の入力を統合する独立モジュール。
  */
 export class InputManager {
   private readonly keysPressed = new Set<string>();
@@ -24,6 +34,10 @@ export class InputManager {
   private touchMoveY = 0;
   private touchSprint = false;
   private jumpQueued = false;
+  private interactQueued = false;
+  private touchVehicleSteer = 0;
+  private touchVehicleThrottle = 0;
+  private touchVehicleBrake = 0;
   private lookDeltaX = 0;
   private lookDeltaY = 0;
   private zoomDelta = 0;
@@ -59,6 +73,12 @@ export class InputManager {
       if (code === 'Space' && !this.keysPressed.has('Space')) {
         this.jumpQueued = true;
       }
+      if (
+        (code === 'KeyE' || code === 'KeyF') &&
+        !this.keysPressed.has(code)
+      ) {
+        this.interactQueued = true;
+      }
       this.keysPressed.add(code);
     };
 
@@ -69,6 +89,9 @@ export class InputManager {
     this.handleWindowBlur = () => {
       this.keysPressed.clear();
       this.isMouseDragging = false;
+      this.touchVehicleSteer = 0;
+      this.touchVehicleThrottle = 0;
+      this.touchVehicleBrake = 0;
     };
 
     this.handleMouseDown = (event: MouseEvent) => {
@@ -133,6 +156,26 @@ export class InputManager {
     this.jumpQueued = true;
   }
 
+  /** タッチの乗降ボタン押下を通知 */
+  public triggerInteract(): void {
+    this.interactQueued = true;
+  }
+
+  /** 運転タッチUIからのステアリング (-1=左, +1=右) を設定 */
+  public setTouchVehicleSteer(steer: number): void {
+    this.touchVehicleSteer = Math.max(-1, Math.min(1, steer));
+  }
+
+  /** 運転タッチUIからのアクセル (0..1) を設定 */
+  public setTouchVehicleThrottle(throttle: number): void {
+    this.touchVehicleThrottle = Math.max(0, Math.min(1, throttle));
+  }
+
+  /** 運転タッチUIからのブレーキ／バック (0..1) を設定 */
+  public setTouchVehicleBrake(brake: number): void {
+    this.touchVehicleBrake = Math.max(0, Math.min(1, brake));
+  }
+
   /** 右半分ドラッグからのカメラ回転量を加算 */
   public addLookDelta(dx: number, dy: number): void {
     this.lookDeltaX += dx;
@@ -157,7 +200,24 @@ export class InputManager {
       keyY -= 1;
     }
 
-    // キーボード斜め入力を単位円に正規化
+    // 車両運転用入力（タッチ優先、なければキーボード WASD + Space）
+    const vehicleSteer =
+      Math.abs(this.touchVehicleSteer) > 0.01 ? this.touchVehicleSteer : keyX;
+    const vehicleThrottle =
+      this.touchVehicleThrottle > 0.01
+        ? this.touchVehicleThrottle
+        : keyY > 0
+          ? 1
+          : 0;
+    const vehicleBrake =
+      this.touchVehicleBrake > 0.01
+        ? this.touchVehicleBrake
+        : keyY < 0
+          ? 1
+          : 0;
+    const vehicleHandbrake = this.keysPressed.has('Space');
+
+    // キーボード斜め入力を単位円に正規化（徒歩移動用）
     const keyLen = Math.hypot(keyX, keyY);
     if (keyLen > 1) {
       keyX /= keyLen;
@@ -183,12 +243,18 @@ export class InputManager {
       moveY,
       sprint: this.touchSprint || keySprint,
       jumpPressed: this.jumpQueued,
+      interactPressed: this.interactQueued,
+      vehicleSteer,
+      vehicleThrottle,
+      vehicleBrake,
+      vehicleHandbrake,
       lookDeltaX: this.lookDeltaX,
       lookDeltaY: this.lookDeltaY,
       zoomDelta: this.zoomDelta,
     };
 
     this.jumpQueued = false;
+    this.interactQueued = false;
     this.lookDeltaX = 0;
     this.lookDeltaY = 0;
     this.zoomDelta = 0;

@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.3.0",
-  "taskId": "2-A",
+  "taskId": "2-B",
   "targetDevice": "iPad Air (5th gen, Apple M1 / 8GB RAM)",
   "summary": {
     "totalAssets": 34,
@@ -1216,14 +1216,24 @@
           "note": "GLBバイナリ検証・用途別配置済み、および1-D街区コード配置・CIビルド＆GitHub Pagesデプロイ成功（状態B）。実ブラウザでの描画確認（状態C）・衝突/動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
         },
         "cityPlacement": {
-          "taskId": "1-D",
-          "instanceCount": 1,
+          "taskId": "2-B",
+          "instanceCount": 2,
           "instances": [
             {
               "instanceId": "veh_mazda_furai_east",
               "positionXZ": [
                 18.0,
                 3.6
+              ],
+              "fitMode": "length",
+              "targetSizeMeters": 4.6,
+              "hasCollision": true
+            },
+            {
+              "instanceId": "veh_mazda_furai_west",
+              "positionXZ": [
+                -20.0,
+                -3.6
               ],
               "fitMode": "length",
               "targetSizeMeters": 4.6,
@@ -1738,20 +1748,11 @@
           "note": "GLBバイナリ検証・用途別配置済み、および1-D街区コード配置・CIビルド＆GitHub Pagesデプロイ成功（状態B）。実ブラウザでの描画確認（状態C）・衝突/動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
         },
         "cityPlacement": {
-          "taskId": "1-D",
-          "instanceCount": 1,
-          "instances": [
-            {
-              "instanceId": "veh_japan_offroad_west",
-              "positionXZ": [
-                -20.0,
-                -3.6
-              ],
-              "fitMode": "length",
-              "targetSizeMeters": 4.4,
-              "hasCollision": true
-            }
-          ]
+          "taskId": "2-B",
+          "status": "replaced_3car_miniature_set",
+          "instanceCount": 0,
+          "instances": [],
+          "note": "GLB内部に同型車両が斜め3台セット（Cube_5 / Cube.002_14 / Cube.004_21）で格納されており、全体4.4mスケーリングでミニチュア化・実寸化すると車道幅を超過して干渉するため、単体車両GLB（2008__mazda_furai.glb 全長4.6m正寸）の配置へ差し替え。ファイル自体は保持。"
         }
       },
       {
