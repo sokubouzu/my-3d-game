@@ -9,6 +9,18 @@ export interface MinimapVehiclePoint {
   isActive: boolean;
 }
 
+export interface MinimapCoinPoint {
+  x: number;
+  z: number;
+}
+
+export interface MinimapGateTarget {
+  active: boolean;
+  x: number;
+  z: number;
+  kind: 'start' | 'checkpoint' | 'goal';
+}
+
 export interface MinimapSnapshot {
   playerX: number;
   playerZ: number;
@@ -19,6 +31,10 @@ export interface MinimapSnapshot {
   drivableVehicles: MinimapVehiclePoint[];
   trafficCount: number;
   trafficVehicles: MinimapVehiclePoint[];
+  coinCount: number;
+  coins: MinimapCoinPoint[];
+  timeAttackActive: boolean;
+  targetGate: MinimapGateTarget;
 }
 
 export interface MinimapProps {
@@ -62,6 +78,10 @@ function createEmptySnapshot(): MinimapSnapshot {
   for (let i = 0; i < 8; i += 1) {
     trafficVehicles.push({ id: '', x: 0, z: 0, yaw: 0, isActive: false });
   }
+  const coins: MinimapCoinPoint[] = [];
+  for (let i = 0; i < 48; i += 1) {
+    coins.push({ x: 0, z: 0 });
+  }
   return {
     playerX: 0,
     playerZ: 0,
@@ -72,6 +92,10 @@ function createEmptySnapshot(): MinimapSnapshot {
     drivableVehicles,
     trafficCount: 0,
     trafficVehicles,
+    coinCount: 0,
+    coins,
+    timeAttackActive: false,
+    targetGate: { active: false, x: 0, z: 0, kind: 'start' },
   };
 }
 
@@ -272,6 +296,92 @@ export function Minimap({ getSnapshot }: MinimapProps) {
       ctx.strokeStyle = 'rgba(148, 163, 184, 0.42)';
       ctx.lineWidth = 1.1;
       ctx.strokeRect(worldLeft, worldTop, worldSpan, worldSpan);
+
+      // 5.5. 4-B: 通常時は近くの未取得ゴールドコインを小さな点で描画
+      if (!snapshot.timeAttackActive && snapshot.coinCount > 0) {
+        const coinVisRadSq = (MINIMAP_HALF_PX - 4) * (MINIMAP_HALF_PX - 4);
+        ctx.fillStyle = '#facc15';
+        ctx.strokeStyle = 'rgba(120, 53, 15, 0.9)';
+        ctx.lineWidth = 0.85;
+        for (let i = 0; i < snapshot.coinCount; i += 1) {
+          const c = snapshot.coins[i];
+          const mx = toX(c.x);
+          const my = toY(c.z);
+          const dx = mx - cx;
+          const dy = my - cy;
+          if (dx * dx + dy * dy > coinVisRadSq) continue;
+          ctx.beginPath();
+          ctx.arc(mx, my, 2.3, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
+      }
+
+      // 5.6. 4-B: タイムアタック目標ゲート（通常時は START ゲートを緑で表示、タイムアタック中は次ゲートをパルス強調）
+      if (snapshot.targetGate.active) {
+        const tg = snapshot.targetGate;
+        let gx = toX(tg.x);
+        let gy = toY(tg.z);
+        const dx = gx - cx;
+        const dy = gy - cy;
+        const dist = Math.hypot(dx, dy);
+        const gateClampR = MINIMAP_HALF_PX - 9;
+        const isClamped = dist > gateClampR;
+        if (isClamped && dist > 1e-4) {
+          gx = cx + (dx / dist) * gateClampR;
+          gy = cy + (dy / dist) * gateClampR;
+        }
+
+        const pulse = 0.5 + 0.5 * Math.sin(now * 0.008);
+        const isGoal = tg.kind === 'goal';
+        const isStart = tg.kind === 'start';
+        const mainColor = isGoal
+          ? '#fbbf24'
+          : isStart
+            ? '#34d399'
+            : '#38bdf8';
+        const haloColor = isGoal
+          ? 'rgba(251, 191, 36, 0.45)'
+          : isStart
+            ? 'rgba(52, 211, 153, 0.35)'
+            : 'rgba(56, 189, 248, 0.45)';
+
+        ctx.save();
+        ctx.translate(gx, gy);
+        if (isClamped) {
+          // レーダー外にある場合は端へ方向三角形マーカーを表示
+          const dirAngle = Math.atan2(dy, dx);
+          ctx.rotate(dirAngle);
+          ctx.beginPath();
+          ctx.moveTo(6.2, 0);
+          ctx.lineTo(-3.6, -4.4);
+          ctx.lineTo(-1.8, 0);
+          ctx.lineTo(-3.6, 4.4);
+          ctx.closePath();
+          ctx.fillStyle = mainColor;
+          ctx.fill();
+          ctx.strokeStyle = '#0f172a';
+          ctx.lineWidth = 1.2;
+          ctx.stroke();
+        } else {
+          // レーダー内にある場合は脈動ハロー＋二重リング
+          const haloR = (snapshot.timeAttackActive ? 7.2 : 5.6) + pulse * 2.4;
+          ctx.beginPath();
+          ctx.arc(0, 0, haloR, 0, Math.PI * 2);
+          ctx.strokeStyle = haloColor;
+          ctx.lineWidth = 1.8;
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.arc(0, 0, snapshot.timeAttackActive ? 4.4 : 3.6, 0, Math.PI * 2);
+          ctx.fillStyle = mainColor;
+          ctx.fill();
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.3;
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
 
       // 6. AI 交通車両（オレンジの向き付き矩形）
       for (let i = 0; i < snapshot.trafficCount; i += 1) {

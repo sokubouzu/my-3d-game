@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { EngineStatus } from '../engine/scene';
+import { formatTimeAttackMs } from '../gameplay';
 
 export interface DebugHudProps {
   status: EngineStatus;
@@ -52,6 +53,13 @@ export function DebugHud({ status }: DebugHudProps) {
             {status.controlMode === 'vehicle'
               ? ` | ${status.vehicleSpeedKmh} km/h (${status.vehicleGear})`
               : ''}
+          </div>
+          <div>
+            Coins: 累計 {status.coins.totalCollected} ({status.coins.fieldCollectedCount}/
+            {status.coins.totalFieldCoins}) | TA Best:{' '}
+            {status.timeAttack.bestTimeMs !== null
+              ? formatTimeAttackMs(status.timeAttack.bestTimeMs)
+              : '--:--.--'}
           </div>
           <div>
             Player:{' '}

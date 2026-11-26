@@ -50,6 +50,14 @@ import {
   SoundManager,
   type VehicleAudioFrame,
 } from '../audio/soundManager';
+import {
+  CoinCollectibleSystem,
+  TIME_ATTACK_RETRY_POSE,
+  TimeAttackSystem,
+  findNearestSafeRoadPose,
+  type CoinStatusSnapshot,
+  type TimeAttackStatusSnapshot,
+} from '../gameplay';
 
 export type ControlMode = 'foot' | 'vehicle';
 
@@ -93,6 +101,8 @@ export interface EngineStatus {
   audioMuted: boolean;
   audioUnlocked: boolean;
   timeOfDay: TimeOfDayMode;
+  coins: CoinStatusSnapshot;
+  timeAttack: TimeAttackStatusSnapshot;
 }
 
 export interface GameEngineHandle {
@@ -106,6 +116,11 @@ export interface GameEngineHandle {
   setTouchVehicleBrake: (brake: number) => void;
   cycleVehicleSpeedMode: () => DriveSpeedMode | null;
   cycleTimeOfDay: () => TimeOfDayMode;
+  respawnCoins: () => void;
+  abortTimeAttack: () => void;
+  retryTimeAttack: () => void;
+  dismissTimeAttackResult: () => void;
+  recoverActiveVehicle: () => boolean;
   getMinimapSnapshot: (out: MinimapSnapshot) => void;
   unlockAudio: () => void;
   toggleAudioMute: () => boolean;
@@ -232,6 +247,10 @@ export function startGameEngine(
   // 3-G: 街灯システム（14基＋中央交差点代表光源1基、castShadow=false）
   const streetLights = new StreetLightSystem(scene, collisionWorld);
 
+  // 4-B: ゴールドコイン収集システム（38枚・InstancedMesh 2ドローコール）& タイムアタックシステム（8ゲート）
+  const coinSystem = new CoinCollectibleSystem(scene, collisionWorld);
+  const timeAttackSystem = new TimeAttackSystem(scene);
+
   // 3-G / 4-A調整: プレイヤー運転車両の前方路面照射用 SpotLight（常設・影オフ・強度0で消灯しシェーダ再コンパイル回避）
   // 夜間高速走行時に前方のカーブ・白線・ガードレールをしっかり照らせる照射距離 (88m) と広がり角 (54°) に調整
   const playerHeadlightSpot = new THREE.SpotLight(
@@ -352,6 +371,8 @@ export function startGameEngine(
       audioMuted,
       audioUnlocked,
       timeOfDay: timeOfDayController?.getMode() ?? 'day',
+      coins: coinSystem.getStatus(),
+      timeAttack: timeAttackSystem.getStatus(),
     });
   };
 
@@ -734,6 +755,32 @@ export function startGameEngine(
       trafficLights,
     );
 
+    // 4-B: コイン収集 & タイムアタック更新（ゼロアロケーション）＋専用効果音連動
+    const collectedCoins = coinSystem.update(
+      dt,
+      focusPos.x,
+      focusPos.z,
+      controlMode === 'vehicle',
+    );
+    if (collectedCoins > 0) {
+      soundManager.playCoinCollect();
+      modeOrPromptChanged = true;
+    }
+
+    const taEvent = timeAttackSystem.update(dt, focusPos.x, focusPos.z);
+    if (taEvent !== 'none') {
+      if (taEvent === 'start') {
+        soundManager.playCheckpointPass(true);
+      } else if (taEvent === 'checkpoint') {
+        soundManager.playCheckpointPass(false);
+      } else if (taEvent === 'goal_record') {
+        soundManager.playTimeAttackGoal(true);
+      } else if (taEvent === 'goal') {
+        soundManager.playTimeAttackGoal(false);
+      }
+      modeOrPromptChanged = true;
+    }
+
     // 3-G: 時間帯トランジション・街灯・信号・建物窓・車両ヘッドライト＆前方SpotLight更新
     if (timeOfDayController) {
       timeOfDayController.update(dt, camera.position);
@@ -745,6 +792,7 @@ export function startGameEngine(
       cityBuilder.setNightFactor(nightFactor);
       expandedWorld.setNightFactor(nightFactor);
       japaneseProps.setNightFactor(nightFactor);
+      coinSystem.setNightFactor(nightFactor);
       trafficManager.setLightsIntensity(headlightFactor);
       for (let i = 0; i < vehicleControllers.length; i += 1) {
         vehicleControllers[i].setLightsIntensity(headlightFactor);
@@ -824,7 +872,11 @@ export function startGameEngine(
       }
     }
 
-    const hudInterval = controlMode === 'vehicle' ? 100 : 250;
+    const hudInterval = timeAttackSystem.isRunning()
+      ? 75
+      : controlMode === 'vehicle'
+        ? 100
+        : 250;
     if (modeOrPromptChanged || now - lastHudUpdateTime >= hudInterval) {
       lastHudUpdateTime = now;
       emitStatus();
@@ -874,6 +926,80 @@ export function startGameEngine(
       emitStatus();
       return next;
     },
+    respawnCoins: () => {
+      const changed = coinSystem.respawnAll();
+      if (changed) {
+        soundManager.playVehicleRecover();
+        emitStatus();
+      }
+    },
+    abortTimeAttack: () => {
+      timeAttackSystem.abort();
+      emitStatus();
+    },
+    retryTimeAttack: () => {
+      timeAttackSystem.resetForRetry();
+      if (controlMode === 'vehicle' && activeVehicle) {
+        const dims = activeVehicle.getDimensions();
+        const ignoreId = activeVehicle.getId();
+        let targetX: number = TIME_ATTACK_RETRY_POSE.x;
+        let targetZ: number = TIME_ATTACK_RETRY_POSE.z;
+        const clearRadius = Math.max(1.4, Math.max(dims.width, dims.length) * 0.45);
+        const offsets: readonly number[] = [0, -6, 4, -12];
+        for (const dz of offsets) {
+          if (collisionWorld.isPointClear(targetX, targetZ + dz, clearRadius, ignoreId)) {
+            targetZ = targetZ + dz;
+            break;
+          }
+        }
+        const groundY = Math.max(0, collisionWorld.getGroundHeight(targetX, targetZ));
+        activeVehicle.respawnAt(targetX, groundY, targetZ, TIME_ATTACK_RETRY_POSE.yaw);
+        tpsCamera.alignBehind(TIME_ATTACK_RETRY_POSE.yaw);
+      } else if (playerController) {
+        const groundY = Math.max(
+          0,
+          collisionWorld.getGroundHeight(
+            TIME_ATTACK_RETRY_POSE.x,
+            TIME_ATTACK_RETRY_POSE.z,
+          ),
+        );
+        playerController.teleportTo(
+          TIME_ATTACK_RETRY_POSE.x,
+          groundY,
+          TIME_ATTACK_RETRY_POSE.z,
+          TIME_ATTACK_RETRY_POSE.yaw,
+        );
+        playerController.getPosition(playerPos);
+        tpsCamera.alignBehind(TIME_ATTACK_RETRY_POSE.yaw);
+      }
+      soundManager.playVehicleRecover();
+      emitStatus();
+    },
+    dismissTimeAttackResult: () => {
+      timeAttackSystem.dismissResult();
+      emitStatus();
+    },
+    recoverActiveVehicle: () => {
+      if (controlMode !== 'vehicle' || !activeVehicle) {
+        return false;
+      }
+      activeVehicle.getPosition(tempVehiclePos);
+      const dims = activeVehicle.getDimensions();
+      const pose = findNearestSafeRoadPose(
+        tempVehiclePos.x,
+        tempVehiclePos.z,
+        activeVehicle.getYaw(),
+        dims.width,
+        dims.length,
+        activeVehicle.getId(),
+        collisionWorld,
+      );
+      activeVehicle.respawnAt(pose.x, pose.y, pose.z, pose.yaw);
+      tpsCamera.alignBehind(pose.yaw);
+      soundManager.playVehicleRecover();
+      emitStatus();
+      return true;
+    },
     getMinimapSnapshot: (out: MinimapSnapshot) => {
       if (controlMode === 'vehicle' && activeVehicle) {
         activeVehicle.getPosition(minimapPosScratch);
@@ -921,6 +1047,10 @@ export function startGameEngine(
         slot.yaw = tv.yaw;
         slot.isActive = false;
       }
+
+      out.coinCount = coinSystem.fillMinimapCoins(out.coins, out.coins.length);
+      out.timeAttackActive = timeAttackSystem.isRunning();
+      timeAttackSystem.fillMinimapTarget(out.targetGate);
     },
     unlockAudio: () => {
       soundManager.unlock();
@@ -940,6 +1070,8 @@ export function startGameEngine(
       }
       playerController = null;
 
+      coinSystem.dispose();
+      timeAttackSystem.dispose();
       pedestrianManager.dispose();
       trafficManager.dispose();
       trafficLights.dispose();

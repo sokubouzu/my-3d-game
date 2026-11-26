@@ -580,6 +580,165 @@ export class SoundManager {
     noiseSrc.start(now, offset, 0.26);
   }
 
+  /**
+   * 4-B: コイン獲得音（軽快な2音チャイム: B5 -> E6、iPad 内蔵スピーカー最適化・低遅延）。
+   */
+  public playCoinCollect(): void {
+    if (
+      !this.ctx ||
+      this.ctx.state !== 'running' ||
+      !this.masterGain ||
+      !this.unlocked ||
+      this.muted ||
+      this.disposed
+    ) {
+      return;
+    }
+
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+
+    // 1音目: B5 (987.77 Hz)
+    this.scheduleTone(ctx, 'triangle', 987.77, now, 0.085, 0.28);
+    this.scheduleTone(ctx, 'sine', 1975.53, now, 0.065, 0.09);
+
+    // 2音目: E6 (1318.51 Hz) — 明るく伸びる2音目
+    const t2 = now + 0.064;
+    this.scheduleTone(ctx, 'triangle', 1318.51, t2, 0.25, 0.32);
+    this.scheduleTone(ctx, 'sine', 2637.02, t2, 0.19, 0.11);
+  }
+
+  /**
+   * 4-B: タイムアタック START / チェックポイント通過音。
+   */
+  public playCheckpointPass(isStart = false): void {
+    if (
+      !this.ctx ||
+      this.ctx.state !== 'running' ||
+      !this.masterGain ||
+      !this.unlocked ||
+      this.muted ||
+      this.disposed
+    ) {
+      return;
+    }
+
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+
+    if (isStart) {
+      // START ゲート通過: 勢いのある3音スタートチャイム (C5 -> G5 -> C6)
+      this.scheduleTone(ctx, 'triangle', 523.25, now, 0.09, 0.26);
+      this.scheduleTone(ctx, 'triangle', 783.99, now + 0.065, 0.1, 0.28);
+      this.scheduleTone(ctx, 'triangle', 1046.5, now + 0.13, 0.28, 0.34);
+      this.scheduleTone(ctx, 'sine', 2093.0, now + 0.13, 0.22, 0.12);
+    } else {
+      // チェックポイント通過: 爽やかな上昇チャイム (E5 -> A5 -> C#6)
+      this.scheduleTone(ctx, 'triangle', 659.25, now, 0.08, 0.24);
+      this.scheduleTone(ctx, 'triangle', 880.0, now + 0.055, 0.1, 0.27);
+      this.scheduleTone(ctx, 'sine', 1108.73, now + 0.11, 0.22, 0.26);
+    }
+  }
+
+  /**
+   * 4-B: タイムアタックゴール時のファンファーレ音（自己ベスト更新時は高音きらめき追加）。
+   */
+  public playTimeAttackGoal(isNewRecord = false): void {
+    if (
+      !this.ctx ||
+      this.ctx.state !== 'running' ||
+      !this.masterGain ||
+      !this.unlocked ||
+      this.muted ||
+      this.disposed
+    ) {
+      return;
+    }
+
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+
+    // 明るいファンファーレ・アルペジオ (C5 -> E5 -> G5 -> C6 和音)
+    this.scheduleTone(ctx, 'triangle', 523.25, now, 0.12, 0.26);
+    this.scheduleTone(ctx, 'triangle', 659.25, now + 0.09, 0.12, 0.28);
+    this.scheduleTone(ctx, 'triangle', 783.99, now + 0.18, 0.14, 0.3);
+
+    // ゴール和音（C5 + E5 + G5 + C6 の豊かな広がり）
+    const chordStart = now + 0.28;
+    this.scheduleTone(ctx, 'triangle', 523.25, chordStart, 0.62, 0.2);
+    this.scheduleTone(ctx, 'triangle', 659.25, chordStart, 0.62, 0.2);
+    this.scheduleTone(ctx, 'triangle', 783.99, chordStart, 0.62, 0.22);
+    this.scheduleTone(ctx, 'triangle', 1046.5, chordStart, 0.72, 0.3);
+    this.scheduleTone(ctx, 'sine', 1567.98, chordStart + 0.02, 0.56, 0.12);
+
+    if (isNewRecord) {
+      // 自己ベスト更新時の追加きらめき (E6 -> G6)
+      this.scheduleTone(ctx, 'sine', 1318.51, chordStart + 0.18, 0.24, 0.2);
+      this.scheduleTone(ctx, 'sine', 1567.98, chordStart + 0.3, 0.45, 0.24);
+    }
+  }
+
+  /**
+   * 4-B: 車体復帰（スタック脱出）時の軽快なフィードバック音。
+   */
+  public playVehicleRecover(): void {
+    if (
+      !this.ctx ||
+      this.ctx.state !== 'running' ||
+      !this.masterGain ||
+      !this.unlocked ||
+      this.muted ||
+      this.disposed
+    ) {
+      return;
+    }
+
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(340, now);
+    osc.frequency.exponentialRampToValueAtTime(680, now + 0.11);
+
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.linearRampToValueAtTime(0.24, now + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.13);
+
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+    osc.start(now);
+    osc.stop(now + 0.14);
+  }
+
+  /** ワンショット効果音用の軽量オシレーター再生ヘルパー */
+  private scheduleTone(
+    ctx: AudioContext,
+    type: OscillatorType,
+    freq: number,
+    startTime: number,
+    duration: number,
+    peakGain: number,
+  ): void {
+    if (!this.masterGain) return;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, startTime);
+
+    const attack = Math.min(0.012, duration * 0.2);
+    gain.gain.setValueAtTime(0.0001, startTime);
+    gain.gain.linearRampToValueAtTime(peakGain, startTime + attack);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+    osc.start(startTime);
+    osc.stop(startTime + duration + 0.015);
+  }
+
   public dispose(): void {
     this.disposed = true;
     if (typeof document !== 'undefined') {

@@ -4,6 +4,11 @@ import {
   type EngineStatus,
   type GameEngineHandle,
 } from './engine/scene';
+import {
+  COIN_PLACEMENTS,
+  TIME_ATTACK_CHECKPOINTS,
+  formatTimeAttackMs,
+} from './gameplay';
 import { DebugHud } from './ui/DebugHud';
 import { Minimap, type MinimapSnapshot } from './ui/Minimap';
 import { TouchControls } from './ui/TouchControls';
@@ -53,6 +58,24 @@ const INITIAL_STATUS: EngineStatus = {
   audioMuted: false,
   audioUnlocked: false,
   timeOfDay: 'day',
+  coins: {
+    totalCollected: 0,
+    fieldCollectedCount: 0,
+    totalFieldCoins: COIN_PLACEMENTS.length,
+    lastCollectTimeMs: 0,
+  },
+  timeAttack: {
+    mode: 'idle',
+    elapsedMs: 0,
+    currentGateIndex: 0,
+    totalGates: TIME_ATTACK_CHECKPOINTS.length,
+    remainingGates: TIME_ATTACK_CHECKPOINTS.length,
+    currentGateLabel: 'START',
+    lastClearTimeMs: null,
+    bestTimeMs: null,
+    isNewRecord: false,
+    clearCount: 0,
+  },
 };
 
 export function App() {
@@ -145,7 +168,31 @@ export function App() {
     engineRef.current?.cycleTimeOfDay();
   }, []);
 
+  const handleRespawnCoins = useCallback(() => {
+    engineRef.current?.respawnCoins();
+  }, []);
+
+  const handleAbortTimeAttack = useCallback(() => {
+    engineRef.current?.abortTimeAttack();
+  }, []);
+
+  const handleRetryTimeAttack = useCallback(() => {
+    engineRef.current?.retryTimeAttack();
+  }, []);
+
+  const handleDismissTimeAttackResult = useCallback(() => {
+    engineRef.current?.dismissTimeAttackResult();
+  }, []);
+
+  const handleRecoverVehicle = useCallback(() => {
+    engineRef.current?.recoverActiveVehicle();
+  }, []);
+
   const timeLabel = TIME_OF_DAY_LABELS[status.timeOfDay];
+  const ta = status.timeAttack;
+  const coins = status.coins;
+  const coinJustCollected =
+    coins.lastCollectTimeMs > 0 && performance.now() - coins.lastCollectTimeMs < 320;
 
   return (
     <div className="viewport-root">
@@ -170,6 +217,138 @@ export function App() {
         onCycleVehicleSpeedMode={handleCycleVehicleSpeedMode}
       />
       <DebugHud status={status} />
+
+      {/* 4-B: 画面上部中央のゲームプレイ HUD（コイン累計・タイムアタック・車体復帰ボタン） */}
+      <div className="gameplay-top-hud">
+        <div
+          className={`coin-hud-pill${coinJustCollected ? ' is-pop' : ''}`}
+          aria-label={`累計獲得コイン ${coins.totalCollected} 枚`}
+        >
+          <span className="coin-hud-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="16" height="16">
+              <circle cx="12" cy="12" r="10" fill="#facc15" stroke="#ca8a04" strokeWidth="2" />
+              <circle cx="12" cy="12" r="6.5" fill="none" stroke="#fef08a" strokeWidth="1.5" />
+            </svg>
+          </span>
+          <span className="coin-hud-total">{coins.totalCollected}</span>
+          <span className="coin-hud-field">
+            {coins.fieldCollectedCount}/{coins.totalFieldCoins}
+          </span>
+          {coins.fieldCollectedCount > 0 && (
+            <button
+              type="button"
+              className="coin-reset-btn"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={handleRespawnCoins}
+              title="取得済みコインを再配置"
+              aria-label="取得済みコインを再配置"
+            >
+              再配置
+            </button>
+          )}
+        </div>
+
+        {status.controlMode === 'vehicle' && (
+          <button
+            type="button"
+            className="vehicle-recover-btn"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={handleRecoverVehicle}
+            aria-label="車体復帰（スタック脱出）"
+            title="最も近い車道へ瞬時に復帰（スタック脱出）"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="16"
+              height="16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+              <path d="M3 3v5h5" />
+            </svg>
+            <span>復帰</span>
+          </button>
+        )}
+
+        {ta.mode === 'running' ? (
+          <div className="time-attack-hud-pill" aria-live="polite">
+            <span className="ta-hud-badge">TA</span>
+            <span className="ta-hud-timer">{formatTimeAttackMs(ta.elapsedMs)}</span>
+            <span className="ta-hud-gates">
+              残り {ta.remainingGates}/{ta.totalGates}
+            </span>
+            <button
+              type="button"
+              className="ta-hud-btn"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={handleRetryTimeAttack}
+              title="スタート地点から再挑戦"
+            >
+              再挑戦
+            </button>
+            <button
+              type="button"
+              className="ta-hud-btn is-abort"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={handleAbortTimeAttack}
+              title="タイムアタックを中断"
+            >
+              中断
+            </button>
+          </div>
+        ) : (
+          ta.bestTimeMs !== null && (
+            <div className="time-attack-best-pill" title="タイムアタック自己ベスト記録">
+              <span className="ta-best-label">BEST</span>
+              <span className="ta-best-value">{formatTimeAttackMs(ta.bestTimeMs)}</span>
+            </div>
+          )
+        )}
+      </div>
+
+      {/* 4-B: タイムアタック ゴール／自己ベスト更新お祝いバナー */}
+      {ta.mode === 'finished' && ta.lastClearTimeMs !== null && (
+        <div
+          className={`time-attack-result-card${ta.isNewRecord ? ' is-new-record' : ''}`}
+          role="status"
+          aria-live="assertive"
+        >
+          {ta.isNewRecord && (
+            <div className="ta-result-record-badge">★ NEW RECORD! 自己ベスト更新 ★</div>
+          )}
+          <div className="ta-result-title">TIME ATTACK CLEAR!</div>
+          <div className="ta-result-time">{formatTimeAttackMs(ta.lastClearTimeMs)}</div>
+          {ta.bestTimeMs !== null && (
+            <div className="ta-result-best">
+              自己ベスト: {formatTimeAttackMs(ta.bestTimeMs)}
+            </div>
+          )}
+          <div className="ta-result-actions">
+            <button
+              type="button"
+              className="ta-result-btn is-primary"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={handleRetryTimeAttack}
+            >
+              STARTから再挑戦
+            </button>
+            <button
+              type="button"
+              className="ta-result-btn"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={handleDismissTimeAttackResult}
+            >
+              閉じる
+            </button>
+          </div>
+        </div>
+      )}
+
       <button
         type="button"
         className={`time-of-day-btn is-time-${status.timeOfDay}`}

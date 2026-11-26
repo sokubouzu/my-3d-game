@@ -270,6 +270,26 @@ export class VehicleController {
     return { x: fallback.x, y: groundY, z: fallback.z, yaw: this.yaw };
   }
 
+  /**
+   * 4-B: 車両・バイクを安全な車道座標・正しい向きへ瞬時にリスポーンさせる（スタック脱出／再挑戦用）。
+   */
+  public respawnAt(x: number, y: number, z: number, yaw: number): void {
+    this.speed = 0;
+    this.steerAngle = 0;
+    this.leanRoll = 0;
+    this.reverseHoldTimer = 0;
+    this.pendingImpactSpeed = 0;
+    this.yaw = normalizeAngle(yaw);
+
+    this.vehicle.root.position.set(x, Math.max(0, y), z);
+    this.vehicle.root.rotation.y = this.yaw;
+    this.vehicle.setSteerAngle(0);
+    if (this.vehicle.config.lean) {
+      this.vehicle.setLeanRoll(0);
+    }
+    this.syncCollider();
+  }
+
   public getTelemetry(): VehicleTelemetry {
     const pos = this.vehicle.root.position;
     let gear: VehicleGear = 'N';

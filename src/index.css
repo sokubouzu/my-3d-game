@@ -760,3 +760,338 @@ body,
   font-variant-numeric: tabular-nums;
   pointer-events: none;
 }
+
+/* --- 4-B: 画面上部中央 ゲームプレイ HUD（コイン・車体復帰・タイムアタック） --- */
+.gameplay-top-hud {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  left: calc(env(safe-area-inset-left, 0px) + 178px);
+  right: calc(env(safe-area-inset-right, 0px) + 314px);
+  z-index: 31;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.coin-hud-pill {
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(250, 204, 21, 0.65);
+  background: rgba(15, 23, 42, 0.78);
+  color: #fef9c3;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  pointer-events: auto;
+  transition: transform 0.14s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.coin-hud-pill.is-pop {
+  transform: scale(1.07);
+  border-color: rgba(254, 240, 138, 0.96);
+  box-shadow: 0 0 18px rgba(250, 204, 21, 0.52);
+}
+
+.coin-hud-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.coin-hud-total {
+  font-size: 16px;
+  font-weight: 800;
+  color: #fde047;
+  line-height: 1;
+}
+
+.coin-hud-field {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(226, 232, 240, 0.8);
+  padding-left: 2px;
+}
+
+.coin-reset-btn {
+  margin-left: 2px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(250, 204, 21, 0.55);
+  background: rgba(161, 98, 7, 0.65);
+  color: #fefce8;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 0.08s ease, background-color 0.12s ease;
+}
+
+.coin-reset-btn:active {
+  transform: scale(0.92);
+  background: rgba(202, 138, 4, 0.85);
+}
+
+/* 運転中のみ表示されるワンタップ車体復帰（スタック脱出）ボタン */
+.vehicle-recover-btn {
+  height: 40px;
+  padding: 0 13px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(56, 189, 248, 0.82);
+  background: rgba(12, 74, 110, 0.82);
+  color: #f0f9ff;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition: transform 0.08s ease, background-color 0.14s ease, border-color 0.14s ease;
+}
+
+.vehicle-recover-btn:active {
+  transform: scale(0.93);
+  background: rgba(2, 132, 199, 0.92);
+  border-color: #bae6fd;
+}
+
+/* タイムアタック走行中 HUD */
+.time-attack-hud-pill {
+  height: 40px;
+  padding: 0 10px 0 12px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(56, 189, 248, 0.85);
+  background: rgba(15, 23, 42, 0.84);
+  color: #f8fafc;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  pointer-events: auto;
+}
+
+.ta-hud-badge {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(14, 165, 233, 0.88);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.ta-hud-timer {
+  font-size: 16px;
+  font-weight: 800;
+  color: #7dd3fc;
+  letter-spacing: 0.02em;
+  min-width: 72px;
+}
+
+.ta-hud-gates {
+  font-size: 12px;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
+.ta-hud-btn {
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.55);
+  background: rgba(51, 65, 85, 0.82);
+  color: #f8fafc;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 0.08s ease, background-color 0.12s ease;
+}
+
+.ta-hud-btn:active {
+  transform: scale(0.92);
+}
+
+.ta-hud-btn.is-abort {
+  border-color: rgba(248, 113, 113, 0.65);
+  background: rgba(127, 29, 29, 0.78);
+  color: #fee2e2;
+}
+
+/* 通常時の自己ベスト記録バッジ */
+.time-attack-best-pill {
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(52, 211, 153, 0.6);
+  background: rgba(15, 23, 42, 0.74);
+  color: #ecfdf5;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.ta-best-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #34d399;
+}
+
+.ta-best-value {
+  font-size: 14px;
+  font-weight: 800;
+  color: #f8fafc;
+}
+
+/* タイムアタック ゴール／自己ベスト更新お祝いバナー */
+@keyframes taResultPopIn {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -14px) scale(0.92);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+@keyframes taRecordGlow {
+  0%,
+  100% {
+    box-shadow:
+      0 12px 32px rgba(0, 0, 0, 0.5),
+      0 0 22px rgba(250, 204, 21, 0.45);
+  }
+  50% {
+    box-shadow:
+      0 12px 36px rgba(0, 0, 0, 0.55),
+      0 0 36px rgba(250, 204, 21, 0.85);
+  }
+}
+
+.time-attack-result-card {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 68px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 35;
+  min-width: 280px;
+  max-width: min(92vw, 380px);
+  padding: 16px 22px 14px;
+  border-radius: 18px;
+  border: 2px solid rgba(56, 189, 248, 0.85);
+  background: rgba(15, 23, 42, 0.9);
+  color: #f8fafc;
+  text-align: center;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  pointer-events: auto;
+  animation: taResultPopIn 0.28s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.time-attack-result-card.is-new-record {
+  border-color: #facc15;
+  background: linear-gradient(
+    165deg,
+    rgba(66, 32, 6, 0.94) 0%,
+    rgba(15, 23, 42, 0.94) 65%
+  );
+  animation:
+    taResultPopIn 0.28s cubic-bezier(0.22, 1, 0.36, 1) forwards,
+    taRecordGlow 1.8s ease-in-out infinite;
+}
+
+.ta-result-record-badge {
+  display: inline-block;
+  margin-bottom: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #f59e0b, #facc15, #f59e0b);
+  color: #422006;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+}
+
+.ta-result-title {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #7dd3fc;
+}
+
+.time-attack-result-card.is-new-record .ta-result-title {
+  color: #fef08a;
+}
+
+.ta-result-time {
+  margin-top: 4px;
+  font-size: 36px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: #ffffff;
+  line-height: 1.1;
+}
+
+.ta-result-best {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #cbd5e1;
+}
+
+.ta-result-actions {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.ta-result-btn {
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(148, 163, 184, 0.55);
+  background: rgba(30, 41, 59, 0.88);
+  color: #f8fafc;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 0.08s ease, background-color 0.12s ease;
+}
+
+.ta-result-btn:active {
+  transform: scale(0.94);
+}
+
+.ta-result-btn.is-primary {
+  border-color: rgba(52, 211, 153, 0.9);
+  background: rgba(5, 150, 105, 0.88);
+  color: #ecfdf5;
+}
+
