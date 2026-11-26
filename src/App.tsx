@@ -20,6 +20,8 @@ const INITIAL_STATUS: EngineStatus = {
   nearbyVehicleName: null,
   vehicleSpeedKmh: 0,
   vehicleGear: 'P',
+  vehicleSpeedMode: 'CITY',
+  vehicleSpeedLimitKmh: 45,
   playerLoaded: false,
   playerError: null,
   playerHeight: 0,
@@ -125,6 +127,10 @@ export function App() {
     engineRef.current?.setTouchVehicleBrake(brake);
   }, []);
 
+  const handleCycleVehicleSpeedMode = useCallback(() => {
+    engineRef.current?.cycleVehicleSpeedMode();
+  }, []);
+
   const handleGetMinimapSnapshot = useCallback((out: MinimapSnapshot) => {
     engineRef.current?.getMinimapSnapshot(out);
   }, []);
@@ -143,6 +149,8 @@ export function App() {
         nearbyVehicleName={status.nearbyVehicleName}
         vehicleSpeedKmh={status.vehicleSpeedKmh}
         vehicleGear={status.vehicleGear}
+        vehicleSpeedMode={status.vehicleSpeedMode}
+        vehicleSpeedLimitKmh={status.vehicleSpeedLimitKmh}
         onMoveChange={handleMoveChange}
         onLookDelta={handleLookDelta}
         onSprintChange={handleSprintChange}
@@ -151,6 +159,7 @@ export function App() {
         onVehicleSteerChange={handleVehicleSteerChange}
         onVehicleThrottleChange={handleVehicleThrottleChange}
         onVehicleBrakeChange={handleVehicleBrakeChange}
+        onCycleVehicleSpeedMode={handleCycleVehicleSpeedMode}
       />
       <DebugHud status={status} />
       <button

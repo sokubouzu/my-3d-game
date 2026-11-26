@@ -9,6 +9,30 @@ import type { LoadedHeroVehicle } from './vehicleModel';
 
 export type VehicleGear = 'P' | 'N' | 'D' | 'R';
 
+export type DriveSpeedMode = 'CITY' | 'CRUISE' | 'SPORT';
+
+export interface DriveSpeedModeConfig {
+  mode: DriveSpeedMode;
+  label: string;
+  /** 上限速度 (km/h)。null の場合は車種本来の最高速度を使用 */
+  limitKmh: number | null;
+}
+
+export const DRIVE_SPEED_MODE_ORDER: readonly DriveSpeedMode[] = [
+  'CITY',
+  'CRUISE',
+  'SPORT',
+];
+
+export const DRIVE_SPEED_MODE_CONFIGS: Record<
+  DriveSpeedMode,
+  DriveSpeedModeConfig
+> = {
+  CITY: { mode: 'CITY', label: '街乗り', limitKmh: 45 },
+  CRUISE: { mode: 'CRUISE', label: '巡航', limitKmh: 85 },
+  SPORT: { mode: 'SPORT', label: '全開', limitKmh: null },
+};
+
 export interface VehicleControlInput {
   /** ステアリング入力 (-1 = 左, +1 = 右) */
   steer: number;
@@ -24,6 +48,8 @@ export interface VehicleTelemetry {
   speedMs: number;
   speedKmh: number;
   gear: VehicleGear;
+  speedMode: DriveSpeedMode;
+  speedLimitKmh: number;
   steerAngleRad: number;
   canExit: boolean;
   position: { x: number; y: number; z: number };
@@ -46,6 +72,7 @@ export class VehicleController {
   private speed = 0; // + = 前進 (+Z方向), - = 後退 (-Z方向)
   private steerAngle = 0; // + = 左切れ, - = 右切れ
   private leanRoll = 0; // バイク用ロール角 (rad, 負 = 左傾き / 正 = 右傾き)
+  private speedMode: DriveSpeedMode = 'CITY';
   private reverseHoldTimer = 0;
   private isOccupied = false;
   private pendingImpactSpeed = 0;
@@ -92,6 +119,38 @@ export class VehicleController {
     return this.vehicle.config.handling.maxForwardSpeed * 3.6;
   }
 
+  public getSpeedMode(): DriveSpeedMode {
+    return this.speedMode;
+  }
+
+  public setSpeedMode(mode: DriveSpeedMode): void {
+    this.speedMode = mode;
+  }
+
+  /** 走行モードを CITY -> CRUISE -> SPORT -> CITY の順で循環切替 */
+  public cycleSpeedMode(): DriveSpeedMode {
+    const idx = DRIVE_SPEED_MODE_ORDER.indexOf(this.speedMode);
+    const next =
+      DRIVE_SPEED_MODE_ORDER[(idx + 1) % DRIVE_SPEED_MODE_ORDER.length];
+    this.speedMode = next;
+    return next;
+  }
+
+  /** 現在の走行モードに応じた実効最高速度 (m/s) */
+  public getEffectiveMaxForwardSpeedMs(): number {
+    const nativeMax = this.vehicle.config.handling.maxForwardSpeed;
+    const limitKmh = DRIVE_SPEED_MODE_CONFIGS[this.speedMode].limitKmh;
+    if (limitKmh === null) {
+      return nativeMax;
+    }
+    return Math.min(nativeMax, limitKmh / 3.6);
+  }
+
+  /** 現在の走行モードに応じた実効最高速度 (km/h) */
+  public getEffectiveMaxSpeedKmh(): number {
+    return this.getEffectiveMaxForwardSpeedMs() * 3.6;
+  }
+
   /** 直近フレームで発生した衝突の衝撃速度 (m/s) を取得してリセット */
   public consumeImpactSpeed(): number {
     const val = this.pendingImpactSpeed;
@@ -101,7 +160,10 @@ export class VehicleController {
 
   public setOccupied(occupied: boolean): void {
     this.isOccupied = occupied;
-    if (!occupied) {
+    if (occupied) {
+      // 乗車時の初期状態は街中で扱いやすい CITY (45km/h) に設定
+      this.speedMode = 'CITY';
+    } else {
       this.reverseHoldTimer = 0;
     }
   }
@@ -217,6 +279,8 @@ export class VehicleController {
       speedMs: this.speed,
       speedKmh: Math.round(Math.abs(this.speed) * 3.6),
       gear,
+      speedMode: this.speedMode,
+      speedLimitKmh: Math.round(this.getEffectiveMaxSpeedKmh()),
       steerAngleRad: this.steerAngle,
       canExit: this.canExit(),
       position: { x: pos.x, y: pos.y, z: pos.z },
@@ -235,8 +299,9 @@ export class VehicleController {
     const throttle = Math.max(0, Math.min(1, activeInput.throttle));
     const brake = Math.max(0, Math.min(1, activeInput.brake));
     const steerInput = Math.max(-1, Math.min(1, activeInput.steer));
+    const effectiveMaxSpeed = this.getEffectiveMaxForwardSpeedMs();
 
-    // 1. 縦方向（加減速・ブレーキ・停車後長押しバック）
+    // 1. 縦方向（加減速・速度リミッター・ブレーキ・停車後長押しバック・自然な惰性走行）
     if (activeInput.handbrake) {
       this.reverseHoldTimer = 0;
       this.applyDeceleration(h.handbrakeDecel * clampedDt);
@@ -245,12 +310,19 @@ export class VehicleController {
       if (this.speed < -0.15) {
         // バック中のアクセルはブレーキとして減速
         this.applyDeceleration(h.brakeDecel * clampedDt);
+      } else if (this.speed > effectiveMaxSpeed + 0.05) {
+        // 高速走行中に下位リミッター（CITY / CRUISE）へ切り替えた際は、急停止せず滑らかに上限速度へ減速
+        const limiterDecel = Math.max(3.6, h.coastDrag * 4.0);
+        this.speed = Math.max(
+          effectiveMaxSpeed,
+          this.speed - limiterDecel * clampedDt,
+        );
       } else {
-        // 低中速域は力強く、高速域へ向かって自然に伸びる加速カーブ
+        // 低中速域は力強く、高速域へ向かって自然に伸びる加速カーブ（リミッター上限で安定巡航）
         const speedNorm = Math.min(1, Math.max(0, this.speed) / h.maxForwardSpeed);
         const accelFactor = 1.0 - 0.42 * speedNorm;
         this.speed = Math.min(
-          h.maxForwardSpeed,
+          effectiveMaxSpeed,
           this.speed + h.accelRate * accelFactor * throttle * clampedDt,
         );
       }
@@ -277,9 +349,10 @@ export class VehicleController {
         }
       }
     } else {
-      // ペダルオフ時の自然な慣性減速（エンジンブレーキ＋空力・転がり抵抗）
+      // ペダルオフ時の実車に近い緩やかな惰性走行（転がり抵抗＋緩やかな空気抵抗）
       this.reverseHoldTimer = 0;
-      const aeroExtra = Math.abs(this.speed) * 0.045;
+      const absSpeed = Math.abs(this.speed);
+      const aeroExtra = absSpeed * 0.018 + absSpeed * absSpeed * 0.0005;
       this.applyDeceleration((h.coastDrag + aeroExtra) * clampedDt);
     }
 

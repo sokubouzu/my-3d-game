@@ -7,7 +7,11 @@ import {
 } from 'react';
 import type { ControlMode } from '../engine/scene';
 import { isTouchCapableDevice } from '../input/inputManager';
-import type { VehicleGear } from '../vehicle';
+import {
+  DRIVE_SPEED_MODE_CONFIGS,
+  type DriveSpeedMode,
+  type VehicleGear,
+} from '../vehicle';
 
 export interface TouchControlsProps {
   controlMode: ControlMode;
@@ -16,6 +20,8 @@ export interface TouchControlsProps {
   nearbyVehicleName: string | null;
   vehicleSpeedKmh: number;
   vehicleGear: VehicleGear;
+  vehicleSpeedMode: DriveSpeedMode;
+  vehicleSpeedLimitKmh: number;
   onMoveChange: (x: number, y: number) => void;
   onLookDelta: (dx: number, dy: number) => void;
   onSprintChange: (active: boolean) => void;
@@ -24,9 +30,28 @@ export interface TouchControlsProps {
   onVehicleSteerChange: (steer: number) => void;
   onVehicleThrottleChange: (throttle: number) => void;
   onVehicleBrakeChange: (brake: number) => void;
+  onCycleVehicleSpeedMode: () => void;
 }
 
 const STICK_MAX_RADIUS = 46;
+const MIN_VARIABLE_THROTTLE = 0.25;
+
+function computeVariableThrottle(
+  clientY: number,
+  rect: { top: number; height: number },
+): number {
+  if (rect.height <= 1) return 1;
+  // 上下端付近(8%)で 100% / 25% に確実に到達できるようわずかにマージンを設定
+  const pad = rect.height * 0.08;
+  const usableHeight = Math.max(1, rect.height - pad * 2);
+  const normalizedFromBottom = Math.max(
+    0,
+    Math.min(1, (rect.top + rect.height - pad - clientY) / usableHeight),
+  );
+  return (
+    MIN_VARIABLE_THROTTLE + normalizedFromBottom * (1 - MIN_VARIABLE_THROTTLE)
+  );
+}
 
 /**
  * 1-C / 2-B / 2-C / 3-A: iPad 横画面（ランドスケープ）向けマルチタッチ操作 UI。
@@ -43,6 +68,8 @@ export function TouchControls({
   nearbyVehicleName,
   vehicleSpeedKmh,
   vehicleGear,
+  vehicleSpeedMode,
+  vehicleSpeedLimitKmh,
   onMoveChange,
   onLookDelta,
   onSprintChange,
@@ -51,6 +78,7 @@ export function TouchControls({
   onVehicleSteerChange,
   onVehicleThrottleChange,
   onVehicleBrakeChange,
+  onCycleVehicleSpeedMode,
 }: TouchControlsProps) {
   // タッチ対応端末フラグ（常に UI を保持し、マウス/キーボード入力で絶対に非表示にしない）
   const isTouchDeviceRef = useRef<boolean>(isTouchCapableDevice());
@@ -75,11 +103,16 @@ export function TouchControls({
   const steerLeftPointerIdRef = useRef<number | null>(null);
   const steerRightPointerIdRef = useRef<number | null>(null);
   const accelPointerIdRef = useRef<number | null>(null);
+  const accelRectRef = useRef<{ top: number; height: number }>({
+    top: 0,
+    height: 152,
+  });
   const brakePointerIdRef = useRef<number | null>(null);
 
   const [steerLeftPressed, setSteerLeftPressed] = useState(false);
   const [steerRightPressed, setSteerRightPressed] = useState(false);
   const [accelPressed, setAccelPressed] = useState(false);
+  const [accelThrottle, setAccelThrottle] = useState(0);
   const [brakePressed, setBrakePressed] = useState(false);
 
   const emitSteerState = useCallback(
@@ -115,6 +148,7 @@ export function TouchControls({
 
     accelPointerIdRef.current = null;
     setAccelPressed(false);
+    setAccelThrottle(0);
     onVehicleThrottleChange(0);
 
     brakePointerIdRef.current = null;
@@ -160,6 +194,7 @@ export function TouchControls({
       if (accelPointerIdRef.current === pointerId) {
         accelPointerIdRef.current = null;
         setAccelPressed(false);
+        setAccelThrottle(0);
         onVehicleThrottleChange(0);
       }
       if (brakePointerIdRef.current === pointerId) {
@@ -427,19 +462,47 @@ export function TouchControls({
     }
   };
 
+  const handleSpeedModeDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (controlMode !== 'vehicle') return;
+    event.preventDefault();
+    event.stopPropagation();
+    onCycleVehicleSpeedMode();
+  };
+
   const handleAccelDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
     if (controlMode !== 'vehicle') return;
     if (accelPointerIdRef.current !== null) return;
     event.preventDefault();
     event.stopPropagation();
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    accelRectRef.current = { top: rect.top, height: rect.height };
+    const throttle = computeVariableThrottle(
+      event.clientY,
+      accelRectRef.current,
+    );
+
     accelPointerIdRef.current = event.pointerId;
     setAccelPressed(true);
-    onVehicleThrottleChange(1);
+    setAccelThrottle(throttle);
+    onVehicleThrottleChange(throttle);
     try {
       event.currentTarget.setPointerCapture(event.pointerId);
     } catch {
       // ignore
     }
+  };
+
+  const handleAccelMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (accelPointerIdRef.current !== event.pointerId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const throttle = computeVariableThrottle(
+      event.clientY,
+      accelRectRef.current,
+    );
+    setAccelThrottle(throttle);
+    onVehicleThrottleChange(throttle);
   };
 
   const handleAccelUp = (event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -448,6 +511,7 @@ export function TouchControls({
     event.stopPropagation();
     accelPointerIdRef.current = null;
     setAccelPressed(false);
+    setAccelThrottle(0);
     onVehicleThrottleChange(0);
     try {
       event.currentTarget.releasePointerCapture(event.pointerId);
@@ -629,6 +693,26 @@ export function TouchControls({
             </span>
           </button>
 
+          {/* 3-F: 乗車中のみスピードメーター付近にワンタップ走行モード（速度リミッター）切替ボタン */}
+          {isVehicleMode && (
+            <button
+              type="button"
+              className={`drive-speed-mode-btn is-mode-${vehicleSpeedMode.toLowerCase()}`}
+              onPointerDown={handleSpeedModeDown}
+              aria-label={`走行モード切替 現在 ${vehicleSpeedMode} ${DRIVE_SPEED_MODE_CONFIGS[vehicleSpeedMode].label} 上限 ${vehicleSpeedLimitKmh}km/h`}
+            >
+              <span className="drive-speed-mode-left">
+                <span className="drive-speed-mode-code">{vehicleSpeedMode}</span>
+                <span className="drive-speed-mode-label">
+                  {DRIVE_SPEED_MODE_CONFIGS[vehicleSpeedMode].label}
+                </span>
+              </span>
+              <span className="drive-speed-mode-limit">
+                {vehicleSpeedLimitKmh} km/h
+              </span>
+            </button>
+          )}
+
           {/* 3-C: 乗車中のみ画面右下（ペダルUIの上）にデジタル速度計・ギア表示 */}
           {isVehicleMode && (
             <div className="drive-speedometer" aria-label="Speedometer">
@@ -645,7 +729,13 @@ export function TouchControls({
                 <div
                   className={`drive-speed-bar-fill drive-speed-bar-${vehicleGear.toLowerCase()}`}
                   style={{
-                    width: `${Math.min(100, Math.round((vehicleSpeedKmh / 160) * 100))}%`,
+                    width: `${Math.min(
+                      100,
+                      Math.round(
+                        (vehicleSpeedKmh / Math.max(45, vehicleSpeedLimitKmh)) *
+                          100,
+                      ),
+                    )}%`,
                   }}
                 />
               </div>
@@ -670,13 +760,25 @@ export function TouchControls({
               type="button"
               className={`drive-pedal drive-pedal-accel${accelPressed ? ' is-pressed' : ''}`}
               onPointerDown={handleAccelDown}
+              onPointerMove={handleAccelMove}
               onPointerUp={handleAccelUp}
               onPointerCancel={handleAccelUp}
               onLostPointerCapture={handleAccelUp}
               aria-label="Accelerate"
             >
+              <div
+                className={`drive-pedal-throttle-fill${accelPressed ? ' is-visible' : ''}`}
+                style={{
+                  height: `${Math.round(accelThrottle * 100)}%`,
+                }}
+                aria-hidden="true"
+              />
               <span className="drive-pedal-title">ACCEL</span>
-              <span className="drive-pedal-sub">前進</span>
+              <span className="drive-pedal-sub">
+                {accelPressed
+                  ? `${Math.round(accelThrottle * 100)}%`
+                  : '上:全開 / 下:弱'}
+              </span>
             </button>
           </div>
         </div>

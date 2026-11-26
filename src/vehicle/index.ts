@@ -21,7 +21,11 @@ export {
   type WheelRig,
 } from './vehicleModel';
 export {
+  DRIVE_SPEED_MODE_CONFIGS,
+  DRIVE_SPEED_MODE_ORDER,
   VehicleController,
+  type DriveSpeedMode,
+  type DriveSpeedModeConfig,
   type VehicleControlInput,
   type VehicleGear,
   type VehicleTelemetry,

@@ -447,9 +447,80 @@ body,
   pointer-events: none;
 }
 
-/* --- 3-C: 運転モード 画面右下（ペダル上）デジタルスピードメーター --- */
+/* --- 3-C / 3-F: 運転モード 画面右下（ペダル上）デジタルスピードメーター＆走行モード切替 --- */
+.drive-speed-mode-btn {
+  width: 196px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 12px;
+  border-radius: 12px;
+  border: 1.5px solid rgba(56, 189, 248, 0.72);
+  background: rgba(15, 23, 42, 0.82);
+  color: #f8fafc;
+  pointer-events: auto;
+  touch-action: manipulation;
+  cursor: pointer;
+  box-shadow: 0 5px 14px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition: transform 0.08s ease, border-color 0.14s ease, background-color 0.14s ease;
+}
+
+.drive-speed-mode-btn:active {
+  transform: scale(0.95);
+}
+
+.drive-speed-mode-btn.is-mode-city {
+  border-color: rgba(52, 211, 153, 0.82);
+  background: rgba(6, 78, 59, 0.74);
+}
+
+.drive-speed-mode-btn.is-mode-cruise {
+  border-color: rgba(56, 189, 248, 0.85);
+  background: rgba(12, 74, 110, 0.76);
+}
+
+.drive-speed-mode-btn.is-mode-sport {
+  border-color: rgba(251, 146, 60, 0.9);
+  background: rgba(124, 45, 18, 0.78);
+}
+
+.drive-speed-mode-left {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.drive-speed-mode-code {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #ffffff;
+}
+
+.drive-speed-mode-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(241, 245, 249, 0.88);
+}
+
+.drive-speed-mode-limit {
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.55);
+  color: #f8fafc;
+  pointer-events: none;
+}
+
 .drive-speedometer {
-  width: 184px;
+  width: 196px;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -531,7 +602,7 @@ body,
   background: linear-gradient(90deg, #f87171, #ef4444);
 }
 
-/* --- 2-B / 3-C: 運転モード 右下ペダル群＆速度計＆降車ボタン --- */
+/* --- 2-B / 3-C / 3-F: 運転モード 右下ペダル群＆速度計＆降車ボタン --- */
 .drive-right-controls {
   position: absolute;
   right: calc(env(safe-area-inset-right, 0px) + 28px);
@@ -539,7 +610,7 @@ body,
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 10px;
+  gap: 8px;
   pointer-events: none;
 }
 
@@ -582,17 +653,43 @@ body,
 }
 
 .drive-pedal-accel {
-  background: rgba(6, 95, 70, 0.58);
+  position: relative;
+  width: 96px;
+  height: 152px;
+  overflow: hidden;
+  background: rgba(6, 95, 70, 0.54);
   border-color: rgba(110, 231, 183, 0.72);
 }
 
 .drive-pedal-accel.is-pressed {
-  transform: scale(0.94);
-  background: rgba(16, 185, 129, 0.8);
+  background: rgba(6, 95, 70, 0.68);
   border-color: rgba(167, 243, 208, 0.98);
+  box-shadow: 0 0 18px rgba(16, 185, 129, 0.35);
+}
+
+.drive-pedal-throttle-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(110, 231, 183, 0.46) 0%,
+    rgba(16, 185, 129, 0.24) 100%
+  );
+  border-top: 2px solid rgba(167, 243, 208, 0.78);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+
+.drive-pedal-throttle-fill.is-visible {
+  opacity: 1;
 }
 
 .drive-pedal-title {
+  position: relative;
+  z-index: 1;
   font-size: 14px;
   font-weight: 800;
   letter-spacing: 0.06em;
@@ -600,8 +697,11 @@ body,
 }
 
 .drive-pedal-sub {
+  position: relative;
+  z-index: 1;
   font-size: 10px;
   font-weight: 600;
   color: rgba(248, 250, 252, 0.85);
+  font-variant-numeric: tabular-nums;
   pointer-events: none;
 }

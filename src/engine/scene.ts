@@ -22,6 +22,7 @@ import {
   DRIVABLE_VEHICLES,
   VehicleController,
   loadHeroVehicle,
+  type DriveSpeedMode,
   type LoadedHeroVehicle,
   type VehicleGear,
 } from '../vehicle';
@@ -57,6 +58,8 @@ export interface EngineStatus {
   nearbyVehicleName: string | null;
   vehicleSpeedKmh: number;
   vehicleGear: VehicleGear;
+  vehicleSpeedMode: DriveSpeedMode;
+  vehicleSpeedLimitKmh: number;
   playerLoaded: boolean;
   playerError: string | null;
   playerHeight: number;
@@ -93,6 +96,7 @@ export interface GameEngineHandle {
   setTouchVehicleSteer: (steer: number) => void;
   setTouchVehicleThrottle: (throttle: number) => void;
   setTouchVehicleBrake: (brake: number) => void;
+  cycleVehicleSpeedMode: () => DriveSpeedMode | null;
   getMinimapSnapshot: (out: MinimapSnapshot) => void;
   unlockAudio: () => void;
   toggleAudioMute: () => boolean;
@@ -283,6 +287,8 @@ export function startGameEngine(
       nearbyVehicleName: nearbyVehicle?.getDisplayName() ?? null,
       vehicleSpeedKmh: vehicleTelemetry?.speedKmh ?? 0,
       vehicleGear: vehicleTelemetry?.gear ?? 'P',
+      vehicleSpeedMode: vehicleTelemetry?.speedMode ?? 'CITY',
+      vehicleSpeedLimitKmh: vehicleTelemetry?.speedLimitKmh ?? 45,
       playerLoaded: loadedPlayer !== null,
       playerError,
       playerHeight: loadedPlayer?.info.heightMeters ?? 0,
@@ -742,6 +748,14 @@ export function startGameEngine(
     },
     setTouchVehicleBrake: (brake: number) => {
       inputManager.setTouchVehicleBrake(brake);
+    },
+    cycleVehicleSpeedMode: () => {
+      if (controlMode !== 'vehicle' || !activeVehicle) {
+        return null;
+      }
+      const next = activeVehicle.cycleSpeedMode();
+      emitStatus();
+      return next;
     },
     getMinimapSnapshot: (out: MinimapSnapshot) => {
       if (controlMode === 'vehicle' && activeVehicle) {
