@@ -6,6 +6,7 @@ import {
   type WheelSlot,
 } from './vehicleConfig';
 import { createVehicleLightRig } from './vehicleLights';
+import { VehicleDamageVisualController } from './vehicleDamageVisuals';
 
 export interface WheelRig {
   slot: WheelSlot;
@@ -48,6 +49,8 @@ export interface LoadedHeroVehicle {
   riderAnchor: THREE.Group;
   /** 2-B の車輪回転・ステアリング制御用リグ */
   rig: VehicleRig;
+  /** 5-B: 車体デフォーム（凹み）・擦り傷/煤・ライト破損の段階的損傷ビジュアル制御 */
+  damageVisuals: VehicleDamageVisualController;
   /** スケール正規化後の実測寸法 (m) */
   dimensions: VehicleDimensions;
   /** 前輪ステアリング角（rad, 左=+ / 右=-）とハンドル回転を更新（2-B用フック） */
@@ -155,6 +158,16 @@ export async function loadHeroVehicle(
   const lightRig = createVehicleLightRig(config.type, dimensions);
   bodyGroup.add(lightRig.group);
 
+  // 5-B: 車体局所デフォーム（凹み）・擦り傷/煤・ライト破損ビジュアル制御
+  const damageVisuals = new VehicleDamageVisualController(
+    bodyGroup,
+    model,
+    rig,
+    lightRig,
+    config.type,
+    dimensions,
+  );
+
   const tempSteerQuat = new THREE.Quaternion();
 
   const setSteerAngle = (radians: number): void => {
@@ -193,6 +206,7 @@ export async function loadHeroVehicle(
   };
 
   const dispose = (): void => {
+    damageVisuals.dispose();
     bodyGroup.remove(lightRig.group);
     lightRig.dispose();
 
@@ -237,6 +251,7 @@ export async function loadHeroVehicle(
     bodyGroup,
     riderAnchor,
     rig,
+    damageVisuals,
     dimensions,
     setSteerAngle,
     addWheelSpin,

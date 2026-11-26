@@ -52,8 +52,14 @@ export class ThirdPersonCamera {
   private readonly desiredTarget = new THREE.Vector3();
   private readonly desiredPosition = new THREE.Vector3();
   private readonly rayDir = new THREE.Vector3();
+  private readonly shakeTargetScratch = new THREE.Vector3();
   private initialized = false;
   private manualLookIdleTime = 99;
+
+  // 5-B: 衝突・爆発時のカメラ衝撃シェイク
+  private shakeIntensity = 0;
+  private shakeDecayRate = 6.5;
+  private shakeTime = 0;
 
   constructor(
     camera: THREE.PerspectiveCamera,
@@ -76,6 +82,21 @@ export class ThirdPersonCamera {
   /** カメラ遮蔽回避用レイキャスト関数を設定 */
   public setOcclusionRaycast(raycast: CameraOcclusionRaycast | null): void {
     this.occlusionRaycast = raycast;
+  }
+
+  /**
+   * 5-B: 車両衝突・大爆発時の衝撃カメラシェイクを発生させる。
+   * @param intensity シェイク強度 (0.08 = 軽い接触 〜 1.0 = 大爆発)
+   * @param decayRate 減衰速度 (1/s、値が小さいほど余韻が長い)
+   */
+  public addShake(intensity: number, decayRate = 6.5): void {
+    const clamped = Math.max(0, Math.min(1.15, intensity));
+    if (clamped >= this.shakeIntensity) {
+      this.shakeIntensity = clamped;
+      this.shakeDecayRate = Math.max(1.8, decayRate);
+    } else {
+      this.shakeIntensity = Math.min(1.15, this.shakeIntensity + clamped * 0.35);
+    }
   }
 
   /** 現在のカメラ水平角（移動方向の基準として使用） */
@@ -275,6 +296,42 @@ export class ThirdPersonCamera {
       if (this.desiredPosition.y < minCamY) {
         this.desiredPosition.y = minCamY;
       }
+    }
+
+    if (this.shakeIntensity > 0.004) {
+      this.shakeTime += dt;
+      const amp = this.shakeIntensity * this.shakeIntensity;
+      const rightX = Math.cos(this.yaw);
+      const rightZ = -Math.sin(this.yaw);
+      const sx =
+        (Math.sin(this.shakeTime * 58.0) * 0.65 +
+          Math.sin(this.shakeTime * 97.0) * 0.35) *
+        0.34 *
+        amp;
+      const sy =
+        (Math.cos(this.shakeTime * 67.0) * 0.6 +
+          Math.sin(this.shakeTime * 113.0) * 0.4) *
+        0.26 *
+        amp;
+
+      this.desiredPosition.x += rightX * sx;
+      this.desiredPosition.z += rightZ * sx;
+      this.desiredPosition.y = Math.max(minCamY, this.desiredPosition.y + sy);
+
+      this.shakeTargetScratch.set(
+        this.currentTarget.x + rightX * sx * 0.5,
+        this.currentTarget.y + sy * 0.5,
+        this.currentTarget.z + rightZ * sx * 0.5,
+      );
+
+      this.shakeIntensity *= Math.exp(-this.shakeDecayRate * dt);
+      if (this.shakeIntensity < 0.004) {
+        this.shakeIntensity = 0;
+      }
+
+      this.camera.position.copy(this.desiredPosition);
+      this.camera.lookAt(this.shakeTargetScratch);
+      return;
     }
 
     this.camera.position.copy(this.desiredPosition);

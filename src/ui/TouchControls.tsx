@@ -10,18 +10,23 @@ import { isTouchCapableDevice } from '../input/inputManager';
 import {
   DRIVE_SPEED_MODE_CONFIGS,
   type DriveSpeedMode,
+  type VehicleDamageState,
   type VehicleGear,
+  type VehicleType,
 } from '../vehicle';
 
 export interface TouchControlsProps {
   controlMode: ControlMode;
   canEnterVehicle: boolean;
   canExitVehicle: boolean;
+  activeVehicleType: VehicleType | null;
   nearbyVehicleName: string | null;
   vehicleSpeedKmh: number;
   vehicleGear: VehicleGear;
   vehicleSpeedMode: DriveSpeedMode;
   vehicleSpeedLimitKmh: number;
+  vehicleHp: number;
+  vehicleDamageState: VehicleDamageState;
   onMoveChange: (x: number, y: number) => void;
   onLookDelta: (dx: number, dy: number) => void;
   onSprintChange: (active: boolean) => void;
@@ -65,11 +70,14 @@ export function TouchControls({
   controlMode,
   canEnterVehicle,
   canExitVehicle,
+  activeVehicleType,
   nearbyVehicleName,
   vehicleSpeedKmh,
   vehicleGear,
   vehicleSpeedMode,
   vehicleSpeedLimitKmh,
+  vehicleHp,
+  vehicleDamageState,
   onMoveChange,
   onLookDelta,
   onSprintChange,
@@ -678,18 +686,30 @@ export function TouchControls({
           </button>
         </div>
 
-        {/* 運転: 画面右下 降車ボタン + デジタルスピードメーター + ブレーキ/バック + アクセルペダル */}
+        {/* 運転: 画面右下 降車ボタン + 走行モード + デジタルスピードメーター＆耐久度 + ブレーキ/バック + アクセルペダル */}
         <div className="drive-right-controls">
           <button
             type="button"
-            className={`interact-btn interact-btn-exit${canExitVehicle ? '' : ' is-disabled'}`}
+            className={`interact-btn interact-btn-exit${
+              vehicleDamageState === 'burning'
+                ? ' is-emergency'
+                : canExitVehicle
+                  ? ''
+                  : ' is-disabled'
+            }`}
             onPointerDown={canExitVehicle ? handleInteractDown : undefined}
             disabled={!canExitVehicle}
-            aria-label="Exit Vehicle"
+            aria-label={vehicleDamageState === 'burning' ? 'Emergency Exit Vehicle' : 'Exit Vehicle'}
           >
-            <span className="interact-btn-main">降りる</span>
+            <span className="interact-btn-main">
+              {vehicleDamageState === 'burning' ? '脱出！' : '降りる'}
+            </span>
             <span className="interact-btn-key">
-              {canExitVehicle ? 'E / F' : '停車で降車'}
+              {vehicleDamageState === 'burning'
+                ? '爆発直前 (E/F)'
+                : canExitVehicle
+                  ? 'E / F'
+                  : '停車で降車'}
             </span>
           </button>
 
@@ -713,9 +733,12 @@ export function TouchControls({
             </button>
           )}
 
-          {/* 3-C: 乗車中のみ画面右下（ペダルUIの上）にデジタル速度計・ギア表示 */}
+          {/* 3-C / 5-B: 乗車中のみ画面右下（ペダルUIの上）にデジタル速度計・ギア・コンパクト車両耐久度インジケーター */}
           {isVehicleMode && (
-            <div className="drive-speedometer" aria-label="Speedometer">
+            <div
+              className={`drive-speedometer is-health-${vehicleDamageState}`}
+              aria-label={`Speedometer ${vehicleSpeedKmh} km/h, Vehicle durability ${vehicleHp}%`}
+            >
               <div className="drive-speedometer-row">
                 <span
                   className={`drive-gear drive-gear-${vehicleGear.toLowerCase()}`}
@@ -738,6 +761,69 @@ export function TouchControls({
                     )}%`,
                   }}
                 />
+              </div>
+
+              {/* 5-B: コンパクトな車両耐久度アイコン＆ゲージ */}
+              <div className="drive-health-panel">
+                <div className="drive-health-header">
+                  <span
+                    className={`drive-health-icon is-state-${vehicleDamageState}`}
+                    aria-hidden="true"
+                  >
+                    {activeVehicleType === 'bike' ? (
+                      <svg
+                        viewBox="0 0 24 24"
+                        width="14"
+                        height="14"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.1"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <circle cx="5.5" cy="17.5" r="3.5" />
+                        <circle cx="18.5" cy="17.5" r="3.5" />
+                        <path d="M15 6h2l2 5.5" />
+                        <path d="M5.5 17.5L10 11h5l3.5 6.5" />
+                        <path d="M10 11l-1.5-3H6" />
+                      </svg>
+                    ) : (
+                      <svg
+                        viewBox="0 0 24 24"
+                        width="14"
+                        height="14"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.1"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M5 11l2-5h10l2 5" />
+                        <rect x="3" y="11" width="18" height="6" rx="2" />
+                        <circle cx="7" cy="17" r="1.5" />
+                        <circle cx="17" cy="17" r="1.5" />
+                      </svg>
+                    )}
+                  </span>
+                  <span className="drive-health-status">
+                    {vehicleDamageState === 'burning'
+                      ? '発火危険!'
+                      : vehicleDamageState === 'heavy'
+                        ? vehicleHp <= 30
+                          ? 'エンジン不調'
+                          : '重破'
+                        : vehicleDamageState === 'light'
+                          ? '損傷'
+                          : '良好'}
+                  </span>
+                  <span className="drive-health-pct">{vehicleHp}%</span>
+                </div>
+                <div className="drive-health-bar" aria-hidden="true">
+                  <div
+                    className={`drive-health-bar-fill is-state-${vehicleDamageState}`}
+                    style={{ width: `${Math.max(0, Math.min(100, vehicleHp))}%` }}
+                  />
+                </div>
               </div>
             </div>
           )}

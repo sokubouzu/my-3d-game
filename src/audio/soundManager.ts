@@ -530,8 +530,8 @@ export class SoundManager {
     noiseSrc.start(now, offset, 0.135);
   }
 
-  /** 建物・他車両との衝突衝撃音ワンショット */
-  public playVehicleImpact(impactSpeed: number): void {
+  /** 建物・ガードレール・街灯・他車両との金属衝突衝撃音ワンショット（速度・入射角連動） */
+  public playVehicleImpact(impactSpeed: number, incidence = 1.0): void {
     if (
       !this.ctx ||
       this.ctx.state !== 'running' ||
@@ -545,49 +545,196 @@ export class SoundManager {
     if (!this.whiteNoiseBuffer) return;
 
     const nowMs = performance.now();
-    if (nowMs - this.lastImpactTimeMs < 220) return;
+    if (nowMs - this.lastImpactTimeMs < 200) return;
     this.lastImpactTimeMs = nowMs;
 
     const ctx = this.ctx;
     const now = ctx.currentTime;
-    const intensity = Math.max(0.25, Math.min(1, impactSpeed / 14.0));
+    const clampedInc = Math.max(0.25, Math.min(1, incidence));
+    const intensity = Math.max(
+      0.22,
+      Math.min(1, (impactSpeed / 18.0) * (0.55 + 0.45 * clampedInc)),
+    );
 
-    // 1. ボディの衝撃（230Hz → 85Hz）
+    // 1. ボディの低中音インパクト（240Hz → 72Hz）
     const bodyOsc = ctx.createOscillator();
     bodyOsc.type = 'triangle';
-    bodyOsc.frequency.setValueAtTime(230 + intensity * 60, now);
-    bodyOsc.frequency.exponentialRampToValueAtTime(85, now + 0.18);
+    bodyOsc.frequency.setValueAtTime(240 + intensity * 75, now);
+    bodyOsc.frequency.exponentialRampToValueAtTime(72, now + 0.19);
 
     const bodyGain = ctx.createGain();
     bodyGain.gain.setValueAtTime(0.0001, now);
-    bodyGain.gain.linearRampToValueAtTime(0.5 * intensity, now + 0.006);
-    bodyGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+    bodyGain.gain.linearRampToValueAtTime(0.52 * intensity, now + 0.005);
+    bodyGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.24);
 
     bodyOsc.connect(bodyGain);
     bodyGain.connect(this.masterGain);
     bodyOsc.start(now);
-    bodyOsc.stop(now + 0.24);
+    bodyOsc.stop(now + 0.26);
 
-    // 2. 金属・バンパー衝突クラッシュノイズ
+    // 2. 金属ボディの歪み・クラッシュリンギング（高次倍音ペア）
+    const metalOsc1 = ctx.createOscillator();
+    metalOsc1.type = 'sawtooth';
+    metalOsc1.frequency.setValueAtTime(520 + intensity * 260, now);
+    metalOsc1.frequency.exponentialRampToValueAtTime(195, now + 0.14);
+
+    const metalFilter = ctx.createBiquadFilter();
+    metalFilter.type = 'bandpass';
+    metalFilter.frequency.setValueAtTime(1250 + intensity * 650, now);
+    metalFilter.Q.setValueAtTime(3.2, now);
+
+    const metalGain = ctx.createGain();
+    metalGain.gain.setValueAtTime(0.0001, now);
+    metalGain.gain.linearRampToValueAtTime(0.28 * intensity, now + 0.004);
+    metalGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+
+    metalOsc1.connect(metalFilter);
+    metalFilter.connect(metalGain);
+    metalGain.connect(this.masterGain);
+    metalOsc1.start(now);
+    metalOsc1.stop(now + 0.18);
+
+    // 3. 金属・バンパー衝突クラッシュノイズ
     const noiseSrc = ctx.createBufferSource();
     noiseSrc.buffer = this.whiteNoiseBuffer;
 
     const filter = ctx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(1500 + intensity * 900, now);
-    filter.frequency.exponentialRampToValueAtTime(360, now + 0.2);
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(1400 + intensity * 1200, now);
+    filter.frequency.exponentialRampToValueAtTime(420, now + 0.22);
+    filter.Q.setValueAtTime(0.85, now);
 
     const noiseGain = ctx.createGain();
     noiseGain.gain.setValueAtTime(0.0001, now);
-    noiseGain.gain.linearRampToValueAtTime(0.42 * intensity, now + 0.005);
-    noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.23);
+    noiseGain.gain.linearRampToValueAtTime(0.46 * intensity, now + 0.004);
+    noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.26);
 
     noiseSrc.connect(filter);
     filter.connect(noiseGain);
     noiseGain.connect(this.masterGain);
 
-    const offset = Math.random() * Math.max(0.1, this.whiteNoiseBuffer.duration - 0.3);
-    noiseSrc.start(now, offset, 0.26);
+    const offset = Math.random() * Math.max(0.1, this.whiteNoiseBuffer.duration - 0.35);
+    noiseSrc.start(now, offset, 0.29);
+  }
+
+  /**
+   * 5-B: 車両発火カウントダウン（約2.5秒間）の緊急警告音（ピピピピ…）。
+   * urgency01 (0..1) が高まるほど音程がわずかに上がり緊迫感を演出する。
+   */
+  public playFireWarningBeep(urgency01 = 0): void {
+    if (
+      !this.ctx ||
+      this.ctx.state !== 'running' ||
+      !this.masterGain ||
+      !this.unlocked ||
+      this.muted ||
+      this.disposed
+    ) {
+      return;
+    }
+
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+    const u = Math.max(0, Math.min(1, urgency01));
+    const baseFreq = 1120 + u * 340;
+
+    const osc = ctx.createOscillator();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(baseFreq, now);
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(baseFreq * 1.15, now);
+    filter.Q.setValueAtTime(1.8, now);
+
+    const gain = ctx.createGain();
+    const dur = Math.max(0.055, 0.095 - u * 0.032);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.linearRampToValueAtTime(0.22, now + 0.005);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.masterGain);
+    osc.start(now);
+    osc.stop(now + dur + 0.015);
+  }
+
+  /**
+   * 5-B: 車両大爆発の衝撃音（重低音ドロップ＋爆風ローパス轟音＋破片アタック、距離減衰付き）。
+   */
+  public playExplosion(distanceMeters = 0): void {
+    if (
+      !this.ctx ||
+      this.ctx.state !== 'running' ||
+      !this.masterGain ||
+      !this.unlocked ||
+      this.muted ||
+      this.disposed
+    ) {
+      return;
+    }
+    if (!this.pinkNoiseBuffer || !this.whiteNoiseBuffer) return;
+
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+    const atten = Math.max(0.16, Math.min(1, 1 / (1 + Math.max(0, distanceMeters - 6) * 0.032)));
+
+    // 1. 爆風の重低音衝撃波 (155Hz -> 28Hz)
+    const boomOsc = ctx.createOscillator();
+    boomOsc.type = 'triangle';
+    boomOsc.frequency.setValueAtTime(155, now);
+    boomOsc.frequency.exponentialRampToValueAtTime(28, now + 0.52);
+
+    const boomGain = ctx.createGain();
+    boomGain.gain.setValueAtTime(0.0001, now);
+    boomGain.gain.linearRampToValueAtTime(0.85 * atten, now + 0.012);
+    boomGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.72);
+
+    boomOsc.connect(boomGain);
+    boomGain.connect(this.masterGain);
+    boomOsc.start(now);
+    boomOsc.stop(now + 0.76);
+
+    // 2. 轟音テール（ピンクノイズのローパス掃引 2200Hz -> 160Hz）
+    const rumbleSrc = ctx.createBufferSource();
+    rumbleSrc.buffer = this.pinkNoiseBuffer;
+
+    const rumbleFilter = ctx.createBiquadFilter();
+    rumbleFilter.type = 'lowpass';
+    rumbleFilter.frequency.setValueAtTime(2200, now);
+    rumbleFilter.frequency.exponentialRampToValueAtTime(160, now + 1.35);
+    rumbleFilter.Q.setValueAtTime(1.2, now);
+
+    const rumbleGain = ctx.createGain();
+    rumbleGain.gain.setValueAtTime(0.0001, now);
+    rumbleGain.gain.linearRampToValueAtTime(0.82 * atten, now + 0.018);
+    rumbleGain.gain.exponentialRampToValueAtTime(0.0001, now + 1.48);
+
+    rumbleSrc.connect(rumbleFilter);
+    rumbleFilter.connect(rumbleGain);
+    rumbleGain.connect(this.masterGain);
+    rumbleSrc.start(now, 0.1, 1.55);
+
+    // 3. 破片・閃光の瞬間アタック（ホワイトノイズ高域）
+    const crackSrc = ctx.createBufferSource();
+    crackSrc.buffer = this.whiteNoiseBuffer;
+
+    const crackFilter = ctx.createBiquadFilter();
+    crackFilter.type = 'bandpass';
+    crackFilter.frequency.setValueAtTime(2400, now);
+    crackFilter.frequency.exponentialRampToValueAtTime(520, now + 0.32);
+    crackFilter.Q.setValueAtTime(0.7, now);
+
+    const crackGain = ctx.createGain();
+    crackGain.gain.setValueAtTime(0.0001, now);
+    crackGain.gain.linearRampToValueAtTime(0.55 * atten, now + 0.004);
+    crackGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.34);
+
+    crackSrc.connect(crackFilter);
+    crackFilter.connect(crackGain);
+    crackGain.connect(this.masterGain);
+    crackSrc.start(now, 0.2, 0.38);
   }
 
   /**

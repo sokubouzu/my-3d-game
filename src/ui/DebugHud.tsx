@@ -33,7 +33,7 @@ export function DebugHud({ status }: DebugHudProps) {
 
       {expanded && (
         <div className="hud-details">
-          <div className="hud-title">my-3d-game (Phase 5-A)</div>
+          <div className="hud-title">my-3d-game (Phase 5-B)</div>
           <div>
             API: {status.isWebGL2 ? 'WebGL2' : 'WebGL1'} | DPR:{' '}
             {status.dpr.toFixed(2)} | Time: {status.timeOfDay.toUpperCase()} |
@@ -51,7 +51,7 @@ export function DebugHud({ status }: DebugHudProps) {
               ? `Driving (${status.activeVehicleName ?? 'Vehicle'})`
               : 'On Foot'}
             {status.controlMode === 'vehicle'
-              ? ` | ${status.vehicleSpeedKmh} km/h (${status.vehicleGear})`
+              ? ` | ${status.vehicleSpeedKmh} km/h (${status.vehicleGear}) | HP ${status.vehicleHp}% (${status.vehicleDamageState.toUpperCase()})`
               : ''}
           </div>
           <div>

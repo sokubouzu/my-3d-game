@@ -64,6 +64,7 @@ export class PlayerController {
   private activeAction: THREE.AnimationAction | null = null;
   private activeClipName = 'None';
   private pendingLandingSpeed = 0;
+  private ejectStunTimer = 0;
 
   constructor(
     player: LoadedPlayerModel,
@@ -122,6 +123,7 @@ export class PlayerController {
       this.velocity.set(0, 0, 0);
       this.verticalVelocity = 0;
       this.pendingLandingSpeed = 0;
+      this.ejectStunTimer = 0;
     }
   }
 
@@ -140,6 +142,7 @@ export class PlayerController {
     this.velocity.set(0, 0, 0);
     this.verticalVelocity = 0;
     this.pendingLandingSpeed = 0;
+    this.ejectStunTimer = 0;
     this.isGrounded = true;
     this.isJumping = false;
     this.state = 'idle';
@@ -170,6 +173,40 @@ export class PlayerController {
     this.player.root.visible = true;
   }
 
+  /**
+   * 5-B: 車両爆発時の自動緊急脱出（非グロテスクな衝撃吹き飛び・安全着地演出）。
+   */
+  public triggerEmergencyEject(
+    sceneRoot: THREE.Object3D,
+    x: number,
+    y: number,
+    z: number,
+    yaw: number,
+    dirX: number,
+    dirZ: number,
+  ): void {
+    if (this.player.root.parent !== sceneRoot) {
+      sceneRoot.add(this.player.root);
+    }
+    this.player.root.visible = true;
+    this.yaw = normalizeAngle(yaw);
+    this.player.root.position.set(x, y + 0.35, z);
+    this.player.root.rotation.set(0, this.yaw, 0);
+
+    const len = Math.hypot(dirX, dirZ);
+    const nx = len > 1e-4 ? dirX / len : Math.sin(this.yaw);
+    const nz = len > 1e-4 ? dirZ / len : Math.cos(this.yaw);
+    this.velocity.set(nx * 4.6, 0, nz * 4.6);
+    this.verticalVelocity = 4.4;
+    this.isGrounded = false;
+    this.isJumping = false;
+    this.coyoteTimer = 0;
+    this.airborneTime = COYOTE_TIME;
+    this.ejectStunTimer = 0.55;
+    this.state = 'fall';
+    this.transitionToClip('FallingToLanding', false, 0.06);
+  }
+
   /** 降車時等にプレイヤーを指定位置・向きへ安全に再配置する */
   public teleportTo(x: number, y: number, z: number, yaw?: number): void {
     this.player.root.position.set(x, y, z);
@@ -183,6 +220,7 @@ export class PlayerController {
     this.isJumping = false;
     this.coyoteTimer = COYOTE_TIME;
     this.airborneTime = 0;
+    this.ejectStunTimer = 0;
     this.state = 'idle';
     this.transitionToClip('Idle', true, 0.0);
   }
@@ -212,11 +250,18 @@ export class PlayerController {
   public update(dt: number, input: InputSnapshot, cameraYaw: number): void {
     const clampedDt = Math.min(dt, 0.05);
 
+    if (this.ejectStunTimer > 0) {
+      this.ejectStunTimer = Math.max(0, this.ejectStunTimer - clampedDt);
+    }
+    const isStunned = this.ejectStunTimer > 0;
+
     // カメラ基準の水平前方・右方向ベクトル（右手系 Y-up）
     this.forward.set(Math.sin(cameraYaw), 0, Math.cos(cameraYaw));
     this.right.set(-Math.cos(cameraYaw), 0, Math.sin(cameraYaw));
 
-    const inputMag = Math.min(1, Math.hypot(input.moveX, input.moveY));
+    const inputMag = isStunned
+      ? 0
+      : Math.min(1, Math.hypot(input.moveX, input.moveY));
     const maxSpeed = input.sprint ? RUN_SPEED : WALK_SPEED;
 
     if (inputMag > 0.02) {
@@ -233,8 +278,12 @@ export class PlayerController {
       this.desiredVelocity.set(0, 0, 0);
     }
 
-    // 加減速補間
-    const accelRate = inputMag > 0.02 ? ACCELERATION : DECELERATION;
+    // 加減速補間（緊急脱出直後は緩やかな減衰で吹き飛び感を見せる）
+    const accelRate = isStunned
+      ? 3.2
+      : inputMag > 0.02
+        ? ACCELERATION
+        : DECELERATION;
     const blend = 1 - Math.exp(-accelRate * clampedDt);
     this.velocity.x += (this.desiredVelocity.x - this.velocity.x) * blend;
     this.velocity.z += (this.desiredVelocity.z - this.velocity.z) * blend;
@@ -246,7 +295,7 @@ export class PlayerController {
     }
 
     // 進行方向へスムーズに旋回（+Z がモデル正面）
-    if (horizontalSpeed > 0.08) {
+    if (horizontalSpeed > 0.08 && !isStunned) {
       const targetYaw = Math.atan2(this.velocity.x, this.velocity.z);
       const deltaAngle = normalizeAngle(targetYaw - this.yaw);
       const maxStep = TURN_SPEED * clampedDt;

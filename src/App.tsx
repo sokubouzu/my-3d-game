@@ -24,11 +24,18 @@ const INITIAL_STATUS: EngineStatus = {
   canEnterVehicle: false,
   canExitVehicle: false,
   activeVehicleName: null,
+  activeVehicleType: null,
   nearbyVehicleName: null,
   vehicleSpeedKmh: 0,
   vehicleGear: 'P',
   vehicleSpeedMode: 'CITY',
   vehicleSpeedLimitKmh: 45,
+  vehicleHp: 100,
+  vehicleDamageState: 'intact',
+  vehicleBurnRemainingSec: 0,
+  ejectDamageFlashTimeMs: 0,
+  vehicleAlertMessage: null,
+  vehicleAlertTone: 'info',
   playerLoaded: false,
   playerError: null,
   playerHeight: 0,
@@ -198,21 +205,38 @@ export function App() {
   const weatherLabel = WEATHER_LABELS[status.weather];
   const ta = status.timeAttack;
   const coins = status.coins;
+  const nowMs = performance.now();
   const coinJustCollected =
-    coins.lastCollectTimeMs > 0 && performance.now() - coins.lastCollectTimeMs < 320;
+    coins.lastCollectTimeMs > 0 && nowMs - coins.lastCollectTimeMs < 320;
+  const isEjectFlashing =
+    status.ejectDamageFlashTimeMs > 0 &&
+    nowMs - status.ejectDamageFlashTimeMs < 950;
+  const isVehicleBurning =
+    status.controlMode === 'vehicle' && status.vehicleDamageState === 'burning';
 
   return (
     <div className="viewport-root">
       <canvas ref={canvasRef} className="webgl-canvas" />
+      {/* 5-B: 爆発時の自動緊急脱出ダメージ演出（非グロテスクなオレンジ琥珀ビネットフラッシュ） */}
+      {isEjectFlashing && (
+        <div
+          key={status.ejectDamageFlashTimeMs}
+          className="eject-impact-flash"
+          aria-hidden="true"
+        />
+      )}
       <TouchControls
         controlMode={status.controlMode}
         canEnterVehicle={status.canEnterVehicle}
         canExitVehicle={status.canExitVehicle}
+        activeVehicleType={status.activeVehicleType}
         nearbyVehicleName={status.nearbyVehicleName}
         vehicleSpeedKmh={status.vehicleSpeedKmh}
         vehicleGear={status.vehicleGear}
         vehicleSpeedMode={status.vehicleSpeedMode}
         vehicleSpeedLimitKmh={status.vehicleSpeedLimitKmh}
+        vehicleHp={status.vehicleHp}
+        vehicleDamageState={status.vehicleDamageState}
         onMoveChange={handleMoveChange}
         onLookDelta={handleLookDelta}
         onSprintChange={handleSprintChange}
@@ -224,6 +248,32 @@ export function App() {
         onCycleVehicleSpeedMode={handleCycleVehicleSpeedMode}
       />
       <DebugHud status={status} />
+
+      {/* 5-B: 車両発火カウントダウン緊急警告バナー / 爆発＆自動リスポーン通知トースト */}
+      {isVehicleBurning ? (
+        <div
+          className="vehicle-fire-warning-banner"
+          role="alert"
+          aria-live="assertive"
+        >
+          <span className="vehicle-fire-warning-icon" aria-hidden="true">
+            !
+          </span>
+          <span>
+            車両発火！ 約 {Math.max(0.1, status.vehicleBurnRemainingSec).toFixed(1)} 秒後に爆発 — 今すぐ脱出！
+          </span>
+        </div>
+      ) : (
+        status.vehicleAlertMessage && (
+          <div
+            className={`vehicle-alert-toast is-tone-${status.vehicleAlertTone}`}
+            role="status"
+            aria-live="polite"
+          >
+            {status.vehicleAlertMessage}
+          </div>
+        )
+      )}
 
       {/* 4-B: 画面上部中央のゲームプレイ HUD（コイン累計・タイムアタック・車体復帰ボタン） */}
       <div className="gameplay-top-hud">

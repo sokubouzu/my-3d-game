@@ -27,6 +27,11 @@ export {
   type DriveSpeedMode,
   type DriveSpeedModeConfig,
   type VehicleControlInput,
+  type VehicleDamageState,
+  type VehicleDamageTickResult,
   type VehicleGear,
+  type VehicleImpactEvent,
   type VehicleTelemetry,
 } from './vehicleController';
+export { VehicleDamageEffects } from './vehicleDamageEffects';
+export { VehicleDamageVisualController } from './vehicleDamageVisuals';

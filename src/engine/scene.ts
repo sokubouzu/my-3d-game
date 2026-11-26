@@ -32,10 +32,14 @@ import {
 import {
   DRIVABLE_VEHICLES,
   VehicleController,
+  VehicleDamageEffects,
   loadHeroVehicle,
   type DriveSpeedMode,
   type LoadedHeroVehicle,
+  type VehicleDamageState,
+  type VehicleDamageTickResult,
   type VehicleGear,
+  type VehicleType,
 } from '../vehicle';
 import {
   TRAFFIC_VEHICLE_CONFIGS,
@@ -74,11 +78,18 @@ export interface EngineStatus {
   canEnterVehicle: boolean;
   canExitVehicle: boolean;
   activeVehicleName: string | null;
+  activeVehicleType: VehicleType | null;
   nearbyVehicleName: string | null;
   vehicleSpeedKmh: number;
   vehicleGear: VehicleGear;
   vehicleSpeedMode: DriveSpeedMode;
   vehicleSpeedLimitKmh: number;
+  vehicleHp: number;
+  vehicleDamageState: VehicleDamageState;
+  vehicleBurnRemainingSec: number;
+  ejectDamageFlashTimeMs: number;
+  vehicleAlertMessage: string | null;
+  vehicleAlertTone: 'danger' | 'info' | 'success';
   playerLoaded: boolean;
   playerError: string | null;
   playerHeight: number;
@@ -257,6 +268,31 @@ export function startGameEngine(
   const coinSystem = new CoinCollectibleSystem(scene, collisionWorld);
   const timeAttackSystem = new TimeAttackSystem(scene);
 
+  // 5-B: 全車両共有の軽量ダメージエフェクト（火花・白煙/黒煙・炎・爆発・リングバッファ路面オイル漏れ痕）
+  const damageEffects = new VehicleDamageEffects(scene);
+  const damageTickScratch: VehicleDamageTickResult = {
+    impact: null,
+    fireBeep: false,
+    fireBeepUrgency: 0,
+    explodedNow: false,
+    readyToRespawn: false,
+  };
+  const respawnSearchPosScratch = new THREE.Vector3();
+  let ejectDamageFlashTimeMs = 0;
+  let vehicleAlertMessage: string | null = null;
+  let vehicleAlertTone: 'danger' | 'info' | 'success' = 'info';
+  let vehicleAlertUntilMs = 0;
+
+  const showVehicleAlert = (
+    message: string,
+    tone: 'danger' | 'info' | 'success',
+    durationMs = 3600,
+  ) => {
+    vehicleAlertMessage = message;
+    vehicleAlertTone = tone;
+    vehicleAlertUntilMs = performance.now() + durationMs;
+  };
+
   // 3-G / 4-A調整: プレイヤー運転車両の前方路面照射用 SpotLight（常設・影オフ・強度0で消灯しシェーダ再コンパイル回避）
   // 夜間高速走行時に前方のカーブ・白線・ガードレールをしっかり照らせる照射距離 (88m) と広がり角 (54°) に調整
   const playerHeadlightSpot = new THREE.SpotLight(
@@ -322,6 +358,10 @@ export function startGameEngine(
 
   const emitStatus = () => {
     if (isDisposed) return;
+    const nowMs = performance.now();
+    if (vehicleAlertMessage !== null && nowMs > vehicleAlertUntilMs) {
+      vehicleAlertMessage = null;
+    }
     const telemetry = playerController?.getTelemetry();
     const vehicleTelemetry = activeVehicle?.getTelemetry();
     const activePos =
@@ -341,11 +381,18 @@ export function startGameEngine(
       canEnterVehicle,
       canExitVehicle,
       activeVehicleName: activeVehicle?.getDisplayName() ?? null,
+      activeVehicleType: activeVehicle?.getType() ?? null,
       nearbyVehicleName: nearbyVehicle?.getDisplayName() ?? null,
       vehicleSpeedKmh: vehicleTelemetry?.speedKmh ?? 0,
       vehicleGear: vehicleTelemetry?.gear ?? 'P',
       vehicleSpeedMode: vehicleTelemetry?.speedMode ?? 'CITY',
       vehicleSpeedLimitKmh: vehicleTelemetry?.speedLimitKmh ?? 45,
+      vehicleHp: vehicleTelemetry?.hp ?? 100,
+      vehicleDamageState: vehicleTelemetry?.damageState ?? 'intact',
+      vehicleBurnRemainingSec: vehicleTelemetry?.burnRemainingSec ?? 0,
+      ejectDamageFlashTimeMs,
+      vehicleAlertMessage,
+      vehicleAlertTone,
       playerLoaded: loadedPlayer !== null,
       playerError,
       playerHeight: loadedPlayer?.info.heightMeters ?? 0,
@@ -455,7 +502,7 @@ export function startGameEngine(
         }
         loadedVehicles.push(vehicle);
         scene.add(vehicle.root);
-        weatherController?.registerVehicleObject(vehicle.root);
+        // 5-B: 運転可能3台は雨濡れ質感と損傷（傷・煤・黒焦げ）を VehicleDamageVisualController で競合なく合成制御
         const vc = new VehicleController(vehicle, collisionWorld);
         vc.setLightsIntensity(timeOfDayController?.getHeadlightFactor() ?? 0);
         vehicleControllers.push(vc);
@@ -660,23 +707,18 @@ export function startGameEngine(
         modeOrPromptChanged = true;
       }
 
-      // 3-D: 乗車中サウンド（エンジン音・走行音・急ブレーキスキッド音・衝突音）
+      // 3-D: 乗車中サウンド（エンジン音・走行音・急ブレーキスキッド音）
       const vSpeedMs = activeVehicle.getSpeed();
-      vehicleAudioFrame.isDriving = true;
+      vehicleAudioFrame.isDriving = !activeVehicle.isWrecked();
       vehicleAudioFrame.speedKmh = Math.abs(vSpeedMs) * 3.6;
       vehicleAudioFrame.maxSpeedKmh = activeVehicle.getMaxForwardSpeedKmh();
-      vehicleAudioFrame.throttle = input.vehicleThrottle;
+      vehicleAudioFrame.throttle = activeVehicle.isBurning() ? 0 : input.vehicleThrottle;
       vehicleAudioFrame.brake = input.vehicleBrake;
       vehicleAudioFrame.handbrake = input.vehicleHandbrake;
       vehicleAudioFrame.isReversing = vSpeedMs < -0.15;
       vehicleAudioFrame.profile = activeVehicle.getAudioProfile();
       soundManager.updateVehicleAudio(vehicleAudioFrame);
       soundManager.updateFootsteps(dt, false, 0, false);
-
-      const impactSpeed = activeVehicle.consumeImpactSpeed();
-      if (impactSpeed > 0) {
-        soundManager.playVehicleImpact(impactSpeed);
-      }
     } else {
       for (const vc of vehicleControllers) {
         vc.update(dt, null);
@@ -728,6 +770,131 @@ export function startGameEngine(
         );
       }
     }
+
+    // 5-B: 全運転可能車両のダメージ演出（煙・火花・オイル漏れ・ライト点滅・発火警告・大爆発・緊急脱出・自動リスポーン）
+    const rainAmountNow = weatherController?.getRainAmount() ?? 0;
+    for (let i = 0; i < vehicleControllers.length; i += 1) {
+      const vc = vehicleControllers[i];
+      const wasActive = controlMode === 'vehicle' && activeVehicle === vc;
+      vc.updateDamageLifecycle(dt, damageEffects, rainAmountNow, damageTickScratch);
+
+      if (damageTickScratch.impact) {
+        const imp = damageTickScratch.impact;
+        const dist = Math.hypot(imp.worldX - focusPos.x, imp.worldZ - focusPos.z);
+        if (wasActive || dist < 35) {
+          soundManager.playVehicleImpact(imp.normalSpeed, imp.incidence);
+        }
+        if (wasActive) {
+          tpsCamera.addShake(
+            0.14 + imp.intensity01 * 0.68,
+            imp.intensity01 > 0.55 ? 4.8 : 7.8,
+          );
+          if (imp.damage > 0) {
+            modeOrPromptChanged = true;
+          }
+        }
+      }
+
+      if (damageTickScratch.fireBeep) {
+        vc.getPosition(tempVehiclePos);
+        const dist = Math.hypot(
+          tempVehiclePos.x - focusPos.x,
+          tempVehiclePos.z - focusPos.z,
+        );
+        if (wasActive || dist < 48) {
+          soundManager.playFireWarningBeep(damageTickScratch.fireBeepUrgency);
+        }
+      }
+
+      if (damageTickScratch.explodedNow) {
+        vc.getPosition(tempVehiclePos);
+        const dist = Math.hypot(
+          tempVehiclePos.x - focusPos.x,
+          tempVehiclePos.z - focusPos.z,
+        );
+        soundManager.playExplosion(dist);
+        const shakeStr = Math.max(0.18, 1.05 / (1 + dist * 0.04));
+        tpsCamera.addShake(shakeStr, 2.7);
+
+        if (wasActive && playerController) {
+          // 爆発瞬間にまだ乗車中なら自動で車外へ緊急脱出（非グロテスクな衝撃演出）
+          const eject = vc.computeEmergencyEjectTransform();
+          vc.setOccupied(false);
+          activeVehicle = null;
+          controlMode = 'foot';
+          canExitVehicle = false;
+          playerController.triggerEmergencyEject(
+            scene,
+            eject.x,
+            eject.y,
+            eject.z,
+            eject.yaw,
+            eject.dirX,
+            eject.dirZ,
+          );
+          playerController.getPosition(playerPos);
+          focusPos.copy(playerPos);
+          ejectDamageFlashTimeMs = performance.now();
+          showVehicleAlert(
+            `緊急脱出！${vc.getDisplayName()} が爆発しました（約9秒後に近くへ自動復帰）`,
+            'danger',
+            4500,
+          );
+        } else {
+          showVehicleAlert(
+            `${vc.getDisplayName()} が爆発炎上しました（約9秒後に近くへ自動復帰）`,
+            'info',
+            4000,
+          );
+        }
+        modeOrPromptChanged = true;
+      }
+
+      if (damageTickScratch.readyToRespawn) {
+        // プレイヤーが困らないよう近くの安全な道路上へピカピカの同型車両を自動スポーン
+        const dims = vc.getDimensions();
+        const refX = focusPos.x;
+        const refZ = focusPos.z;
+        const camYaw = tpsCamera.getYaw();
+        // プレイヤーの前方寄り 10m 付近の車道を優先探索し、プレイヤーの真上に重ならないよう保護
+        respawnSearchPosScratch.set(
+          refX + Math.sin(camYaw) * 10,
+          0,
+          refZ + Math.cos(camYaw) * 10,
+        );
+        let pose = findNearestSafeRoadPose(
+          respawnSearchPosScratch.x,
+          respawnSearchPosScratch.z,
+          camYaw,
+          dims.width,
+          dims.length,
+          vc.getId(),
+          collisionWorld,
+        );
+        const distToPlayer = Math.hypot(pose.x - refX, pose.z - refZ);
+        if (distToPlayer < 6.0) {
+          pose = findNearestSafeRoadPose(
+            pose.x + Math.sin(pose.yaw) * 12,
+            pose.z + Math.cos(pose.yaw) * 12,
+            pose.yaw,
+            dims.width,
+            dims.length,
+            vc.getId(),
+            collisionWorld,
+          );
+        }
+        vc.repairAndRespawn(pose.x, pose.y, pose.z, pose.yaw, rainAmountNow);
+        soundManager.playVehicleRecover();
+        showVehicleAlert(
+          `${vc.getDisplayName()} が近くの道路に復帰しました`,
+          'success',
+          3600,
+        );
+        modeOrPromptChanged = true;
+      }
+    }
+
+    damageEffects.update(dt, currentDpr);
 
     // 3-B: 交差点信号サイクル更新（青 -> 黄 -> 赤）
     trafficLights.update(dt);
@@ -830,29 +997,35 @@ export function startGameEngine(
         activeVehicle &&
         headlightFactor > 0.01
       ) {
-        const dims = activeVehicle.getDimensions();
-        const isBike = activeVehicle.getType() === 'bike';
-        const bodyGroup = activeVehicle.getBodyGroup();
-        bodyGroup.updateMatrixWorld();
+        const spotMul = activeVehicle.getHeadlightSpotMultiplier();
+        if (spotMul > 0.02) {
+          const dims = activeVehicle.getDimensions();
+          const isBike = activeVehicle.getType() === 'bike';
+          const bodyGroup = activeVehicle.getBodyGroup();
+          bodyGroup.updateMatrixWorld();
 
-        headlightOriginScratch.set(
-          0,
-          isBike ? dims.height * 0.65 : dims.height * 0.45,
-          isBike ? dims.length * 0.42 : dims.length * 0.49,
-        );
-        bodyGroup.localToWorld(headlightOriginScratch);
+          headlightOriginScratch.set(
+            0,
+            isBike ? dims.height * 0.65 : dims.height * 0.45,
+            isBike ? dims.length * 0.42 : dims.length * 0.49,
+          );
+          bodyGroup.localToWorld(headlightOriginScratch);
 
-        headlightTargetScratch.set(
-          0,
-          0.25,
-          dims.length * 0.5 + (isBike ? 22 : 28),
-        );
-        bodyGroup.localToWorld(headlightTargetScratch);
+          headlightTargetScratch.set(
+            0,
+            0.25,
+            dims.length * 0.5 + (isBike ? 22 : 28),
+          );
+          bodyGroup.localToWorld(headlightTargetScratch);
 
-        playerHeadlightSpot.position.copy(headlightOriginScratch);
-        playerHeadlightSpot.target.position.copy(headlightTargetScratch);
-        playerHeadlightSpot.target.updateMatrixWorld();
-        playerHeadlightSpot.intensity = headlightFactor * (isBike ? 68 : 96);
+          playerHeadlightSpot.position.copy(headlightOriginScratch);
+          playerHeadlightSpot.target.position.copy(headlightTargetScratch);
+          playerHeadlightSpot.target.updateMatrixWorld();
+          playerHeadlightSpot.intensity =
+            headlightFactor * spotMul * (isBike ? 68 : 96);
+        } else {
+          playerHeadlightSpot.intensity = 0;
+        }
       } else {
         playerHeadlightSpot.intensity = 0;
       }
@@ -986,7 +1159,13 @@ export function startGameEngine(
           }
         }
         const groundY = Math.max(0, collisionWorld.getGroundHeight(targetX, targetZ));
-        activeVehicle.respawnAt(targetX, groundY, targetZ, TIME_ATTACK_RETRY_POSE.yaw);
+        activeVehicle.repairAndRespawn(
+          targetX,
+          groundY,
+          targetZ,
+          TIME_ATTACK_RETRY_POSE.yaw,
+          weatherController?.getRainAmount() ?? 0,
+        );
         tpsCamera.alignBehind(TIME_ATTACK_RETRY_POSE.yaw);
       } else if (playerController) {
         const groundY = Math.max(
@@ -1013,7 +1192,12 @@ export function startGameEngine(
       emitStatus();
     },
     recoverActiveVehicle: () => {
-      if (controlMode !== 'vehicle' || !activeVehicle) {
+      if (
+        controlMode !== 'vehicle' ||
+        !activeVehicle ||
+        activeVehicle.isBurning() ||
+        activeVehicle.isWrecked()
+      ) {
         return false;
       }
       activeVehicle.getPosition(tempVehiclePos);
@@ -1062,6 +1246,8 @@ export function startGameEngine(
         slot.z = minimapPosScratch.z;
         slot.yaw = vc.getYaw();
         slot.isActive = vc === activeVehicle;
+        slot.isWrecked = vc.isWrecked();
+        slot.isBurning = vc.isBurning();
       }
 
       minimapTrafficScratch.length = 0;
@@ -1103,6 +1289,7 @@ export function startGameEngine(
       }
       playerController = null;
 
+      damageEffects.dispose();
       coinSystem.dispose();
       timeAttackSystem.dispose();
       pedestrianManager.dispose();

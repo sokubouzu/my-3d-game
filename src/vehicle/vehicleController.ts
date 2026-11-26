@@ -6,10 +6,39 @@ import type {
   VehicleType,
 } from './vehicleConfig';
 import type { LoadedHeroVehicle } from './vehicleModel';
+import type { VehicleDamageEffects } from './vehicleDamageEffects';
 
 export type VehicleGear = 'P' | 'N' | 'D' | 'R';
 
 export type DriveSpeedMode = 'CITY' | 'CRUISE' | 'SPORT';
+
+export type VehicleDamageState =
+  | 'intact'
+  | 'light'
+  | 'heavy'
+  | 'burning'
+  | 'wrecked';
+
+export interface VehicleImpactEvent {
+  impactSpeed: number;
+  normalSpeed: number;
+  incidence: number;
+  damage: number;
+  intensity01: number;
+  worldX: number;
+  worldY: number;
+  worldZ: number;
+  normalX: number;
+  normalZ: number;
+}
+
+export interface VehicleDamageTickResult {
+  impact: VehicleImpactEvent | null;
+  fireBeep: boolean;
+  fireBeepUrgency: number;
+  explodedNow: boolean;
+  readyToRespawn: boolean;
+}
 
 export interface DriveSpeedModeConfig {
   mode: DriveSpeedMode;
@@ -52,16 +81,23 @@ export interface VehicleTelemetry {
   speedLimitKmh: number;
   steerAngleRad: number;
   canExit: boolean;
+  hp: number;
+  damageState: VehicleDamageState;
+  burnRemainingSec: number;
+  respawnRemainingSec: number;
   position: { x: number; y: number; z: number };
 }
 
 const REVERSE_HOLD_DELAY = 0.22; // 秒: 停車後のブレーキ長押しでバック移行
 const EXIT_MAX_SPEED = 1.2; // m/s (~4.3 km/h 以下で降車可能)
 const DOOR_INTERACT_MARGIN = 2.4; // m: 車体外面からの乗車可能距離（車体中心から約 2.5〜3.0m）
+const BURN_COUNTDOWN_SEC = 2.5; // 秒: 発火から大爆発までの緊急カウントダウン
+const WRECK_RESPAWN_SEC = 9.0; // 秒: 全損残骸から安全な道路上への自動復帰時間（8〜10秒）
+const IMPACT_DAMAGE_COOLDOWN_SEC = 0.26; // 秒: 連続衝突の多段ヒット防止
 
 /**
- * 作業ID 2-B / 2-C: 運転可能車両（乗用車・スポーツカー・バイク）の物理・車輪回転・ステアリング・
- * バイク車体バンク演出・OBB衝突解決・乗降位置計算を管理するモジュール。
+ * 作業ID 2-B / 2-C / 5-B: 運転可能車両（乗用車・スポーツカー・バイク）の物理・車輪回転・ステアリング・
+ * バイク車体バンク演出・OBB衝突解決・乗降位置計算・段階的ダメージ/発火/爆発/自動リスポーンを管理するモジュール。
  */
 export class VehicleController {
   private readonly vehicle: LoadedHeroVehicle;
@@ -75,7 +111,36 @@ export class VehicleController {
   private speedMode: DriveSpeedMode = 'CITY';
   private reverseHoldTimer = 0;
   private isOccupied = false;
-  private pendingImpactSpeed = 0;
+
+  // 5-B: 耐久度・ダメージ演出・発火＆自動リスポーン状態
+  private hp = 100;
+  private damageState: VehicleDamageState = 'intact';
+  private burnTimer = 0;
+  private fireBeepTimer = 0;
+  private respawnTimer = 0;
+  private wreckElapsed = 0;
+  private impactCooldown = 0;
+  private misfireClock = 0;
+  private smokeEmitTimer = 0;
+  private fireEmitTimer = 0;
+  private damageSparkTimer = 0.6;
+  private oilLeakDistanceAccum = 0;
+
+  private pendingImpact: VehicleImpactEvent | null = null;
+  private readonly impactEventScratch: VehicleImpactEvent = {
+    impactSpeed: 0,
+    normalSpeed: 0,
+    incidence: 0,
+    damage: 0,
+    intensity01: 0,
+    worldX: 0,
+    worldY: 0,
+    worldZ: 0,
+    normalX: 0,
+    normalZ: 0,
+  };
+  private readonly enginePosScratch = new THREE.Vector3();
+  private readonly oilPosScratch = new THREE.Vector3();
 
   constructor(vehicle: LoadedHeroVehicle, collisionWorld: CollisionWorld) {
     this.vehicle = vehicle;
@@ -115,6 +180,39 @@ export class VehicleController {
     this.vehicle.setLightsIntensity(factor);
   }
 
+  public getHeadlightSpotMultiplier(): number {
+    return this.vehicle.damageVisuals.getHeadlightSpotMultiplier();
+  }
+
+  public getHp(): number {
+    return this.hp;
+  }
+
+  public getDamageState(): VehicleDamageState {
+    return this.damageState;
+  }
+
+  public getBurnRemainingSec(): number {
+    return this.damageState === 'burning' ? this.burnTimer : 0;
+  }
+
+  public getRespawnRemainingSec(): number {
+    return this.damageState === 'wrecked' ? this.respawnTimer : 0;
+  }
+
+  /** 乗車可能（発火・黒焦げ残骸ではない）かどうか */
+  public isDrivable(): boolean {
+    return this.damageState !== 'wrecked' && this.damageState !== 'burning';
+  }
+
+  public isWrecked(): boolean {
+    return this.damageState === 'wrecked';
+  }
+
+  public isBurning(): boolean {
+    return this.damageState === 'burning';
+  }
+
   public getRiderMount(): BikeRiderMountConfig | null {
     return this.vehicle.config.riderMount ?? null;
   }
@@ -144,26 +242,22 @@ export class VehicleController {
     return next;
   }
 
-  /** 現在の走行モードに応じた実効最高速度 (m/s) */
+  /** 現在の走行モードおよび損傷状態（HP30%以下の不調）に応じた実効最高速度 (m/s) */
   public getEffectiveMaxForwardSpeedMs(): number {
     const nativeMax = this.vehicle.config.handling.maxForwardSpeed;
     const limitKmh = DRIVE_SPEED_MODE_CONFIGS[this.speedMode].limitKmh;
-    if (limitKmh === null) {
-      return nativeMax;
+    const modeMax =
+      limitKmh === null ? nativeMax : Math.min(nativeMax, limitKmh / 3.6);
+    if (this.hp <= 30 && this.damageState === 'heavy') {
+      const severity = Math.max(0, Math.min(1, (30 - this.hp) / 30));
+      return modeMax * (1 - 0.18 * severity);
     }
-    return Math.min(nativeMax, limitKmh / 3.6);
+    return modeMax;
   }
 
   /** 現在の走行モードに応じた実効最高速度 (km/h) */
   public getEffectiveMaxSpeedKmh(): number {
     return this.getEffectiveMaxForwardSpeedMs() * 3.6;
-  }
-
-  /** 直近フレームで発生した衝突の衝撃速度 (m/s) を取得してリセット */
-  public consumeImpactSpeed(): number {
-    const val = this.pendingImpactSpeed;
-    this.pendingImpactSpeed = 0;
-    return val;
   }
 
   public setOccupied(occupied: boolean): void {
@@ -192,8 +286,9 @@ export class VehicleController {
     return this.vehicle.dimensions;
   }
 
-  /** 降車可能なほぼ停止状態かどうか */
+  /** 降車可能なほぼ停止状態かどうか（発火カウントダウン中は速度に関わらず緊急降車可能） */
   public canExit(): boolean {
+    if (this.damageState === 'burning') return true;
     return Math.abs(this.speed) <= EXIT_MAX_SPEED;
   }
 
@@ -217,6 +312,7 @@ export class VehicleController {
 
   /** プレイヤーがドア付近（約 3.0m 以内）にいるか判定 */
   public isPlayerNearDoor(playerPos: THREE.Vector3): boolean {
+    if (!this.isDrivable()) return false;
     return this.getDoorDistance(playerPos) <= DOOR_INTERACT_MARGIN;
   }
 
@@ -271,14 +367,83 @@ export class VehicleController {
   }
 
   /**
-   * 4-B: 車両・バイクを安全な車道座標・正しい向きへ瞬時にリスポーンさせる（スタック脱出／再挑戦用）。
+   * 5-B: 爆発瞬間の自動緊急脱出用スポーン座標と爆風ノックバック方向を計算する。
+   */
+  public computeEmergencyEjectTransform(): {
+    x: number;
+    y: number;
+    z: number;
+    yaw: number;
+    dirX: number;
+    dirZ: number;
+  } {
+    const pos = this.vehicle.root.position;
+    const halfW = this.vehicle.dimensions.width * 0.5;
+    const halfL = this.vehicle.dimensions.length * 0.5;
+    const fwdX = Math.sin(this.yaw);
+    const fwdZ = Math.cos(this.yaw);
+    const leftX = Math.cos(this.yaw);
+    const leftZ = -Math.sin(this.yaw);
+
+    const candidates: Array<{ x: number; z: number; dx: number; dz: number }> = [
+      {
+        x: pos.x + leftX * (halfW + 1.9),
+        z: pos.z + leftZ * (halfW + 1.9),
+        dx: leftX,
+        dz: leftZ,
+      },
+      {
+        x: pos.x - leftX * (halfW + 1.9),
+        z: pos.z - leftZ * (halfW + 1.9),
+        dx: -leftX,
+        dz: -leftZ,
+      },
+      {
+        x: pos.x - fwdX * (halfL + 2.0),
+        z: pos.z - fwdZ * (halfL + 2.0),
+        dx: -fwdX,
+        dz: -fwdZ,
+      },
+      {
+        x: pos.x + fwdX * (halfL + 2.0),
+        z: pos.z + fwdZ * (halfL + 2.0),
+        dx: fwdX,
+        dz: fwdZ,
+      },
+    ];
+
+    const playerRadius = 0.44;
+    for (const c of candidates) {
+      if (this.collisionWorld.isPointClear(c.x, c.z, playerRadius, this.vehicle.config.id)) {
+        const groundY = this.collisionWorld.getGroundHeight(c.x, c.z);
+        return {
+          x: c.x,
+          y: groundY,
+          z: c.z,
+          yaw: Math.atan2(c.dx, c.dz),
+          dirX: c.dx,
+          dirZ: c.dz,
+        };
+      }
+    }
+
+    const fb = this.computeExitTransform();
+    return {
+      ...fb,
+      dirX: leftX,
+      dirZ: leftZ,
+    };
+  }
+
+  /**
+   * 4-B: 車両・バイクを安全な車道座標・正しい向きへ瞬時にリスポーンさせる（スタック脱出用）。
    */
   public respawnAt(x: number, y: number, z: number, yaw: number): void {
     this.speed = 0;
     this.steerAngle = 0;
     this.leanRoll = 0;
     this.reverseHoldTimer = 0;
-    this.pendingImpactSpeed = 0;
+    this.pendingImpact = null;
     this.yaw = normalizeAngle(yaw);
 
     this.vehicle.root.position.set(x, Math.max(0, y), z);
@@ -290,10 +455,33 @@ export class VehicleController {
     this.syncCollider();
   }
 
+  /**
+   * 5-B: 耐久度 100%・凹み頂点・擦り傷/煤・ライト破損を新品状態へ完全復元し、安全車道へスポーンさせる。
+   */
+  public repairAndRespawn(
+    x: number,
+    y: number,
+    z: number,
+    yaw: number,
+    rainAmount = 0,
+  ): void {
+    this.hp = 100;
+    this.damageState = 'intact';
+    this.burnTimer = 0;
+    this.fireBeepTimer = 0;
+    this.respawnTimer = 0;
+    this.wreckElapsed = 0;
+    this.impactCooldown = 0;
+    this.oilLeakDistanceAccum = 0;
+    this.pendingImpact = null;
+    this.vehicle.damageVisuals.reset(rainAmount);
+    this.respawnAt(x, y, z, yaw);
+  }
+
   public getTelemetry(): VehicleTelemetry {
     const pos = this.vehicle.root.position;
     let gear: VehicleGear = 'N';
-    if (!this.isOccupied && Math.abs(this.speed) < 0.05) {
+    if ((!this.isOccupied || this.damageState === 'wrecked') && Math.abs(this.speed) < 0.05) {
       gear = 'P';
     } else if (this.speed > 0.1) {
       gear = 'D';
@@ -311,23 +499,55 @@ export class VehicleController {
       speedLimitKmh: Math.round(this.getEffectiveMaxSpeedKmh()),
       steerAngleRad: this.steerAngle,
       canExit: this.canExit(),
+      hp: Math.round(this.hp),
+      damageState: this.damageState,
+      burnRemainingSec: this.getBurnRemainingSec(),
+      respawnRemainingSec: this.getRespawnRemainingSec(),
       position: { x: pos.x, y: pos.y, z: pos.z },
     };
   }
 
-  /** 毎フレームの車両物理・車輪回転・ステアリング・衝突解決を更新 */
+  /** 毎フレームの車両物理・車輪回転・ステアリング・衝突解決・ダメージ判定を更新 */
   public update(dt: number, input: VehicleControlInput | null): void {
     const clampedDt = Math.min(dt, 0.05);
+    if (this.impactCooldown > 0) {
+      this.impactCooldown = Math.max(0, this.impactCooldown - clampedDt);
+    }
+    this.misfireClock += clampedDt;
+
+    // 全損残骸は完全不動（コライダーのみ維持）
+    if (this.damageState === 'wrecked') {
+      this.speed = 0;
+      this.steerAngle = 0;
+      this.reverseHoldTimer = 0;
+      if (this.vehicle.config.lean && Math.abs(this.leanRoll) > 0.001) {
+        this.leanRoll *= Math.exp(-6 * clampedDt);
+        this.vehicle.setLeanRoll(this.leanRoll);
+      }
+      this.syncCollider();
+      return;
+    }
+
     const h = this.vehicle.config.handling;
+    const isBurning = this.damageState === 'burning';
     const activeInput: VehicleControlInput =
-      this.isOccupied && input
+      this.isOccupied && input && !isBurning
         ? input
-        : { steer: 0, throttle: 0, brake: 0, handbrake: true };
+        : { steer: 0, throttle: 0, brake: isBurning ? 0.65 : 0, handbrake: !isBurning };
 
     const throttle = Math.max(0, Math.min(1, activeInput.throttle));
     const brake = Math.max(0, Math.min(1, activeInput.brake));
     const steerInput = Math.max(-1, Math.min(1, activeInput.steer));
     const effectiveMaxSpeed = this.getEffectiveMaxForwardSpeedMs();
+
+    // 耐久 30% 以下のエンジン不調（わずかな加速息継ぎ & ステアリングブレ）
+    const isEngineFailing = this.hp <= 30 && this.damageState === 'heavy';
+    const failSeverity = isEngineFailing
+      ? Math.max(0, Math.min(1, (30 - this.hp) / 30))
+      : 0;
+    const misfireAccelMul = isEngineFailing
+      ? 1 - failSeverity * (0.14 + 0.14 * Math.max(0, Math.sin(this.misfireClock * 11.5)))
+      : 1;
 
     // 1. 縦方向（加減速・速度リミッター・ブレーキ・停車後長押しバック・自然な惰性走行）
     if (activeInput.handbrake) {
@@ -351,7 +571,7 @@ export class VehicleController {
         const accelFactor = 1.0 - 0.42 * speedNorm;
         this.speed = Math.min(
           effectiveMaxSpeed,
-          this.speed + h.accelRate * accelFactor * throttle * clampedDt,
+          this.speed + h.accelRate * accelFactor * misfireAccelMul * throttle * clampedDt,
         );
       }
     } else if (brake > 0.05) {
@@ -365,7 +585,7 @@ export class VehicleController {
           -h.maxReverseSpeed,
           this.speed - h.reverseAccel * brake * clampedDt,
         );
-      } else {
+      } else if (!isBurning) {
         // 停車状態での長押しでバックギアへ移行
         this.speed = 0;
         this.reverseHoldTimer += clampedDt;
@@ -375,6 +595,8 @@ export class VehicleController {
             this.speed - h.reverseAccel * brake * clampedDt,
           );
         }
+      } else {
+        this.speed = 0;
       }
     } else {
       // ペダルオフ時の実車に近い緩やかな惰性走行（転がり抵抗＋緩やかな空気抵抗）
@@ -390,7 +612,15 @@ export class VehicleController {
     const maxSteerNow =
       h.maxSteerAngle - (h.maxSteerAngle - h.minHighSpeedSteer) * steerCurve;
     // 左入力(-1) -> +Y回転（左旋回）、右入力(+1) -> -Y回転（右旋回）
-    const targetSteerAngle = -steerInput * maxSteerNow;
+    const wobbleOffset =
+      isEngineFailing && Math.abs(this.speed) > 1.2
+        ? (Math.sin(this.misfireClock * 6.4) * 0.65 +
+            Math.sin(this.misfireClock * 13.7) * 0.35) *
+          0.052 *
+          failSeverity *
+          Math.min(1, Math.abs(this.speed) / 8)
+        : 0;
+    const targetSteerAngle = -steerInput * maxSteerNow + wobbleOffset;
     const steerDelta = targetSteerAngle - this.steerAngle;
     const maxSteerStep = h.steerResponseSpeed * clampedDt;
     if (Math.abs(steerDelta) <= maxSteerStep) {
@@ -409,10 +639,12 @@ export class VehicleController {
     const fwdX = Math.sin(this.yaw);
     const fwdZ = Math.cos(this.yaw);
     const pos = this.vehicle.root.position;
+    const prevX = pos.x;
+    const prevZ = pos.z;
     const nextX = pos.x + fwdX * this.speed * clampedDt;
     const nextZ = pos.z + fwdZ * this.speed * clampedDt;
 
-    // 4. 建物・他車両・外周壁との衝突解決（すり抜け防止＋停止・反発、バイクは車幅に合わせたスリム判定）
+    // 4. 建物・ガードレール・街灯・他車両・外周壁との衝突解決
     const isBike = this.vehicle.config.type === 'bike';
     const colWidth = isBike
       ? Math.max(0.45, this.vehicle.dimensions.width * this.vehicle.config.colliderShrink)
@@ -434,17 +666,34 @@ export class VehicleController {
     pos.z = col.z;
 
     if (col.collided) {
-      const vx = fwdX * this.speed;
-      const vz = fwdZ * this.speed;
+      const preSpeed = this.speed;
+      const absPreSpeed = Math.abs(preSpeed);
+      const vx = fwdX * preSpeed;
+      const vz = fwdZ * preSpeed;
       const vn = vx * col.normalX + vz * col.normalZ;
       if (vn < 0) {
-        // 衝突方向への突っ込み成分を打ち消し、高速時は軽く反発・低速時は停止
-        const impactSpeed = -vn;
-        if (impactSpeed > 0.85) {
-          this.pendingImpactSpeed = Math.max(this.pendingImpactSpeed, impactSpeed);
+        const normalSpeed = -vn;
+        const incidence = Math.max(
+          0,
+          Math.min(1, normalSpeed / Math.max(0.01, absPreSpeed)),
+        );
+
+        // 5-B: 衝突速度と入射角から衝撃エネルギー・ダメージを算出
+        if (normalSpeed > 1.2 && this.impactCooldown <= 0) {
+          this.handleCollisionImpact(
+            absPreSpeed,
+            normalSpeed,
+            incidence,
+            col.contactX,
+            col.contactZ,
+            col.normalX,
+            col.normalZ,
+          );
         }
-        if (impactSpeed > 3.0) {
-          this.speed = -Math.sign(this.speed) * Math.min(2.2, impactSpeed * 0.25);
+
+        // 衝突方向への突っ込み成分を打ち消し、高速時は軽く反発・低速時は停止
+        if (normalSpeed > 3.0) {
+          this.speed = -Math.sign(preSpeed) * Math.min(2.4, normalSpeed * 0.25);
         } else {
           this.speed *= 0.15;
           if (Math.abs(this.speed) < 0.25) {
@@ -452,6 +701,12 @@ export class VehicleController {
           }
         }
       }
+    }
+
+    // 走行距離をオイル漏れトラッキング用に積算
+    const movedDist = Math.hypot(pos.x - prevX, pos.z - prevZ);
+    if (this.hp <= 40 && this.damageState !== 'wrecked' && movedDist > 0.001) {
+      this.oilLeakDistanceAccum += movedDist;
     }
 
     // 5. 地面接地（車道 Y = 0 基準、歩道乗り上げ時も埋まり防止で滑らか追従）
@@ -473,7 +728,6 @@ export class VehicleController {
       const forwardSpeed = Math.max(0, this.speed);
       const speedFactor = Math.min(1, forwardSpeed / lean.speedRefMs);
       const normalizedSteer = maxSteerNow > 0.001 ? this.steerAngle / maxSteerNow : 0;
-      // +Z 前方 / +X 左側の右手系では Z 軸の負回転で左側(+X)、正回転で右側(-X)へ傾く
       const targetRoll = -normalizedSteer * speedFactor * lean.maxRollRad;
       const rollBlend = 1 - Math.exp(-lean.responseRate * clampedDt);
       this.leanRoll += (targetRoll - this.leanRoll) * rollBlend;
@@ -492,6 +746,266 @@ export class VehicleController {
 
     // 8. 車両自身の OBB コライダーを最新位置へ同期
     this.syncCollider();
+  }
+
+  private handleCollisionImpact(
+    impactSpeed: number,
+    normalSpeed: number,
+    incidence: number,
+    contactX: number,
+    contactZ: number,
+    normalX: number,
+    normalZ: number,
+  ): void {
+    this.impactCooldown = IMPACT_DAMAGE_COOLDOWN_SEC;
+
+    const pos = this.vehicle.root.position;
+    const dims = this.vehicle.dimensions;
+    const contactY = pos.y + dims.height * (this.vehicle.config.type === 'bike' ? 0.52 : 0.42);
+
+    let damage = 0;
+    if (normalSpeed >= 2.1 && this.damageState !== 'burning' && this.damageState !== 'wrecked') {
+      const energy =
+        (normalSpeed - 1.65) *
+        (0.42 + 0.58 * incidence) *
+        (1 + normalSpeed * 0.044);
+      const profileScale =
+        this.vehicle.config.audioProfile === 'bike'
+          ? 1.22
+          : this.vehicle.config.audioProfile === 'sports'
+            ? 1.05
+            : 0.92;
+      damage = Math.min(68, Math.max(2, energy * profileScale * 0.92));
+      this.hp = Math.max(0, this.hp - damage);
+
+      if (this.hp <= 0) {
+        this.hp = 0;
+        this.damageState = 'burning';
+        this.burnTimer = BURN_COUNTDOWN_SEC;
+        this.fireBeepTimer = 0;
+      } else if (this.hp <= 40) {
+        this.damageState = 'heavy';
+      } else if (this.hp <= 70) {
+        this.damageState = 'light';
+      }
+    }
+
+    const intensity01 = Math.max(
+      0.12,
+      Math.min(1, (normalSpeed - 1.0) / 22.0 * (0.55 + 0.45 * incidence)),
+    );
+
+    // 衝突ポイントおよび押し込み方向を車体ローカル空間 (+X=左, +Z=前) へ変換してボディを凹ませる
+    if (damage >= 2.5) {
+      const cos = Math.cos(this.yaw);
+      const sin = Math.sin(this.yaw);
+      const dx = contactX - pos.x;
+      const dz = contactZ - pos.z;
+      const localX = dx * cos - dz * sin;
+      const localZ = dx * sin + dz * cos;
+      const localY = Math.max(0.28, contactY - pos.y);
+      // 押し出し法線 (normalX, normalZ) が障害物 -> 車両内部への押し込み方向と一致
+      const localPushX = normalX * cos - normalZ * sin;
+      const localPushZ = normalX * sin + normalZ * cos;
+
+      this.vehicle.damageVisuals.applyImpactDent(
+        localX,
+        localY,
+        localZ,
+        localPushX,
+        localPushZ,
+        Math.min(1, intensity01 * 0.85 + Math.min(0.4, damage / 65)),
+      );
+    }
+
+    const ev = this.impactEventScratch;
+    ev.impactSpeed = impactSpeed;
+    ev.normalSpeed = normalSpeed;
+    ev.incidence = incidence;
+    ev.damage = damage;
+    ev.intensity01 = intensity01;
+    ev.worldX = contactX;
+    ev.worldY = contactY;
+    ev.worldZ = contactZ;
+    ev.normalX = normalX;
+    ev.normalZ = normalZ;
+    this.pendingImpact = ev;
+  }
+
+  /**
+   * 5-B: 毎フレームの段階的ダメージ演出（煙・火花・オイル漏れ・ライト点滅・発火カウントダウン・大爆発・自動リスポーン計時）を更新する。
+   */
+  public updateDamageLifecycle(
+    dt: number,
+    effects: VehicleDamageEffects,
+    rainAmount: number,
+    out: VehicleDamageTickResult,
+  ): void {
+    const clampedDt = Math.min(dt, 0.05);
+    out.impact = this.pendingImpact;
+    this.pendingImpact = null;
+    out.fireBeep = false;
+    out.fireBeepUrgency = 0;
+    out.explodedNow = false;
+    out.readyToRespawn = false;
+
+    const isBurning = this.damageState === 'burning';
+    const isWrecked = this.damageState === 'wrecked';
+
+    // 1. ボディ表面（傷/煤/黒焦げ＋雨濡れ合成）および破損ヘッドライト点滅の更新
+    this.vehicle.damageVisuals.update(
+      clampedDt,
+      this.hp / 100,
+      isBurning,
+      isWrecked,
+      rainAmount,
+    );
+
+    // 2. 衝突瞬間の金属火花パーティクル放出
+    if (out.impact && out.impact.normalSpeed > 1.8) {
+      effects.emitImpactSparks(
+        out.impact.worldX,
+        out.impact.worldY,
+        out.impact.worldZ,
+        out.impact.normalX,
+        out.impact.normalZ,
+        out.impact.intensity01,
+      );
+    }
+
+    // エンジンワールド座標を計算（煙・火花・炎の発生源）
+    const eng = this.computeEngineWorldPosition(this.enginePosScratch);
+    const fwdX = Math.sin(this.yaw);
+    const fwdZ = Math.cos(this.yaw);
+    const vx = fwdX * this.speed;
+    const vz = fwdZ * this.speed;
+
+    // 3. 耐久度別の煙・火花・オイル漏れ演出
+    if (this.damageState === 'light') {
+      // 耐久 70% 以下: エンジン付近から薄い白煙が上昇
+      this.smokeEmitTimer -= clampedDt;
+      if (this.smokeEmitTimer <= 0) {
+        const ratio = Math.max(0, Math.min(1, (70 - this.hp) / 30));
+        this.smokeEmitTimer = 0.16 - ratio * 0.05;
+        effects.emitEngineSmoke(eng.x, eng.y, eng.z, 0.08 + ratio * 0.14, 0.72 + ratio * 0.25, vx, vz);
+      }
+    } else if (this.damageState === 'heavy') {
+      // 耐久 40% 以下: 濃い黒煙 + 時折小さな火花 + 走行中路面オイル漏れ痕
+      this.smokeEmitTimer -= clampedDt;
+      if (this.smokeEmitTimer <= 0) {
+        const ratio = Math.max(0, Math.min(1, (40 - this.hp) / 40));
+        this.smokeEmitTimer = 0.095 - ratio * 0.03;
+        effects.emitEngineSmoke(eng.x, eng.y, eng.z, 0.78 + ratio * 0.16, 0.95 + ratio * 0.35, vx, vz);
+      }
+
+      this.damageSparkTimer -= clampedDt;
+      if (this.damageSparkTimer <= 0) {
+        this.damageSparkTimer = 0.5 + Math.random() * 0.85;
+        effects.emitDamageSparks(eng.x, eng.y - 0.12, eng.z);
+      }
+
+      // 走行中の路面上に黒いオイル漏れ痕を点々と残す（リングバッファ）
+      if (this.oilLeakDistanceAccum >= 1.35) {
+        this.oilLeakDistanceAccum = 0;
+        const oilPos = this.computeOilLeakWorldPosition(this.oilPosScratch);
+        const groundY = Math.max(
+          0,
+          this.collisionWorld.getGroundHeight(oilPos.x, oilPos.z),
+        );
+        const dropScale = this.vehicle.config.type === 'bike' ? 0.44 : 0.68;
+        effects.stampOilDrop(oilPos.x, groundY, oilPos.z, dropScale, false);
+      }
+    } else if (isBurning) {
+      // 4. 発火カウントダウン（約 2.5秒間）：激しい炎＋黒煙＋緊急警告音ピピピピ…
+      this.burnTimer = Math.max(0, this.burnTimer - clampedDt);
+      const urgency = 1 - this.burnTimer / BURN_COUNTDOWN_SEC;
+
+      this.fireBeepTimer -= clampedDt;
+      if (this.fireBeepTimer <= 0) {
+        out.fireBeep = true;
+        out.fireBeepUrgency = urgency;
+        this.fireBeepTimer = Math.max(0.11, 0.34 - urgency * 0.22);
+      }
+
+      this.fireEmitTimer -= clampedDt;
+      if (this.fireEmitTimer <= 0) {
+        this.fireEmitTimer = 0.042;
+        effects.emitFireFlame(eng.x, eng.y - 0.08, eng.z, 1.05 + urgency * 0.45);
+      }
+
+      this.smokeEmitTimer -= clampedDt;
+      if (this.smokeEmitTimer <= 0) {
+        this.smokeEmitTimer = 0.058;
+        effects.emitEngineSmoke(eng.x, eng.y + 0.18, eng.z, 0.94, 1.35, vx * 0.3, vz * 0.3);
+      }
+
+      this.damageSparkTimer -= clampedDt;
+      if (this.damageSparkTimer <= 0) {
+        this.damageSparkTimer = 0.26 + Math.random() * 0.28;
+        effects.emitDamageSparks(eng.x, eng.y, eng.z);
+      }
+
+      if (this.burnTimer <= 0) {
+        // 大爆発発生 -> 黒焦げ残骸へ移行
+        const pos = this.vehicle.root.position;
+        const groundY = Math.max(
+          0,
+          this.collisionWorld.getGroundHeight(pos.x, pos.z),
+        );
+        this.damageState = 'wrecked';
+        this.respawnTimer = WRECK_RESPAWN_SEC;
+        this.wreckElapsed = 0;
+        this.speed = 0;
+        this.vehicle.damageVisuals.applyExplosionWreckDeformation();
+        effects.triggerExplosion(pos.x, groundY, pos.z);
+        out.explodedNow = true;
+      }
+    } else if (isWrecked) {
+      // 5. 黒焦げ残骸状態: くすぶり煙＋初期残り火、約9秒後に自動リスポーン通知
+      this.wreckElapsed += clampedDt;
+      this.respawnTimer = Math.max(0, this.respawnTimer - clampedDt);
+
+      const coolFactor = Math.max(0, 1 - this.wreckElapsed / WRECK_RESPAWN_SEC);
+      this.smokeEmitTimer -= clampedDt;
+      if (this.smokeEmitTimer <= 0) {
+        this.smokeEmitTimer = 0.12 + (1 - coolFactor) * 0.12;
+        effects.emitEngineSmoke(eng.x, eng.y, eng.z, 0.9, 0.8 + coolFactor * 0.45, 0, 0);
+      }
+      if (coolFactor > 0.35) {
+        this.fireEmitTimer -= clampedDt;
+        if (this.fireEmitTimer <= 0) {
+          this.fireEmitTimer = 0.12;
+          effects.emitFireFlame(eng.x, eng.y - 0.15, eng.z, 0.55 * coolFactor);
+        }
+      }
+
+      if (this.respawnTimer <= 0) {
+        out.readyToRespawn = true;
+      }
+    }
+  }
+
+  private computeEngineWorldPosition(out: THREE.Vector3): THREE.Vector3 {
+    const pos = this.vehicle.root.position;
+    const dims = this.vehicle.dimensions;
+    const isBike = this.vehicle.config.type === 'bike';
+    const localZ = isBike ? dims.length * 0.05 : dims.length * 0.34;
+    const localY = isBike ? dims.height * 0.46 : dims.height * 0.58;
+    const fwdX = Math.sin(this.yaw);
+    const fwdZ = Math.cos(this.yaw);
+    out.set(pos.x + fwdX * localZ, pos.y + localY, pos.z + fwdZ * localZ);
+    return out;
+  }
+
+  private computeOilLeakWorldPosition(out: THREE.Vector3): THREE.Vector3 {
+    const pos = this.vehicle.root.position;
+    const dims = this.vehicle.dimensions;
+    const isBike = this.vehicle.config.type === 'bike';
+    const localZ = isBike ? -dims.length * 0.04 : dims.length * 0.24;
+    const fwdX = Math.sin(this.yaw);
+    const fwdZ = Math.cos(this.yaw);
+    out.set(pos.x + fwdX * localZ, pos.y, pos.z + fwdZ * localZ);
+    return out;
   }
 
   private applyDeceleration(amount: number): void {

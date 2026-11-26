@@ -1157,3 +1157,210 @@ body,
   color: #ecfdf5;
 }
 
+/* --- 5-B: 車両耐久度インジケーター（スピードメーター内コンパクト配置） --- */
+.drive-speedometer.is-health-heavy {
+  border-color: rgba(251, 146, 60, 0.72);
+}
+
+.drive-speedometer.is-health-burning {
+  border-color: rgba(248, 113, 113, 0.95);
+  box-shadow: 0 0 18px rgba(239, 68, 68, 0.45);
+}
+
+.drive-health-panel {
+  margin-top: 3px;
+  padding-top: 5px;
+  border-top: 1px solid rgba(148, 163, 184, 0.22);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.drive-health-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.drive-health-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #34d399;
+}
+
+.drive-health-icon.is-state-light {
+  color: #facc15;
+}
+
+.drive-health-icon.is-state-heavy {
+  color: #fb923c;
+}
+
+.drive-health-icon.is-state-burning {
+  color: #f87171;
+  animation: damagePulse 0.45s ease-in-out infinite alternate;
+}
+
+.drive-health-status {
+  color: #cbd5e1;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.drive-health-pct {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #f8fafc;
+}
+
+.drive-health-bar {
+  width: 100%;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.22);
+  overflow: hidden;
+}
+
+.drive-health-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #10b981, #34d399);
+  transition: width 0.14s ease, background 0.2s ease;
+}
+
+.drive-health-bar-fill.is-state-light {
+  background: linear-gradient(90deg, #eab308, #facc15);
+}
+
+.drive-health-bar-fill.is-state-heavy {
+  background: linear-gradient(90deg, #ea580c, #fb923c);
+}
+
+.drive-health-bar-fill.is-state-burning {
+  background: linear-gradient(90deg, #dc2626, #f87171);
+  animation: damagePulse 0.4s ease-in-out infinite alternate;
+}
+
+/* 発火中の緊急脱出ボタン強調 */
+.interact-btn-exit.is-emergency {
+  border-color: rgba(254, 202, 202, 0.98);
+  background: rgba(220, 38, 38, 0.9);
+  box-shadow: 0 0 22px rgba(239, 68, 68, 0.65);
+  animation: damagePulse 0.42s ease-in-out infinite alternate;
+}
+
+/* 5-B: 車両発火カウントダウン緊急警告バナー */
+.vehicle-fire-warning-banner {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 60px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 38;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 16px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(254, 202, 202, 0.95);
+  background: rgba(185, 28, 28, 0.88);
+  color: #fef2f2;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  box-shadow: 0 8px 24px rgba(185, 28, 28, 0.48);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  pointer-events: none;
+  animation: damagePulse 0.4s ease-in-out infinite alternate;
+}
+
+.vehicle-fire-warning-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fef08a;
+  color: #991b1b;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+/* 5-B: 爆発＆自動リスポーン通知トースト */
+.vehicle-alert-toast {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 60px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 37;
+  padding: 7px 16px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(148, 163, 184, 0.65);
+  background: rgba(15, 23, 42, 0.84);
+  color: #f8fafc;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.36);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  pointer-events: none;
+}
+
+.vehicle-alert-toast.is-tone-danger {
+  border-color: rgba(251, 146, 60, 0.9);
+  background: rgba(124, 45, 18, 0.88);
+  color: #ffedd5;
+}
+
+.vehicle-alert-toast.is-tone-success {
+  border-color: rgba(52, 211, 153, 0.85);
+  background: rgba(6, 78, 59, 0.86);
+  color: #d1fae5;
+}
+
+/* 5-B: 爆発緊急脱出時の画面外周オレンジ衝撃ビネット（非グロテスク演出） */
+.eject-impact-flash {
+  position: fixed;
+  inset: 0;
+  z-index: 36;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(255, 180, 64, 0) 42%,
+    rgba(249, 115, 22, 0.42) 78%,
+    rgba(220, 38, 38, 0.56) 100%
+  );
+  animation: ejectFlashFade 0.95s ease-out forwards;
+}
+
+@keyframes damagePulse {
+  from {
+    opacity: 0.82;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes ejectFlashFade {
+  0% {
+    opacity: 0.95;
+  }
+  25% {
+    opacity: 0.72;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+

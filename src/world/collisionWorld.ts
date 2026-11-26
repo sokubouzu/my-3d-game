@@ -32,6 +32,12 @@ export interface VehicleCollisionResult {
   normalX: number;
   /** 衝突押し出し方向（正規化法線 Z） */
   normalZ: number;
+  /** 衝突が発生したワールド座標 X (m) */
+  contactX: number;
+  /** 衝突が発生したワールド座標 Z (m) */
+  contactZ: number;
+  /** 最も強く衝突したコライダー ID（外周壁の場合は 'world_boundary'、未衝突時は null） */
+  hitColliderId: string | null;
 }
 
 export interface ObbBox2D {
@@ -410,6 +416,10 @@ export class CollisionWorld {
     let collided = false;
     let totalPushX = 0;
     let totalPushZ = 0;
+    let bestHitWeight = 0;
+    let contactX = x;
+    let contactZ = z;
+    let hitColliderId: string | null = null;
 
     const fwdX = Math.sin(yaw);
     const fwdZ = Math.cos(yaw);
@@ -470,6 +480,14 @@ export class CollisionWorld {
 
           const pushWorldX = pushLocalX * col.cos + pushLocalZ * col.sin;
           const pushWorldZ = -pushLocalX * col.sin + pushLocalZ * col.cos;
+          const pushMag = Math.hypot(pushWorldX, pushWorldZ);
+          if (pushMag > bestHitWeight) {
+            bestHitWeight = pushMag;
+            // OBB 上の最近接点をワールド座標へ変換して衝突ポイントとする
+            contactX = col.cx + clampedX * col.cos + clampedZ * col.sin;
+            contactZ = col.cz - clampedX * col.sin + clampedZ * col.cos;
+            hitColliderId = col.id;
+          }
 
           sx += pushWorldX;
           sz += pushWorldZ;
@@ -479,17 +497,45 @@ export class CollisionWorld {
 
         // 街区外周壁クランプ
         if (sx < -limit) {
-          spherePushX += -limit - sx;
+          const pen = -limit - sx;
+          if (pen > bestHitWeight) {
+            bestHitWeight = pen;
+            contactX = -this.worldHalfExtent;
+            contactZ = sz;
+            hitColliderId = 'world_boundary';
+          }
+          spherePushX += pen;
           sx = -limit;
         } else if (sx > limit) {
-          spherePushX += limit - sx;
+          const pen = sx - limit;
+          if (pen > bestHitWeight) {
+            bestHitWeight = pen;
+            contactX = this.worldHalfExtent;
+            contactZ = sz;
+            hitColliderId = 'world_boundary';
+          }
+          spherePushX -= pen;
           sx = limit;
         }
         if (sz < -limit) {
-          spherePushZ += -limit - sz;
+          const pen = -limit - sz;
+          if (pen > bestHitWeight) {
+            bestHitWeight = pen;
+            contactX = sx;
+            contactZ = -this.worldHalfExtent;
+            hitColliderId = 'world_boundary';
+          }
+          spherePushZ += pen;
           sz = -limit;
         } else if (sz > limit) {
-          spherePushZ += limit - sz;
+          const pen = sz - limit;
+          if (pen > bestHitWeight) {
+            bestHitWeight = pen;
+            contactX = sx;
+            contactZ = this.worldHalfExtent;
+            hitColliderId = 'world_boundary';
+          }
+          spherePushZ -= pen;
           sz = limit;
         }
 
@@ -532,6 +578,22 @@ export class CollisionWorld {
           totalPushZ += sep.pushZ;
           collided = true;
           separated = true;
+          if (sep.penetration > bestHitWeight) {
+            bestHitWeight = sep.penetration;
+            // 押し出し法線の逆向きにある車体表面近傍を衝突点として近似
+            const pLen = Math.hypot(sep.pushX, sep.pushZ);
+            if (pLen > 1e-6) {
+              const nx = sep.pushX / pLen;
+              const nz = sep.pushZ / pLen;
+              const localNX = nx * vehObb.cos - nz * vehObb.sin;
+              const localNZ = nx * vehObb.sin + nz * vehObb.cos;
+              const surfLocalX = -Math.sign(localNX) * Math.min(vehObb.halfW, Math.abs(localNX) * vehObb.halfW * 1.35);
+              const surfLocalZ = -Math.sign(localNZ) * Math.min(vehObb.halfD, Math.abs(localNZ) * vehObb.halfD * 1.35);
+              contactX = cx + surfLocalX * vehObb.cos + surfLocalZ * vehObb.sin;
+              contactZ = cz - surfLocalX * vehObb.sin + surfLocalZ * vehObb.cos;
+            }
+            hitColliderId = col.id;
+          }
         }
       }
 
@@ -548,6 +610,9 @@ export class CollisionWorld {
       collided,
       normalX,
       normalZ,
+      contactX,
+      contactZ,
+      hitColliderId,
     };
   }
 

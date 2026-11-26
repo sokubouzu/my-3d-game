@@ -7,6 +7,8 @@ export interface MinimapVehiclePoint {
   z: number;
   yaw: number;
   isActive: boolean;
+  isWrecked?: boolean;
+  isBurning?: boolean;
 }
 
 export interface MinimapCoinPoint {
@@ -405,7 +407,7 @@ export function Minimap({ getSnapshot }: MinimapProps) {
         ctx.restore();
       }
 
-      // 7. 運転可能車両2台（シアン／ゴールドの強調アイコン・レーダー外でも端に表示）
+      // 7. 運転可能車両3台（シアン／ゴールド／ピンクの強調アイコン・発火/残骸状態も区別表示・レーダー外でも端に表示）
       const clampRadius = MINIMAP_HALF_PX - 9;
       for (let i = 0; i < snapshot.drivableCount; i += 1) {
         const dv = snapshot.drivableVehicles[i];
@@ -424,23 +426,36 @@ export function Minimap({ getSnapshot }: MinimapProps) {
 
         const isSports = dv.id.includes('porsche');
         const isBike = dv.id.includes('bike') || dv.id.includes('harley');
-        const fill = isBike ? '#f472b6' : isSports ? '#facc15' : '#38bdf8';
+        const baseFill = isBike ? '#f472b6' : isSports ? '#facc15' : '#38bdf8';
+        const fill = dv.isWrecked
+          ? '#475569'
+          : dv.isBurning
+            ? '#f97316'
+            : baseFill;
 
         ctx.save();
         ctx.translate(mx, my);
+        if (dv.isBurning) {
+          const pulse = 0.5 + 0.5 * Math.sin(now * 0.016);
+          ctx.beginPath();
+          ctx.arc(0, 0, 5.5 + pulse * 2.4, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(239, 68, 68, 0.85)';
+          ctx.lineWidth = 1.6;
+          ctx.stroke();
+        }
         if (isClamped) {
           ctx.beginPath();
           ctx.arc(0, 0, isBike ? 3.2 : 3.6, 0, Math.PI * 2);
           ctx.fillStyle = fill;
           ctx.fill();
-          ctx.strokeStyle = '#0f172a';
+          ctx.strokeStyle = dv.isWrecked ? '#ef4444' : '#0f172a';
           ctx.lineWidth = 1.2;
           ctx.stroke();
         } else {
           const angle = Math.atan2(Math.cos(dv.yaw), Math.sin(dv.yaw));
           ctx.rotate(angle);
           ctx.fillStyle = fill;
-          ctx.strokeStyle = '#ffffff';
+          ctx.strokeStyle = dv.isWrecked ? '#94a3b8' : '#ffffff';
           ctx.lineWidth = 1.1;
           if (isBike) {
             ctx.fillRect(-3.8, -1.6, 7.6, 3.2);
@@ -448,6 +463,17 @@ export function Minimap({ getSnapshot }: MinimapProps) {
           } else {
             ctx.fillRect(-4.6, -2.7, 9.2, 5.4);
             ctx.strokeRect(-4.6, -2.7, 9.2, 5.4);
+          }
+          if (dv.isWrecked) {
+            ctx.rotate(-angle);
+            ctx.strokeStyle = '#ef4444';
+            ctx.lineWidth = 1.4;
+            ctx.beginPath();
+            ctx.moveTo(-2.6, -2.6);
+            ctx.lineTo(2.6, 2.6);
+            ctx.moveTo(2.6, -2.6);
+            ctx.lineTo(-2.6, 2.6);
+            ctx.stroke();
           }
         }
         ctx.restore();
