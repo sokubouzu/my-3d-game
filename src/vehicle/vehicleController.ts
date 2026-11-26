@@ -705,7 +705,7 @@ export class VehicleController {
 
     // 走行距離をオイル漏れトラッキング用に積算
     const movedDist = Math.hypot(pos.x - prevX, pos.z - prevZ);
-    if (this.hp <= 40 && this.damageState !== 'wrecked' && movedDist > 0.001) {
+    if (this.hp <= 40 && movedDist > 0.001) {
       this.oilLeakDistanceAccum += movedDist;
     }
 
