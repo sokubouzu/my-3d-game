@@ -62,15 +62,19 @@ export function App() {
     const handle = startGameEngine(canvas, setStatus);
     engineRef.current = handle;
 
-    // 3-D: iPadOS Safari 自動再生制限解除（初回タップ／キー操作で AudioContext.resume()）
+    // 3-D: iPadOS Safari 自動再生制限解除（touchstart / pointerdown / click / keydown の同期コールバック内でアンロック＆running まで再試行）
     const handleFirstGesture = () => {
       handle.unlockAudio();
     };
+    window.addEventListener('touchstart', handleFirstGesture, {
+      capture: true,
+      passive: true,
+    });
     window.addEventListener('pointerdown', handleFirstGesture, {
       capture: true,
       passive: true,
     });
-    window.addEventListener('touchstart', handleFirstGesture, {
+    window.addEventListener('click', handleFirstGesture, {
       capture: true,
       passive: true,
     });
@@ -80,8 +84,9 @@ export function App() {
     });
 
     return () => {
-      window.removeEventListener('pointerdown', handleFirstGesture, true);
       window.removeEventListener('touchstart', handleFirstGesture, true);
+      window.removeEventListener('pointerdown', handleFirstGesture, true);
+      window.removeEventListener('click', handleFirstGesture, true);
       window.removeEventListener('keydown', handleFirstGesture, true);
       engineRef.current = null;
       handle.dispose();
@@ -125,7 +130,6 @@ export function App() {
   }, []);
 
   const handleToggleAudioMute = useCallback(() => {
-    engineRef.current?.unlockAudio();
     engineRef.current?.toggleAudioMute();
   }, []);
 

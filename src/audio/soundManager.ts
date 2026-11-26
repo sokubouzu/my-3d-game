@@ -27,12 +27,18 @@ function getAudioContextConstructor(): AudioContextCtor | null {
   return win.AudioContext ?? win.webkitAudioContext ?? null;
 }
 
+const MASTER_GAIN_LEVEL = 1.0;
+
 /**
  * 作業ID 3-D: iPadOS Safari 対応・外部音声ファイル不要の手続き型 Web Audio エンジン。
  *
  * - エンジン音・走行音・スキッド音・街の環境音は初期化時に1回だけ常設ノードグラフを構築し、
  *   毎フレームは setTargetAtTime によるパラメータ更新のみを行う（M1 iPad Air 60FPS 維持）。
- * - 足音・着地音・衝突音はイベント発生時のみ事前生成ノイズバッファを共有して軽量再生。
+ * - iPadOS Safari の音声制限解除のため、ユーザー操作の同期コールバック内で
+ *   AudioContext 生成・resume()・短い確認チャイム音の oscillator.start() を一括実行し、
+ *   ctx.state === 'running' になるまで再試行する。
+ * - iPad 内蔵スピーカーは 80Hz 以下の超低音が聞こえにくいため、中音域（150Hz〜1200Hz）の
+ *   倍音バランスとマスターゲイン＋軽量コンプレッサーを最適化している。
  */
 export class SoundManager {
   private ctx: AudioContext | null = null;
@@ -49,7 +55,7 @@ export class SoundManager {
   // 2. 車両エンジン音＆ロードノイズ（常設）
   private engineOsc1: OscillatorNode | null = null;
   private engineOsc2: OscillatorNode | null = null;
-  private engineSubOsc: OscillatorNode | null = null;
+  private engineHarmonicOsc: OscillatorNode | null = null;
   private enginePulseLfo: OscillatorNode | null = null;
   private enginePulseGain: GainNode | null = null;
   private engineFilter: BiquadFilterNode | null = null;
@@ -67,6 +73,8 @@ export class SoundManager {
   // 状態管理
   private muted = false;
   private unlocked = false;
+  private unlockChimePlayed = false;
+  private lastChimeTimeMs = -1000;
   private disposed = false;
   private onStateChange?: (state: SoundStateSnapshot) => void;
 
@@ -76,11 +84,16 @@ export class SoundManager {
   private footstepAlternate = false;
   private lastImpactTimeMs = -1000;
 
-  // バックグラウンド遷移ハンドラ
+  // バックグラウンド遷移・AudioContext 状態監視ハンドラ
   private readonly handleVisibilityChange: () => void;
+  private readonly handleContextStateChange: () => void;
 
   constructor(onStateChange?: (state: SoundStateSnapshot) => void) {
     this.onStateChange = onStateChange;
+
+    this.handleContextStateChange = () => {
+      this.syncUnlockedState();
+    };
 
     this.handleVisibilityChange = () => {
       if (!this.ctx || this.disposed) return;
@@ -88,8 +101,13 @@ export class SoundManager {
         if (this.ctx.state === 'running') {
           void this.ctx.suspend().catch(() => {});
         }
-      } else if (this.unlocked && !this.muted && this.ctx.state === 'suspended') {
-        void this.ctx.resume().catch(() => {});
+      } else if (!this.muted && this.ctx.state !== 'running') {
+        void this.ctx
+          .resume()
+          .then(() => {
+            this.syncUnlockedState();
+          })
+          .catch(() => {});
       }
     };
 
@@ -103,69 +121,96 @@ export class SoundManager {
   }
 
   public isUnlocked(): boolean {
-    return this.unlocked;
+    return this.unlocked && this.ctx?.state === 'running';
   }
 
   public getState(): SoundStateSnapshot {
     return {
       muted: this.muted,
-      unlocked: this.unlocked,
+      unlocked: this.unlocked && this.ctx?.state === 'running',
     };
   }
 
   /**
    * iPadOS Safari の自動再生制限解除。
-   * ユーザーの初回画面タップ／キー操作イベントハンドラ内から同期的に呼び出すこと。
+   * ユーザーの初回タップ（touchstart / pointerdown / click）・スピーカーボタン押下時の
+   * 同期コールバック内から呼び出し、AudioContext 生成・resume()・短い確認チャイム音の
+   * oscillator.start() を同一同期ブロック内で実行する。
+   * ctx.state === 'running' になるまで再試行するガード付き。
    */
-  public unlock(): void {
-    if (this.disposed) return;
+  public unlock(playFeedbackChime = false): boolean {
+    if (this.disposed) return false;
 
+    const alreadyRunning =
+      this.ctx !== null && this.ctx.state === 'running' && this.unlocked;
+    if (alreadyRunning) {
+      if (playFeedbackChime && !this.muted && this.ctx) {
+        this.playConfirmationChime(this.ctx, true, true);
+      }
+      return true;
+    }
+
+    // 1. AudioContext 生成と常設ノードグラフ構築（同期）
     if (!this.ctx) {
       const Ctor = getAudioContextConstructor();
-      if (!Ctor) return;
+      if (!Ctor) return false;
       try {
-        this.ctx = new Ctor();
-        this.buildPersistentGraph(this.ctx);
+        const created = new Ctor();
+        created.addEventListener('statechange', this.handleContextStateChange);
+        this.ctx = created;
+        this.buildPersistentGraph(created);
       } catch {
-        return;
+        return false;
       }
     }
 
     const ctx = this.ctx;
-    if (!ctx) return;
+    if (!ctx) return false;
 
-    if (ctx.state === 'suspended') {
-      void ctx
-        .resume()
-        .then(() => {
-          this.markUnlocked();
-        })
-        .catch(() => {});
-    }
-
-    // iOS / iPadOS Safari 確実アンロック用の無音1サンプル再生
-    if (!this.unlocked) {
+    // 2. ctx.state が 'running' でなければ同期的に resume() を発行
+    if (ctx.state !== 'running') {
       try {
-        const silentBuf = ctx.createBuffer(1, 1, ctx.sampleRate);
-        const src = ctx.createBufferSource();
-        src.buffer = silentBuf;
-        src.connect(ctx.destination);
-        src.start(0);
+        void ctx
+          .resume()
+          .then(() => {
+            this.syncUnlockedState();
+          })
+          .catch(() => {});
       } catch {
-        // 既に再生可能または無視可能
-      }
-      if (ctx.state === 'running') {
-        this.markUnlocked();
+        // Safari の状態遷移中例外を保護
       }
     }
+
+    // 3. 同一同期ブロック内で短い確認チャイム音（440Hz→660Hz）の oscillator.start() を実行
+    const shouldPlayAudibleChime =
+      !this.muted && (playFeedbackChime || !this.unlockChimePlayed);
+    this.playConfirmationChime(ctx, shouldPlayAudibleChime, playFeedbackChime);
+    if (shouldPlayAudibleChime) {
+      this.unlockChimePlayed = true;
+    }
+
+    // 4. running 状態を同期反映（未達の場合は次回タップで再試行される）
+    this.syncUnlockedState();
+    return this.isUnlocked();
   }
 
   public setMuted(nextMuted: boolean): boolean {
+    const wasMuted = this.muted;
     this.muted = nextMuted;
+
     if (!this.muted) {
-      this.unlock();
+      // 音声ON切替時はフィードバック音が減衰されないよう即座にマスターゲインを復帰
+      if (this.ctx && this.masterGain) {
+        const now = this.ctx.currentTime;
+        this.masterGain.gain.cancelScheduledValues(now);
+        this.masterGain.gain.setValueAtTime(MASTER_GAIN_LEVEL, now);
+      }
+      // 確実なアンロック＋短いフィードバック音（440Hz→660Hz）を発音
+      this.unlock(wasMuted || !this.unlockChimePlayed);
+    } else {
+      this.applyMasterGain();
     }
-    this.applyMasterGain();
+
     this.emitState();
     return this.muted;
   }
@@ -178,11 +223,13 @@ export class SoundManager {
    * 車両エンジン音・ロードノイズ・ブレーキスキッド音を毎フレーム滑らかに更新する（ゼロアロケーション）。
    */
   public updateVehicleAudio(frame: VehicleAudioFrame): void {
-    if (!this.ctx || !this.unlocked || this.disposed) return;
+    if (!this.ctx || this.ctx.state !== 'running' || !this.unlocked || this.disposed) {
+      return;
+    }
     if (
       !this.engineOsc1 ||
       !this.engineOsc2 ||
-      !this.engineSubOsc ||
+      !this.engineHarmonicOsc ||
       !this.engineFilter ||
       !this.engineGain ||
       !this.enginePulseLfo ||
@@ -217,50 +264,56 @@ export class SoundManager {
     const throttleBoost = throttle * (isSports ? 0.18 : 0.12);
     const revNorm = Math.min(1.12, revCurve + throttleBoost);
 
-    // 車種別の基本周波数＆倍音バランス
-    const idleFreq = isSports ? 64 : 46;
-    const maxFreq = isSports ? 255 : 155;
+    // 車種別の基本周波数＆iPad内蔵スピーカーで明確に聞こえる中音域（150Hz〜1200Hz）倍音設計
+    const idleFreq = isSports ? 86 : 68;
+    const maxFreq = isSports ? 295 : 215;
     const baseFreq = idleFreq + (maxFreq - idleFreq) * revNorm;
-    const harmonicRatio = isSports ? 2.02 : 1.99;
+    const harmonic2Ratio = isSports ? 2.02 : 2.0;
+    const harmonic3Ratio = isSports ? 3.03 : 3.01;
 
     const freqTau = isSports ? 0.045 : 0.065;
     this.engineOsc1.frequency.setTargetAtTime(baseFreq, now, freqTau);
     this.engineOsc2.frequency.setTargetAtTime(
-      baseFreq * harmonicRatio,
+      baseFreq * harmonic2Ratio,
       now,
       freqTau,
     );
-    this.engineSubOsc.frequency.setTargetAtTime(baseFreq * 0.5, now, freqTau);
+    this.engineHarmonicOsc.frequency.setTargetAtTime(
+      baseFreq * harmonic3Ratio,
+      now,
+      freqTau,
+    );
 
     // アイドリング時の低い鼓動感（低速ほど脈動、高速で滑らかに連続音へ）
     const idlePulseRate = isSports ? 14 + speedNorm * 22 : 10 + speedNorm * 16;
-    const idlePulseDepth = (1 - Math.min(1, speedNorm * 2.5)) * (isSports ? 0.022 : 0.018);
+    const idlePulseDepth =
+      (1 - Math.min(1, speedNorm * 2.5)) * (isSports ? 0.055 : 0.045);
     this.enginePulseLfo.frequency.setTargetAtTime(idlePulseRate, now, 0.08);
     this.enginePulseGain.gain.setTargetAtTime(idlePulseDepth, now, 0.08);
 
-    // ローパスフィルター開度（アクセルON・高回転で倍音が明るく開く）
-    const filterMin = isSports ? 340 : 220;
-    const filterMax = isSports ? 2200 : 1150;
+    // ローパスフィルター開度（中音域の倍音をしっかり通す設定）
+    const filterMin = isSports ? 680 : 500;
+    const filterMax = isSports ? 2600 : 1800;
     const targetFilterFreq =
       filterMin +
       (filterMax - filterMin) * Math.min(1, revNorm * 0.85 + throttle * 0.28);
     this.engineFilter.frequency.setTargetAtTime(targetFilterFreq, now, 0.06);
-    this.engineFilter.Q.setTargetAtTime(isSports ? 2.4 : 1.4, now, 0.08);
+    this.engineFilter.Q.setTargetAtTime(isSports ? 2.4 : 1.7, now, 0.08);
 
-    // エンジン音量（アイドリング時は控えめ、加速・高速時に存在感アップ）
-    const baseEngineGain = isSports ? 0.088 : 0.078;
+    // エンジン音量（通常の端末音量で明確に聞こえるレベル）
+    const baseEngineGain = isSports ? 0.3 : 0.26;
     const targetEngineGain =
-      baseEngineGain + throttle * 0.055 + speedNorm * 0.048;
+      baseEngineGain + throttle * 0.15 + speedNorm * 0.11;
     this.engineGain.gain.setTargetAtTime(targetEngineGain, now, 0.06);
 
-    // タイヤ走行音・風切りロードノイズ
+    // タイヤ走行音・風切りロードノイズ（中音域 480Hz〜1150Hz）
     const roadNorm = Math.min(1, speedKmh / 120);
-    const targetRoadGain = roadNorm > 0.03 ? roadNorm * roadNorm * 0.095 : 0.0001;
-    const targetRoadFreq = 320 + roadNorm * 820;
+    const targetRoadGain = roadNorm > 0.03 ? roadNorm * roadNorm * 0.24 : 0.0001;
+    const targetRoadFreq = 480 + roadNorm * 680;
     this.roadFilter.frequency.setTargetAtTime(targetRoadFreq, now, 0.08);
     this.roadGain.gain.setTargetAtTime(targetRoadGain, now, 0.09);
 
-    // 一定速度以上（>= 18 km/h）からの急ブレーキ／ハンドブレーキ時に短いタイヤスキッド音
+    // 一定速度以上（>= 18 km/h）からの急ブレーキ／ハンドブレーキ時にタイヤスキッド音
     const isHardBraking =
       !frame.isReversing &&
       speedKmh >= 18 &&
@@ -270,8 +323,8 @@ export class SoundManager {
         1,
         ((speedKmh - 14) / 65) * (frame.handbrake ? 1.0 : brake),
       );
-      const targetSkidGain = 0.035 + skidIntensity * 0.095;
-      const targetSkidFreq = 980 + skidIntensity * 460;
+      const targetSkidGain = 0.15 + skidIntensity * 0.25;
+      const targetSkidFreq = 920 + skidIntensity * 520;
       this.skidFilter.frequency.setTargetAtTime(targetSkidFreq, now, 0.04);
       this.skidGain.gain.setTargetAtTime(targetSkidGain, now, 0.03);
     } else {
@@ -309,9 +362,16 @@ export class SoundManager {
     }
   }
 
-  /** 足音ワンショット（アスファルト／歩道を踏む靴音） */
+  /** 足音ワンショット（アスファルト／歩道を踏む靴音、iPad スピーカー中音域最適化） */
   public playFootstep(isRunning: boolean): void {
-    if (!this.ctx || !this.masterGain || !this.unlocked || this.muted || this.disposed) {
+    if (
+      !this.ctx ||
+      this.ctx.state !== 'running' ||
+      !this.masterGain ||
+      !this.unlocked ||
+      this.muted ||
+      this.disposed
+    ) {
       return;
     }
     if (!this.whiteNoiseBuffer) return;
@@ -323,53 +383,60 @@ export class SoundManager {
     const jitter = 0.92 + Math.random() * 0.16;
     const sideTone = this.footstepAlternate ? 1.04 : 0.96;
 
-    // 1. 地面の擦れ・靴底のアタック（バンドパスノイズ）
+    // 1. 地面の擦れ・靴底のアタック（中音域バンドパスノイズ 680Hz〜1100Hz）
     const noiseSrc = ctx.createBufferSource();
     noiseSrc.buffer = this.whiteNoiseBuffer;
 
     const filter = ctx.createBiquadFilter();
     filter.type = 'bandpass';
     filter.frequency.setValueAtTime(
-      (isRunning ? 720 : 540) * jitter * sideTone,
+      (isRunning ? 980 : 760) * jitter * sideTone,
       now,
     );
-    filter.Q.setValueAtTime(1.1, now);
+    filter.Q.setValueAtTime(1.2, now);
 
     const noiseGain = ctx.createGain();
-    const peakNoise = isRunning ? 0.085 : 0.052;
+    const peakNoise = isRunning ? 0.34 : 0.24;
     noiseGain.gain.setValueAtTime(0.0001, now);
     noiseGain.gain.linearRampToValueAtTime(peakNoise, now + 0.008);
-    noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.068);
+    noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.072);
 
     noiseSrc.connect(filter);
     filter.connect(noiseGain);
     noiseGain.connect(this.masterGain);
 
     const offset = Math.random() * Math.max(0.1, this.whiteNoiseBuffer.duration - 0.15);
-    noiseSrc.start(now, offset, 0.085);
+    noiseSrc.start(now, offset, 0.088);
 
-    // 2. 低い着地タップ（短いサイン波ピッチドロップ）
+    // 2. 靴底の着地タップ（iPad スピーカーで明確に鳴る 190Hz〜240Hz → 95Hz ピッチドロップ）
     const thudOsc = ctx.createOscillator();
-    thudOsc.type = 'sine';
-    const startFreq = (isRunning ? 128 : 102) * jitter;
+    thudOsc.type = 'triangle';
+    const startFreq = (isRunning ? 235 : 190) * jitter;
     thudOsc.frequency.setValueAtTime(startFreq, now);
-    thudOsc.frequency.exponentialRampToValueAtTime(42, now + 0.05);
+    thudOsc.frequency.exponentialRampToValueAtTime(95, now + 0.052);
 
     const thudGain = ctx.createGain();
-    const peakThud = isRunning ? 0.095 : 0.058;
+    const peakThud = isRunning ? 0.36 : 0.26;
     thudGain.gain.setValueAtTime(0.0001, now);
     thudGain.gain.linearRampToValueAtTime(peakThud, now + 0.005);
-    thudGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.055);
+    thudGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.058);
 
     thudOsc.connect(thudGain);
     thudGain.connect(this.masterGain);
     thudOsc.start(now);
-    thudOsc.stop(now + 0.06);
+    thudOsc.stop(now + 0.064);
   }
 
   /** ジャンプ着地音ワンショット */
   public playLanding(impactSpeed: number): void {
-    if (!this.ctx || !this.masterGain || !this.unlocked || this.muted || this.disposed) {
+    if (
+      !this.ctx ||
+      this.ctx.state !== 'running' ||
+      !this.masterGain ||
+      !this.unlocked ||
+      this.muted ||
+      this.disposed
+    ) {
       return;
     }
     if (!this.whiteNoiseBuffer) return;
@@ -378,46 +445,54 @@ export class SoundManager {
     const now = ctx.currentTime;
     const intensity = Math.max(0.35, Math.min(1, impactSpeed / 9.0));
 
-    // 低音インパクト
+    // 中低音インパクト（215Hz → 88Hz）
     const thudOsc = ctx.createOscillator();
     thudOsc.type = 'triangle';
-    thudOsc.frequency.setValueAtTime(115 + intensity * 25, now);
-    thudOsc.frequency.exponentialRampToValueAtTime(34, now + 0.1);
+    thudOsc.frequency.setValueAtTime(215 + intensity * 45, now);
+    thudOsc.frequency.exponentialRampToValueAtTime(88, now + 0.1);
 
     const thudGain = ctx.createGain();
     thudGain.gain.setValueAtTime(0.0001, now);
-    thudGain.gain.linearRampToValueAtTime(0.14 * intensity, now + 0.008);
-    thudGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.115);
+    thudGain.gain.linearRampToValueAtTime(0.38 * intensity, now + 0.008);
+    thudGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
 
     thudOsc.connect(thudGain);
     thudGain.connect(this.masterGain);
     thudOsc.start(now);
-    thudOsc.stop(now + 0.125);
+    thudOsc.stop(now + 0.13);
 
     // 砂利・舗装の着地ノイズ
     const noiseSrc = ctx.createBufferSource();
     noiseSrc.buffer = this.whiteNoiseBuffer;
 
     const filter = ctx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(820, now);
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(920, now);
+    filter.Q.setValueAtTime(0.9, now);
 
     const noiseGain = ctx.createGain();
     noiseGain.gain.setValueAtTime(0.0001, now);
-    noiseGain.gain.linearRampToValueAtTime(0.1 * intensity, now + 0.01);
-    noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.11);
+    noiseGain.gain.linearRampToValueAtTime(0.3 * intensity, now + 0.01);
+    noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.115);
 
     noiseSrc.connect(filter);
     filter.connect(noiseGain);
     noiseGain.connect(this.masterGain);
 
     const offset = Math.random() * Math.max(0.1, this.whiteNoiseBuffer.duration - 0.2);
-    noiseSrc.start(now, offset, 0.13);
+    noiseSrc.start(now, offset, 0.135);
   }
 
   /** 建物・他車両との衝突衝撃音ワンショット */
   public playVehicleImpact(impactSpeed: number): void {
-    if (!this.ctx || !this.masterGain || !this.unlocked || this.muted || this.disposed) {
+    if (
+      !this.ctx ||
+      this.ctx.state !== 'running' ||
+      !this.masterGain ||
+      !this.unlocked ||
+      this.muted ||
+      this.disposed
+    ) {
       return;
     }
     if (!this.whiteNoiseBuffer) return;
@@ -430,15 +505,15 @@ export class SoundManager {
     const now = ctx.currentTime;
     const intensity = Math.max(0.25, Math.min(1, impactSpeed / 14.0));
 
-    // 1. ボディの鈍い低音衝撃
+    // 1. ボディの衝撃（230Hz → 85Hz）
     const bodyOsc = ctx.createOscillator();
     bodyOsc.type = 'triangle';
-    bodyOsc.frequency.setValueAtTime(135 + intensity * 40, now);
-    bodyOsc.frequency.exponentialRampToValueAtTime(32, now + 0.18);
+    bodyOsc.frequency.setValueAtTime(230 + intensity * 60, now);
+    bodyOsc.frequency.exponentialRampToValueAtTime(85, now + 0.18);
 
     const bodyGain = ctx.createGain();
     bodyGain.gain.setValueAtTime(0.0001, now);
-    bodyGain.gain.linearRampToValueAtTime(0.28 * intensity, now + 0.006);
+    bodyGain.gain.linearRampToValueAtTime(0.5 * intensity, now + 0.006);
     bodyGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
 
     bodyOsc.connect(bodyGain);
@@ -452,12 +527,12 @@ export class SoundManager {
 
     const filter = ctx.createBiquadFilter();
     filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(1100 + intensity * 900, now);
-    filter.frequency.exponentialRampToValueAtTime(240, now + 0.2);
+    filter.frequency.setValueAtTime(1500 + intensity * 900, now);
+    filter.frequency.exponentialRampToValueAtTime(360, now + 0.2);
 
     const noiseGain = ctx.createGain();
     noiseGain.gain.setValueAtTime(0.0001, now);
-    noiseGain.gain.linearRampToValueAtTime(0.24 * intensity, now + 0.005);
+    noiseGain.gain.linearRampToValueAtTime(0.42 * intensity, now + 0.005);
     noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.23);
 
     noiseSrc.connect(filter);
@@ -487,30 +562,88 @@ export class SoundManager {
     stopSafely(this.ambientLfo);
     stopSafely(this.engineOsc1);
     stopSafely(this.engineOsc2);
-    stopSafely(this.engineSubOsc);
+    stopSafely(this.engineHarmonicOsc);
     stopSafely(this.enginePulseLfo);
     stopSafely(this.roadSource);
     stopSafely(this.skidSource);
 
     if (this.ctx) {
       const ctx = this.ctx;
+      ctx.removeEventListener('statechange', this.handleContextStateChange);
       this.ctx = null;
       void ctx.close().catch(() => {});
     }
   }
 
-  private markUnlocked(): void {
-    if (this.unlocked || this.disposed) return;
-    this.unlocked = true;
-    this.applyMasterGain();
+  /**
+   * iPadOS Safari の同期アンロック兼・短い確認チャイム音（440Hz→660Hz）。
+   * 同一ユーザー操作から touchstart / pointerdown / click が連続発火しても
+   * 重複鳴動しないようデバウンスしつつ、ctx.state !== 'running' の間は
+   * 常に oscillator.start() を実行して確実にロック解除する。
+   */
+  private playConfirmationChime(
+    ctx: AudioContext,
+    audible: boolean,
+    bypassDebounce: boolean,
+  ): void {
+    const nowMs = performance.now();
+    const withinDebounce = !bypassDebounce && nowMs - this.lastChimeTimeMs < 180;
+    const effectiveAudible = audible && !withinDebounce;
+
+    // 既に running かつデバウンス内なら不要
+    if (ctx.state === 'running' && !effectiveAudible) {
+      return;
+    }
+
+    if (effectiveAudible) {
+      this.lastChimeTimeMs = nowMs;
+    }
+
+    try {
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(440, now);
+      osc.frequency.exponentialRampToValueAtTime(660, now + 0.065);
+
+      if (effectiveAudible) {
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.linearRampToValueAtTime(0.24, now + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.095);
+        osc.connect(gain);
+        gain.connect(this.masterGain ?? ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.1);
+      } else {
+        // ミュート中や連打デバウンス中でも Safari アンロック用の極小発音を実行
+        gain.gain.setValueAtTime(0.0001, now);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.03);
+      }
+    } catch {
+      // 既に停止済み・例外時は無視
+    }
+  }
+
+  private syncUnlockedState(): void {
+    if (this.disposed) return;
+    const isRunning = this.ctx !== null && this.ctx.state === 'running';
+    if (this.unlocked === isRunning) return;
+    this.unlocked = isRunning;
+    if (isRunning) {
+      this.applyMasterGain();
+    }
     this.emitState();
   }
 
   private applyMasterGain(): void {
     if (!this.ctx || !this.masterGain) return;
     const now = this.ctx.currentTime;
-    const target = this.muted ? 0.0 : 0.85;
-    this.masterGain.gain.setTargetAtTime(target, now, 0.03);
+    const target = this.muted ? 0.0 : MASTER_GAIN_LEVEL;
+    this.masterGain.gain.setTargetAtTime(target, now, 0.025);
   }
 
   private emitState(): void {
@@ -523,38 +656,53 @@ export class SoundManager {
   private buildPersistentGraph(ctx: AudioContext): void {
     const now = ctx.currentTime;
 
-    // マスターゲイン
+    // マスターゲイン＋軽量コンプレッサー（iPad スピーカーで音割れを防ぎつつ音圧確保）
     const masterGain = ctx.createGain();
-    masterGain.gain.setValueAtTime(this.muted ? 0.0 : 0.85, now);
-    masterGain.connect(ctx.destination);
+    masterGain.gain.setValueAtTime(this.muted ? 0.0 : MASTER_GAIN_LEVEL, now);
+
+    const compressor = ctx.createDynamicsCompressor();
+    compressor.threshold.setValueAtTime(-10, now);
+    compressor.knee.setValueAtTime(12, now);
+    compressor.ratio.setValueAtTime(4, now);
+    compressor.attack.setValueAtTime(0.005, now);
+    compressor.release.setValueAtTime(0.12, now);
+
+    masterGain.connect(compressor);
+    compressor.connect(ctx.destination);
     this.masterGain = masterGain;
 
     // 共有ノイズバッファ生成（2.5秒ホワイトノイズ・3.0秒ピンクノイズ）
     this.whiteNoiseBuffer = createWhiteNoiseBuffer(ctx, 2.5);
     this.pinkNoiseBuffer = createPinkNoiseBuffer(ctx, 3.0);
 
-    // --- 1. 街の環境音（遠い風と都市の気配、ごく控えめな音量で常時ループ） ---
+    // --- 1. 街の環境音（遠い風と都市の気配、iPad スピーカーで聞こえる 150Hz〜1150Hz 帯域） ---
     const ambientSource = ctx.createBufferSource();
     ambientSource.buffer = this.pinkNoiseBuffer;
     ambientSource.loop = true;
 
+    const ambientHighpass = ctx.createBiquadFilter();
+    ambientHighpass.type = 'highpass';
+    ambientHighpass.frequency.setValueAtTime(140, now);
+    ambientHighpass.Q.setValueAtTime(0.7, now);
+
     const ambientWindFilter = ctx.createBiquadFilter();
     ambientWindFilter.type = 'lowpass';
-    ambientWindFilter.frequency.setValueAtTime(340, now);
-    ambientWindFilter.Q.setValueAtTime(0.7, now);
+    ambientWindFilter.frequency.setValueAtTime(860, now);
+    ambientWindFilter.Q.setValueAtTime(0.8, now);
 
     const ambientLfo = ctx.createOscillator();
     ambientLfo.type = 'sine';
     ambientLfo.frequency.setValueAtTime(0.11, now);
     const ambientLfoDepth = ctx.createGain();
-    ambientLfoDepth.gain.setValueAtTime(110, now);
+    ambientLfoDepth.gain.setValueAtTime(240, now);
     ambientLfo.connect(ambientLfoDepth);
     ambientLfoDepth.connect(ambientWindFilter.frequency);
 
     const ambientGain = ctx.createGain();
-    ambientGain.gain.setValueAtTime(0.048, now);
+    ambientGain.gain.setValueAtTime(0.18, now);
 
-    ambientSource.connect(ambientWindFilter);
+    ambientSource.connect(ambientHighpass);
+    ambientHighpass.connect(ambientWindFilter);
     ambientWindFilter.connect(ambientGain);
     ambientGain.connect(masterGain);
 
@@ -564,30 +712,41 @@ export class SoundManager {
     this.ambientSource = ambientSource;
     this.ambientLfo = ambientLfo;
 
-    // --- 2. 車両エンジン音（オシレーター3基 + 脈動LFO + ローパスフィルター） ---
+    // --- 2. 車両エンジン音（中音域倍音重視オシレーター3基 + 脈動LFO + フィルター） ---
     const engineOsc1 = ctx.createOscillator();
     engineOsc1.type = 'sawtooth';
-    engineOsc1.frequency.setValueAtTime(48, now);
+    engineOsc1.frequency.setValueAtTime(68, now);
 
     const engineOsc2 = ctx.createOscillator();
-    engineOsc2.type = 'triangle';
-    engineOsc2.frequency.setValueAtTime(96, now);
+    engineOsc2.type = 'sawtooth';
+    engineOsc2.frequency.setValueAtTime(136, now);
 
-    const engineSubOsc = ctx.createOscillator();
-    engineSubOsc.type = 'sine';
-    engineSubOsc.frequency.setValueAtTime(24, now);
+    const engineHarmonicOsc = ctx.createOscillator();
+    engineHarmonicOsc.type = 'triangle';
+    engineHarmonicOsc.frequency.setValueAtTime(205, now);
 
     const osc1Mix = ctx.createGain();
-    osc1Mix.gain.setValueAtTime(0.52, now);
+    osc1Mix.gain.setValueAtTime(0.5, now);
     const osc2Mix = ctx.createGain();
-    osc2Mix.gain.setValueAtTime(0.34, now);
-    const subMix = ctx.createGain();
-    subMix.gain.setValueAtTime(0.45, now);
+    osc2Mix.gain.setValueAtTime(0.48, now);
+    const harmonicMix = ctx.createGain();
+    harmonicMix.gain.setValueAtTime(0.36, now);
+
+    const engineHighpass = ctx.createBiquadFilter();
+    engineHighpass.type = 'highpass';
+    engineHighpass.frequency.setValueAtTime(105, now);
+    engineHighpass.Q.setValueAtTime(0.7, now);
 
     const engineFilter = ctx.createBiquadFilter();
     engineFilter.type = 'lowpass';
-    engineFilter.frequency.setValueAtTime(240, now);
-    engineFilter.Q.setValueAtTime(1.5, now);
+    engineFilter.frequency.setValueAtTime(520, now);
+    engineFilter.Q.setValueAtTime(1.7, now);
+
+    const engineMidBoost = ctx.createBiquadFilter();
+    engineMidBoost.type = 'peaking';
+    engineMidBoost.frequency.setValueAtTime(420, now);
+    engineMidBoost.Q.setValueAtTime(1.0, now);
+    engineMidBoost.gain.setValueAtTime(5.0, now);
 
     const engineGain = ctx.createGain();
     engineGain.gain.setValueAtTime(0.0001, now);
@@ -603,21 +762,23 @@ export class SoundManager {
 
     engineOsc1.connect(osc1Mix);
     engineOsc2.connect(osc2Mix);
-    engineSubOsc.connect(subMix);
-    osc1Mix.connect(engineFilter);
-    osc2Mix.connect(engineFilter);
-    subMix.connect(engineFilter);
-    engineFilter.connect(engineGain);
+    engineHarmonicOsc.connect(harmonicMix);
+    osc1Mix.connect(engineHighpass);
+    osc2Mix.connect(engineHighpass);
+    harmonicMix.connect(engineHighpass);
+    engineHighpass.connect(engineFilter);
+    engineFilter.connect(engineMidBoost);
+    engineMidBoost.connect(engineGain);
     engineGain.connect(masterGain);
 
     engineOsc1.start(now);
     engineOsc2.start(now);
-    engineSubOsc.start(now);
+    engineHarmonicOsc.start(now);
     enginePulseLfo.start(now);
 
     this.engineOsc1 = engineOsc1;
     this.engineOsc2 = engineOsc2;
-    this.engineSubOsc = engineSubOsc;
+    this.engineHarmonicOsc = engineHarmonicOsc;
     this.enginePulseLfo = enginePulseLfo;
     this.enginePulseGain = enginePulseGain;
     this.engineFilter = engineFilter;
@@ -630,8 +791,8 @@ export class SoundManager {
 
     const roadFilter = ctx.createBiquadFilter();
     roadFilter.type = 'bandpass';
-    roadFilter.frequency.setValueAtTime(420, now);
-    roadFilter.Q.setValueAtTime(0.8, now);
+    roadFilter.frequency.setValueAtTime(520, now);
+    roadFilter.Q.setValueAtTime(0.9, now);
 
     const roadGain = ctx.createGain();
     roadGain.gain.setValueAtTime(0.0001, now);
@@ -652,8 +813,8 @@ export class SoundManager {
 
     const skidFilter = ctx.createBiquadFilter();
     skidFilter.type = 'bandpass';
-    skidFilter.frequency.setValueAtTime(1150, now);
-    skidFilter.Q.setValueAtTime(4.8, now);
+    skidFilter.frequency.setValueAtTime(1100, now);
+    skidFilter.Q.setValueAtTime(3.0, now);
 
     const skidGain = ctx.createGain();
     skidGain.gain.setValueAtTime(0.0001, now);
