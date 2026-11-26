@@ -16,7 +16,7 @@ export interface CityAssetPlacement {
   x: number;
   /** 配置 Z 座標 (m) */
   z: number;
-  /** 地面からの追加 Y オフセット (m)。通常 0 (自動接地) */
+  /** 接地目標の地面高さ Y (m)。通常 0 (車道・建物基礎) または SIDEWALK_Y (歩道上の小物) */
   yOffset?: number;
   /** Y 軸回転 (rad) */
   rotationY: number;
@@ -26,6 +26,17 @@ export interface CityAssetPlacement {
   targetSize: number;
   /** 水平フットプリント（幅・奥行の最大辺）上限 (m) */
   maxFootprint: number;
+  /**
+   * 道路・地面土台を含むセット（ジオラマ型）GLBフラグ。
+   * true の場合、セット内の道路面メッシュの実際の Y 座標を計測し、
+   * 道路面が yOffset と一致するようモデル全体を下げて不要な土台を地面下に埋める。
+   */
+  isDiorama?: boolean;
+  /**
+   * 道路面が単一メッシュに統合されているジオラマや地下基礎付き建物向けの
+   * 下端からの埋設比率 (0.0〜0.5)。自動道路面検出で見つからない場合のフォールバック値。
+   */
+  surfaceEmbedRatio?: number;
   /** コリジョンを有効にするか */
   hasCollision: boolean;
   /** コリジョンボックスの縮小率 (0.85〜0.98 程度、軒先・ミラーの引っかかり緩和) */
@@ -41,9 +52,10 @@ export interface CityAssetPlacement {
 const SIDEWALK_Y = CITY_METRICS.sidewalkHeight;
 
 /**
- * 1-D: docs/ASSET_MANIFEST.json で承認済み (placementStatus: "approved") の
- * buildings (12種) / vehicles (9種) / props (3種) 全24アセットを最低1つ以上配置する
+ * 1-D (iPad実機テスト修正反映版):
+ * docs/ASSET_MANIFEST.json で承認済みの市街地向け GLB アセットを配置する
  * 160m × 160m 日本の街区レイアウト定義。
+ * ※ 飛行機 (porco_plane.glb) は今後の空港フェーズ用に市街地配置リストから除外済み。
  * ※ ライセンス保留 (placementStatus: "保留") の9アセットは一切含めない。
  */
 export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
@@ -62,6 +74,7 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     fitMode: 'height',
     targetSize: 8.4,
     maxFootprint: 13.0,
+    surfaceEmbedRatio: 0.078,
     hasCollision: true,
     colliderShrink: 0.9,
     placeholderFootprint: { width: 11, depth: 11, height: 8.4 },
@@ -80,6 +93,8 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     fitMode: 'height',
     targetSize: 7.4,
     maxFootprint: 13.0,
+    isDiorama: true,
+    surfaceEmbedRatio: 0.123,
     hasCollision: true,
     colliderShrink: 0.92,
     placeholderFootprint: { width: 11, depth: 11, height: 7.4 },
@@ -98,6 +113,8 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     fitMode: 'height',
     targetSize: 10.5,
     maxFootprint: 20.0,
+    isDiorama: true,
+    surfaceEmbedRatio: 0.144,
     hasCollision: true,
     colliderShrink: 0.9,
     placeholderFootprint: { width: 18, depth: 10, height: 10.5 },
@@ -116,6 +133,8 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     fitMode: 'height',
     targetSize: 11.0,
     maxFootprint: 26.0,
+    isDiorama: true,
+    surfaceEmbedRatio: 0.089,
     hasCollision: true,
     colliderShrink: 0.9,
     placeholderFootprint: { width: 22, depth: 22, height: 11.0 },
@@ -133,7 +152,7 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     url: './assets/buildings/japanese_house.glb',
     x: 18,
     z: -18,
-    yOffset: SIDEWALK_Y,
+    yOffset: 0,
     rotationY: -Math.PI / 2,
     fitMode: 'height',
     targetSize: 6.8,
@@ -156,6 +175,7 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     fitMode: 'height',
     targetSize: 6.2,
     maxFootprint: 12.0,
+    surfaceEmbedRatio: 0.25,
     hasCollision: true,
     colliderShrink: 0.9,
     placeholderFootprint: { width: 10, depth: 8, height: 6.2 },
@@ -174,6 +194,7 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     fitMode: 'height',
     targetSize: 7.5,
     maxFootprint: 12.0,
+    surfaceEmbedRatio: 0.12,
     hasCollision: true,
     colliderShrink: 0.9,
     placeholderFootprint: { width: 10, depth: 10, height: 7.5 },
@@ -187,7 +208,7 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     url: './assets/buildings/dae_final_assignment_milestone_house.glb',
     x: 36,
     z: -36,
-    yOffset: SIDEWALK_Y,
+    yOffset: 0,
     rotationY: -Math.PI / 2,
     fitMode: 'height',
     targetSize: 7.2,
@@ -205,7 +226,7 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     url: './assets/buildings/vancouver_police_-_cambie_st._vancouver_bc_ca.glb',
     x: 56,
     z: -26,
-    yOffset: SIDEWALK_Y,
+    yOffset: 0,
     rotationY: -Math.PI / 2,
     fitMode: 'height',
     targetSize: 12.5,
@@ -248,6 +269,8 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     fitMode: 'height',
     targetSize: 7.4,
     maxFootprint: 13.0,
+    isDiorama: true,
+    surfaceEmbedRatio: 0.123,
     hasCollision: true,
     colliderShrink: 0.92,
     placeholderFootprint: { width: 11, depth: 11, height: 7.4 },
@@ -261,7 +284,7 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     url: './assets/buildings/japanese_house.glb',
     x: -18,
     z: 34,
-    yOffset: SIDEWALK_Y,
+    yOffset: 0,
     rotationY: Math.PI / 2,
     fitMode: 'height',
     targetSize: 6.8,
@@ -279,11 +302,13 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     url: './assets/buildings/night_city_japan.glb',
     x: -44,
     z: 42,
-    yOffset: SIDEWALK_Y,
+    yOffset: 0,
     rotationY: Math.PI / 2,
     fitMode: 'height',
     targetSize: 16.0,
     maxFootprint: 28.0,
+    isDiorama: true,
+    surfaceEmbedRatio: 0.14,
     hasCollision: true,
     colliderShrink: 0.9,
     placeholderFootprint: { width: 24, depth: 20, height: 16.0 },
@@ -293,6 +318,7 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
 
   // =========================================================================
   // 4. 南東ブロック (X > +10, Z > +10): 線路・停車車両・駅前広場展示
+  //    ※ porco_plane.glb は今後の空港フェーズ用に配置リストから除外済み
   // =========================================================================
   {
     instanceId: 'se_train_track',
@@ -317,7 +343,7 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     url: './assets/vehicles/train_ride.glb',
     x: 46,
     z: 34,
-    yOffset: SIDEWALK_Y + 0.22,
+    yOffset: SIDEWALK_Y + 0.16,
     rotationY: 0,
     fitMode: 'length',
     targetSize: 18.0,
@@ -347,31 +373,13 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     priority: 3,
   },
   {
-    instanceId: 'se_porco_plane',
-    assetId: 'porco_plane',
-    category: 'vehicles',
-    url: './assets/vehicles/porco_plane.glb',
-    x: 24,
-    z: 44,
-    yOffset: SIDEWALK_Y,
-    rotationY: -Math.PI / 4,
-    fitMode: 'length',
-    targetSize: 7.8,
-    maxFootprint: 8.5,
-    hasCollision: true,
-    colliderShrink: 0.85,
-    placeholderFootprint: { width: 7.5, depth: 7.5, height: 3.2 },
-    castShadow: true,
-    priority: 3,
-  },
-  {
     instanceId: 'se_japanese_house_clone',
     assetId: 'japanese_house',
     category: 'buildings',
     url: './assets/buildings/japanese_house.glb',
     x: 20,
     z: 60,
-    yOffset: SIDEWALK_Y,
+    yOffset: 0,
     rotationY: Math.PI,
     fitMode: 'height',
     targetSize: 6.8,

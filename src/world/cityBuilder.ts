@@ -204,8 +204,8 @@ export function buildJapaneseCity(
 }
 
 /**
- * バウンディングボックス計測による自動スケーリング・中心揃え・底面接地（Y = yOffset）を行い、
- * 実測サイズで OBB コライダーを更新する。
+ * バウンディングボックス計測による自動スケーリング・中心揃え・底面接地を行い、
+ * ジオラマ型 GLB（道路・土台付き）の道路面高さ補正および OBB コライダー同期を実行する。
  */
 function normalizeAndAttachModel(
   model: THREE.Object3D,
@@ -246,17 +246,41 @@ function normalizeAndAttachModel(
     scale = 1.0;
   }
 
-  model.scale.multiplyScalar(scale);
+  // スケール適用後に必ず updateMatrixWorld(true) を実行してからワールド境界ボックスを再計算
+  model.scale.setScalar(scale);
   model.updateMatrixWorld(true);
 
   const scaledBox = new THREE.Box3().setFromObject(model);
   const scaledCenter = scaledBox.getCenter(new THREE.Vector3());
   const scaledSize = scaledBox.getSize(new THREE.Vector3());
 
-  // 水平中心を原点、最下部を正確に Y = 0 へ接地
+  // 水平中心を原点揃え、底面を正確に Y = 0 へ接地
   model.position.x -= scaledCenter.x;
   model.position.z -= scaledCenter.z;
   model.position.y -= scaledBox.min.y;
+  model.updateMatrixWorld(true);
+
+  // ジオラマ型（道路・土台付き）または地下基礎付きモデルの場合、
+  // セット内の道路面（または土台上面）の高さを計測し、不要な土台を地面下へ埋める
+  let embedOffsetY = 0;
+  if (placement.isDiorama) {
+    const detectedRoadOffset = detectDioramaRoadSurfaceOffsetY(
+      model,
+      scaledSize,
+    );
+    if (detectedRoadOffset !== null) {
+      embedOffsetY = detectedRoadOffset;
+    } else if (placement.surfaceEmbedRatio && placement.surfaceEmbedRatio > 0) {
+      embedOffsetY = scaledSize.y * placement.surfaceEmbedRatio;
+    }
+  } else if (placement.surfaceEmbedRatio && placement.surfaceEmbedRatio > 0) {
+    embedOffsetY = scaledSize.y * placement.surfaceEmbedRatio;
+  }
+
+  if (embedOffsetY > 0) {
+    model.position.y -= embedOffsetY;
+    model.updateMatrixWorld(true);
+  }
 
   // シャドウ設定 (M1 iPad Air 最適化: 高ポリゴンは castShadow=false)
   model.traverse((obj) => {
@@ -267,15 +291,29 @@ function normalizeAndAttachModel(
 
   const wrapper = new THREE.Group();
   wrapper.name = placement.instanceId;
-  const baseY = placement.yOffset ?? 0;
-  wrapper.position.set(placement.x, baseY, placement.z);
+  const targetGroundY = placement.yOffset ?? 0;
+  wrapper.position.set(placement.x, targetGroundY, placement.z);
   wrapper.rotation.y = placement.rotationY;
   wrapper.add(model);
   parentGroup.add(wrapper);
 
-  // 実測バウンディングボックスで OBB コライダーを精密更新
+  // 最終ワールド行列を更新し、通常モデルで浮きが残らないよう厳密に再検証
+  wrapper.updateMatrixWorld(true);
+  const finalWorldBox = new THREE.Box3().setFromObject(wrapper);
+  if (!finalWorldBox.isEmpty() && embedOffsetY === 0) {
+    const residualDeltaY = finalWorldBox.min.y - targetGroundY;
+    if (Math.abs(residualDeltaY) > 0.001) {
+      wrapper.position.y -= residualDeltaY;
+      wrapper.updateMatrixWorld(true);
+      finalWorldBox.setFromObject(wrapper);
+    }
+  }
+
+  // 実測バウンディングボックスで OBB コライダーを修正後の高さへ同期
   if (placement.hasCollision) {
     const shrink = placement.colliderShrink ?? 0.92;
+    const colliderMinY = Math.max(0, finalWorldBox.min.y);
+    const colliderMaxY = Math.max(colliderMinY + 0.5, finalWorldBox.max.y);
     collisionWorld.upsertCollider(
       placement.instanceId,
       placement.x,
@@ -283,8 +321,50 @@ function normalizeAndAttachModel(
       Math.max(0.4, scaledSize.x * shrink),
       Math.max(0.4, scaledSize.z * shrink),
       placement.rotationY,
-      baseY,
-      baseY + Math.max(0.5, scaledSize.y),
+      colliderMinY,
+      colliderMaxY,
     );
   }
+}
+
+/**
+ * ジオラマ型 GLB（底面 Y = 0 に接地済み）の各メッシュを走査し、
+ * 道路・地面プレート（全体の水平面積の 30% 以上を占める薄い水平メッシュ、下半分に存在）の
+ * 実際の上面 Y 座標を計測して返す。見つからない場合は null。
+ */
+function detectDioramaRoadSurfaceOffsetY(
+  groundedModel: THREE.Object3D,
+  totalSize: THREE.Vector3,
+): number | null {
+  const totalArea = totalSize.x * totalSize.z;
+  if (totalArea <= 0.0001 || totalSize.y <= 0.0001) {
+    return null;
+  }
+
+  const meshBox = new THREE.Box3();
+  const meshSize = new THREE.Vector3();
+  let bestArea = 0;
+  let bestSurfaceY: number | null = null;
+
+  groundedModel.traverse((obj) => {
+    if (!(obj instanceof THREE.Mesh)) return;
+    meshBox.setFromObject(obj);
+    if (meshBox.isEmpty()) return;
+
+    meshBox.getSize(meshSize);
+    const area = meshSize.x * meshSize.z;
+    const isWidePlate = area >= totalArea * 0.3;
+    const isThinPlate = meshSize.y <= Math.max(0.35, totalSize.y * 0.06);
+    const isInLowerRegion = meshBox.max.y <= totalSize.y * 0.35;
+
+    if (isWidePlate && isThinPlate && isInLowerRegion && area > bestArea) {
+      bestArea = area;
+      bestSurfaceY = meshBox.max.y;
+    }
+  });
+
+  if (bestSurfaceY !== null && bestSurfaceY > 0.01) {
+    return bestSurfaceY;
+  }
+  return null;
 }
