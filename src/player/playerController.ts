@@ -125,12 +125,57 @@ export class PlayerController {
     }
   }
 
+  /** バイク乗車時: プレイヤーを非表示にせず、シート位置へ跨がり姿勢でアタッチする */
+  public enterBikeRide(
+    anchor: THREE.Group,
+    offsetY: number,
+    offsetZ: number,
+    forwardLeanRad: number,
+    clipName = 'Driving',
+  ): void {
+    anchor.add(this.player.root);
+    this.player.root.position.set(0, offsetY, offsetZ);
+    this.player.root.rotation.set(forwardLeanRad, 0, 0);
+    this.player.root.visible = true;
+    this.velocity.set(0, 0, 0);
+    this.verticalVelocity = 0;
+    this.pendingLandingSpeed = 0;
+    this.isGrounded = true;
+    this.isJumping = false;
+    this.state = 'idle';
+
+    const targetClip = this.player.actions.has(clipName) ? clipName : 'Idle';
+    this.transitionToClip(targetClip, true, 0.12);
+  }
+
+  /** バイク乗車中のアニメーションミキサーのみを更新 */
+  public updateRidingAnimation(dt: number): void {
+    const clampedDt = Math.min(dt, 0.05);
+    this.player.mixer.update(clampedDt);
+  }
+
+  /** バイク降車時: シーンルートへ戻し、前傾・ロール角をリセットして降車位置へ再配置 */
+  public exitBikeRide(
+    sceneRoot: THREE.Object3D,
+    x: number,
+    y: number,
+    z: number,
+    yaw: number,
+  ): void {
+    if (this.player.root.parent !== sceneRoot) {
+      sceneRoot.add(this.player.root);
+    }
+    this.player.root.rotation.set(0, 0, 0);
+    this.teleportTo(x, y, z, yaw);
+    this.player.root.visible = true;
+  }
+
   /** 降車時等にプレイヤーを指定位置・向きへ安全に再配置する */
   public teleportTo(x: number, y: number, z: number, yaw?: number): void {
     this.player.root.position.set(x, y, z);
     if (yaw !== undefined) {
       this.yaw = normalizeAngle(yaw);
-      this.player.root.rotation.y = this.yaw;
+      this.player.root.rotation.set(0, this.yaw, 0);
     }
     this.velocity.set(0, 0, 0);
     this.verticalVelocity = 0;

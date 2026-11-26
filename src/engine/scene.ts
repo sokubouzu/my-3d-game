@@ -474,7 +474,18 @@ export function startGameEngine(
           controlMode = 'vehicle';
           activeVehicle = nearest;
           nearbyVehicle = null;
-          playerController.setVisible(false);
+          const riderMount = nearest.getRiderMount();
+          if (nearest.getType() === 'bike' && riderMount) {
+            playerController.enterBikeRide(
+              nearest.getRiderAnchor(),
+              riderMount.offsetY,
+              riderMount.offsetZ,
+              riderMount.forwardLeanRad,
+              riderMount.animationName,
+            );
+          } else {
+            playerController.setVisible(false);
+          }
           activeVehicle.setOccupied(true);
           tpsCamera.alignBehind(activeVehicle.getYaw());
           modeOrPromptChanged = true;
@@ -485,10 +496,15 @@ export function startGameEngine(
         activeVehicle.canExit()
       ) {
         const exit = activeVehicle.computeExitTransform();
+        const wasBike = activeVehicle.getType() === 'bike';
         activeVehicle.setOccupied(false);
         activeVehicle = null;
-        playerController.teleportTo(exit.x, exit.y, exit.z, exit.yaw);
-        playerController.setVisible(true);
+        if (wasBike) {
+          playerController.exitBikeRide(scene, exit.x, exit.y, exit.z, exit.yaw);
+        } else {
+          playerController.teleportTo(exit.x, exit.y, exit.z, exit.yaw);
+          playerController.setVisible(true);
+        }
         playerController.getPosition(playerPos);
         controlMode = 'foot';
         tpsCamera.alignBehind(exit.yaw);
@@ -509,6 +525,10 @@ export function startGameEngine(
           vc.update(dt, null);
         }
       }
+      const isRidingBike = activeVehicle.getType() === 'bike';
+      if (isRidingBike && playerController) {
+        playerController.updateRidingAnimation(dt);
+      }
       activeVehicle.getPosition(focusPos);
 
       const groundY = collisionWorld.getGroundHeight(focusPos.x, focusPos.z);
@@ -519,6 +539,7 @@ export function startGameEngine(
         activeVehicle.getSpeed(),
         groundY,
         activeVehicle.getId(),
+        isRidingBike,
       );
 
       const nextCanExit = activeVehicle.canExit();
@@ -782,7 +803,7 @@ export function startGameEngine(
       soundManager.dispose();
 
       if (loadedPlayer) {
-        scene.remove(loadedPlayer.root);
+        loadedPlayer.root.removeFromParent();
         loadedPlayer.dispose();
         loadedPlayer = null;
       }

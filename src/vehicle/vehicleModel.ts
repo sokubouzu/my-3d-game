@@ -41,6 +41,10 @@ export interface LoadedHeroVehicle {
   config: HeroVehicleConfig;
   /** ワールド配置用ルート（position.y = 0 固定、+Z 正面） */
   root: THREE.Group;
+  /** 車体バンク（ロール角）回転用グループ（root の子） */
+  bodyGroup: THREE.Group;
+  /** バイク乗車時のプレイヤー搭乗アンカー（bodyGroup の子としてバンクに追従） */
+  riderAnchor: THREE.Group;
   /** 2-B の車輪回転・ステアリング制御用リグ */
   rig: VehicleRig;
   /** スケール正規化後の実測寸法 (m) */
@@ -49,6 +53,8 @@ export interface LoadedHeroVehicle {
   setSteerAngle: (radians: number) => void;
   /** 全4輪の回転角を加算更新（rad, 前進=+）（2-B用フック） */
   addWheelSpin: (deltaRadians: number) => void;
+  /** 車体のロール角（バンク演出、rad: 負=左傾き / 正=右傾き）を更新 */
+  setLeanRoll: (radians: number) => void;
   /** リソース破棄 */
   dispose: () => void;
 }
@@ -114,13 +120,22 @@ export async function loadHeroVehicle(
   model.position.set(-scaledCenter.x, -scaledBox.min.y, -scaledCenter.z);
   model.updateMatrixWorld(true);
 
-  // 3. 空の親 Group（root: position.y = 0 固定、+Z 正面）に格納し、原点姿勢でリグ構築
+  // 3. 空の親 Group（root: position.y = 0 固定、+Z 正面）配下にバンク用 bodyGroup と搭乗アンカーを構築
   const root = new THREE.Group();
   root.name = config.id;
-  root.add(model);
+
+  const bodyGroup = new THREE.Group();
+  bodyGroup.name = `${config.id}_body_lean`;
+  bodyGroup.add(model);
+
+  const riderAnchor = new THREE.Group();
+  riderAnchor.name = `${config.id}_rider_anchor`;
+  bodyGroup.add(riderAnchor);
+
+  root.add(bodyGroup);
   root.updateMatrixWorld(true);
 
-  const rig = buildVehicleRig(root, model, config);
+  const rig = buildVehicleRig(bodyGroup, model, config);
 
   // 4. 初期ワールド座標・向きを設定（Y = 0 厳守）
   root.position.set(config.initialPosition.x, 0, config.initialPosition.z);
@@ -162,6 +177,10 @@ export async function loadHeroVehicle(
     }
   };
 
+  const setLeanRoll = (radians: number): void => {
+    bodyGroup.rotation.z = radians;
+  };
+
   const dispose = (): void => {
     const disposedGeometries = new Set<THREE.BufferGeometry>();
     const disposedMaterials = new Set<THREE.Material>();
@@ -201,10 +220,13 @@ export async function loadHeroVehicle(
   return {
     config,
     root,
+    bodyGroup,
+    riderAnchor,
     rig,
     dimensions,
     setSteerAngle,
     addWheelSpin,
+    setLeanRoll,
     dispose,
   };
 }

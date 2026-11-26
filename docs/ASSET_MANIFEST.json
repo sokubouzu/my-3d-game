@@ -1,6 +1,6 @@
 {
-  "schemaVersion": "1.4.0",
-  "taskId": "2-C",
+  "schemaVersion": "1.5.0",
+  "taskId": "3-E",
   "targetDevice": "iPad Air (5th gen, Apple M1 / 8GB RAM)",
   "summary": {
     "totalAssets": 34,
@@ -1762,20 +1762,70 @@
           "note": "GLBバイナリ検証・用途別配置済み、および1-D街区コード配置・CIビルド＆GitHub Pagesデプロイ成功（状態B）。実ブラウザでの描画確認（状態C）・衝突/動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
         },
         "cityPlacement": {
-          "taskId": "1-D",
+          "taskId": "3-E",
           "instanceCount": 1,
           "instances": [
             {
               "instanceId": "veh_harley_bike",
               "positionXZ": [
-                7.8,
-                -13.0
+                4.75,
+                14.0
               ],
               "fitMode": "length",
               "targetSizeMeters": 2.3,
-              "hasCollision": true
+              "hasCollision": true,
+              "drivable": true
             }
           ]
+        },
+        "drivableVehicleRig": {
+          "taskId": "3-E",
+          "role": "playable_motorcycle",
+          "vehicleType": "bike",
+          "instanceId": "veh_harley_bike",
+          "placement": {
+            "positionXYZ": [
+              4.75,
+              0.0,
+              14.0
+            ],
+            "rotationYRad": -2.617994,
+            "targetLengthMeters": 2.3,
+            "hasCollision": true,
+            "colliderShrink": 0.76,
+            "castShadow": true
+          },
+          "coordinateSystem": {
+            "rawModelForwardAxis": "-Z",
+            "normalizedForwardAxis": "+Z",
+            "modelForwardCorrectionYRad": 3.141593,
+            "groundedY": 0.0
+          },
+          "handlingSpec": {
+            "maxForwardSpeedMs": 37.5,
+            "maxForwardSpeedKmh": 135,
+            "accelRateMs2": 17.5,
+            "brakeDecelMs2": 28.0,
+            "wheelbaseMeters": 1.67,
+            "maxLeanRollRad": 0.45
+          },
+          "audioProfile": "bike",
+          "riderMount": {
+            "visibleRider": true,
+            "offsetY": 0.34,
+            "offsetZ": -0.34,
+            "forwardLeanRad": 0.14,
+            "animationName": "Driving"
+          },
+          "movableParts": {
+            "wheels": {
+              "separateMovableNodes": false,
+              "note": "GLB内部はテクスチャアトラス単位5メッシュ（big1_A2k_big1A_0 / big2_B2k_big2B_0 / sym_small_C2k_symC_0 / sym_small_C2k_1_symC_0 / similar_D2k_simularD_0）で結合済みのため前後ホイール独立ノードなし"
+            },
+            "handlebar": {
+              "separateMovableNode": false
+            }
+          }
         }
       },
       {

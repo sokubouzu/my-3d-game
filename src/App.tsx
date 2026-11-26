@@ -41,7 +41,7 @@ const INITIAL_STATUS: EngineStatus = {
   heroVehicleError: null,
   heroVehicleWheels: 0,
   drivableVehicleCount: 0,
-  drivableVehicleTotal: 2,
+  drivableVehicleTotal: 3,
   trafficLoadedCount: 0,
   trafficTotalCount: 4,
   pedestrianLoadedCount: 0,

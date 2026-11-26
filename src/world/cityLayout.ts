@@ -338,23 +338,8 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     castShadow: true,
     priority: 2,
   },
-  {
-    instanceId: 'veh_harley_bike',
-    assetId: 'harley_custom_bike_v1.2',
-    category: 'vehicles',
-    url: './assets/vehicles/harley_custom_bike_v1.2.glb',
-    x: 4.75,
-    z: 14,
-    rotationY: Math.PI / 6,
-    fitMode: 'length',
-    targetSize: 2.3,
-    maxFootprint: 2.5,
-    hasCollision: true,
-    colliderShrink: 0.88,
-    placeholderFootprint: { width: 1.0, depth: 2.3, height: 1.2 },
-    castShadow: true,
-    priority: 1,
-  },
+  // ※ veh_harley_bike (harley_custom_bike_v1.2.glb / x:4.75, z:14) は
+  //    同一位置のまま運転可能バイク（3台目: type='bike'）へ昇格したため静的配置から除外。
 
   // =========================================================================
   // 6. 街の小物 (単体モデルのみ、Y = 0 接地)

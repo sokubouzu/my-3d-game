@@ -206,13 +206,14 @@ export function Minimap({ getSnapshot }: MinimapProps) {
         }
 
         const isSports = dv.id.includes('porsche');
-        const fill = isSports ? '#facc15' : '#38bdf8';
+        const isBike = dv.id.includes('bike') || dv.id.includes('harley');
+        const fill = isBike ? '#f472b6' : isSports ? '#facc15' : '#38bdf8';
 
         ctx.save();
         ctx.translate(mx, my);
         if (isClamped) {
           ctx.beginPath();
-          ctx.arc(0, 0, 3.6, 0, Math.PI * 2);
+          ctx.arc(0, 0, isBike ? 3.2 : 3.6, 0, Math.PI * 2);
           ctx.fillStyle = fill;
           ctx.fill();
           ctx.strokeStyle = '#0f172a';
@@ -224,8 +225,13 @@ export function Minimap({ getSnapshot }: MinimapProps) {
           ctx.fillStyle = fill;
           ctx.strokeStyle = '#ffffff';
           ctx.lineWidth = 1.1;
-          ctx.fillRect(-4.6, -2.7, 9.2, 5.4);
-          ctx.strokeRect(-4.6, -2.7, 9.2, 5.4);
+          if (isBike) {
+            ctx.fillRect(-3.8, -1.6, 7.6, 3.2);
+            ctx.strokeRect(-3.8, -1.6, 7.6, 3.2);
+          } else {
+            ctx.fillRect(-4.6, -2.7, 9.2, 5.4);
+            ctx.strokeRect(-4.6, -2.7, 9.2, 5.4);
+          }
         }
         ctx.restore();
       }

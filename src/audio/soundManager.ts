@@ -275,6 +275,7 @@ export class SoundManager {
       this.engineOsc1.type = tuning.osc1Type;
       this.engineOsc2.type = tuning.osc2Type;
       this.engineHarmonicOsc.type = tuning.harmonicOscType;
+      this.enginePulseLfo.type = frame.profile === 'bike' ? 'triangle' : 'sine';
       this.engineOsc1Mix.gain.setTargetAtTime(tuning.osc1Gain, now, 0.04);
       this.engineOsc2Mix.gain.setTargetAtTime(tuning.osc2Gain, now, 0.04);
       this.engineHarmonicMix.gain.setTargetAtTime(tuning.harmonicGain, now, 0.04);
@@ -294,7 +295,7 @@ export class SoundManager {
     const throttleBoost = throttle * tuning.throttleBoost;
     const revNorm = Math.min(tuning.maxRevNorm, revCurve + throttleBoost);
 
-    // 車種別の基本周波数＆倍音設計（standard: 静かな実用車 / sports: 高回転スポーツカー）
+    // 車種別の基本周波数＆倍音設計（standard: 静かな実用車 / sports: 高回転スポーツカー / bike: 単気筒〜2気筒バイク）
     const baseFreq = tuning.idleFreq + (tuning.maxFreq - tuning.idleFreq) * revNorm;
     const freqTau = tuning.freqTau;
     this.engineOsc1.frequency.setTargetAtTime(baseFreq, now, freqTau);
@@ -309,11 +310,15 @@ export class SoundManager {
       freqTau,
     );
 
-    // アイドリング時の低い鼓動感（低速ほど脈動、高速で滑らかに連続音へ）
+    // アイドリング時の鼓動感（バイクは単気筒〜2気筒らしい歯切れよい鼓動を低〜中速域まで維持）
+    const isBike = frame.profile === 'bike';
     const idlePulseRate =
-      tuning.idlePulseBaseRate + speedNorm * tuning.idlePulseSpeedScale;
-    const idlePulseDepth =
-      (1 - Math.min(1, speedNorm * 2.5)) * tuning.idlePulseDepth;
+      tuning.idlePulseBaseRate +
+      (isBike ? revNorm : speedNorm) * tuning.idlePulseSpeedScale;
+    const pulseFade = isBike
+      ? Math.max(0.22, 1 - Math.min(1, speedNorm * 1.4))
+      : 1 - Math.min(1, speedNorm * 2.5);
+    const idlePulseDepth = pulseFade * tuning.idlePulseDepth;
     this.enginePulseLfo.frequency.setTargetAtTime(idlePulseRate, now, 0.08);
     this.enginePulseGain.gain.setTargetAtTime(idlePulseDepth, now, 0.08);
 

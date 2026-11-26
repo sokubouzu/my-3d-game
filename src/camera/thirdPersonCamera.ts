@@ -160,6 +160,7 @@ export class ThirdPersonCamera {
     vehicleSpeed: number,
     groundHeight = 0,
     ignoreColliderId?: string,
+    isBike = false,
   ): void {
     const clampedDt = Math.min(dt, 0.05);
     this.manualLookIdleTime += clampedDt;
@@ -175,15 +176,17 @@ export class ThirdPersonCamera {
       this.pitch += (0.24 - this.pitch) * pitchAlpha;
     }
 
-    // 高速域では視界確保のためわずかにカメラを引く
-    const speedPullback = Math.min(1.4, Math.abs(vehicleSpeed) * 0.032);
-    const drivingDistance = Math.max(
-      5.6,
-      Math.min(9.6, this.distance + 2.0 + speedPullback),
+    // 高速域では視界確保のためわずかにカメラを引く（バイク時は跨がり姿勢とバンクが見やすい近め距離）
+    const speedPullback = Math.min(
+      isBike ? 1.15 : 1.4,
+      Math.abs(vehicleSpeed) * (isBike ? 0.028 : 0.032),
     );
+    const drivingDistance = isBike
+      ? Math.max(4.0, Math.min(6.6, this.distance + 0.4 + speedPullback))
+      : Math.max(5.6, Math.min(9.6, this.distance + 2.0 + speedPullback));
     this.desiredTarget.set(
       vehiclePosition.x,
-      vehiclePosition.y + 1.55,
+      vehiclePosition.y + (isBike ? 1.32 : 1.55),
       vehiclePosition.z,
     );
 
@@ -196,12 +199,12 @@ export class ThirdPersonCamera {
       this.currentTarget.lerp(this.desiredTarget, alpha);
     }
 
-    const minCamY = groundHeight + 0.55;
+    const minCamY = groundHeight + (isBike ? 0.45 : 0.55);
     this.applyCameraWithOcclusion(
       clampedDt,
       drivingDistance,
       minCamY,
-      1.85,
+      isBike ? 1.35 : 1.85,
       ignoreColliderId,
     );
   }

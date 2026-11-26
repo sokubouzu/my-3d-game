@@ -1,5 +1,10 @@
 import * as THREE from 'three';
 import type { CollisionWorld } from '../world/collisionWorld';
+import type {
+  BikeRiderMountConfig,
+  VehicleAudioProfile,
+  VehicleType,
+} from './vehicleConfig';
 import type { LoadedHeroVehicle } from './vehicleModel';
 
 export type VehicleGear = 'P' | 'N' | 'D' | 'R';
@@ -26,10 +31,11 @@ export interface VehicleTelemetry {
 
 const REVERSE_HOLD_DELAY = 0.22; // 秒: 停車後のブレーキ長押しでバック移行
 const EXIT_MAX_SPEED = 1.2; // m/s (~4.3 km/h 以下で降車可能)
-const DOOR_INTERACT_MARGIN = 2.4; // m: 車体外面からの乗車可能距離（車体中心から約 3.0m 強）
+const DOOR_INTERACT_MARGIN = 2.4; // m: 車体外面からの乗車可能距離（車体中心から約 2.5〜3.0m）
 
 /**
- * 作業ID 2-B / 2-C: 運転可能車両の物理・車輪回転・ステアリング・OBB衝突解決・乗降位置計算を管理するモジュール。
+ * 作業ID 2-B / 2-C: 運転可能車両（乗用車・スポーツカー・バイク）の物理・車輪回転・ステアリング・
+ * バイク車体バンク演出・OBB衝突解決・乗降位置計算を管理するモジュール。
  */
 export class VehicleController {
   private readonly vehicle: LoadedHeroVehicle;
@@ -39,6 +45,7 @@ export class VehicleController {
   private yaw: number;
   private speed = 0; // + = 前進 (+Z方向), - = 後退 (-Z方向)
   private steerAngle = 0; // + = 左切れ, - = 右切れ
+  private leanRoll = 0; // バイク用ロール角 (rad, 負 = 左傾き / 正 = 右傾き)
   private reverseHoldTimer = 0;
   private isOccupied = false;
   private pendingImpactSpeed = 0;
@@ -57,12 +64,28 @@ export class VehicleController {
     return this.vehicle.config.id;
   }
 
+  public getType(): VehicleType {
+    return this.vehicle.config.type;
+  }
+
   public getDisplayName(): string {
     return this.vehicle.config.displayName;
   }
 
-  public getAudioProfile(): 'standard' | 'sports' {
+  public getAudioProfile(): VehicleAudioProfile {
     return this.vehicle.config.audioProfile;
+  }
+
+  public getRiderAnchor(): THREE.Group {
+    return this.vehicle.riderAnchor;
+  }
+
+  public getRiderMount(): BikeRiderMountConfig | null {
+    return this.vehicle.config.riderMount ?? null;
+  }
+
+  public getLeanRoll(): number {
+    return this.leanRoll;
   }
 
   public getMaxForwardSpeedKmh(): number {
@@ -140,26 +163,27 @@ export class VehicleController {
     const leftX = Math.cos(this.yaw);
     const leftZ = -Math.sin(this.yaw);
 
+    const sideOffset = this.vehicle.config.type === 'bike' ? 0.72 : 0.95;
     const candidates: Array<{ x: number; z: number }> = [
-      // 1. 車の左側（歩道側）ドア横
+      // 1. 車両の左側（歩道側）横
       {
-        x: pos.x + leftX * (halfW + 0.95) + fwdX * 0.15,
-        z: pos.z + leftZ * (halfW + 0.95) + fwdZ * 0.15,
+        x: pos.x + leftX * (halfW + sideOffset) + fwdX * 0.15,
+        z: pos.z + leftZ * (halfW + sideOffset) + fwdZ * 0.15,
       },
-      // 2. 車の左側やや後方
+      // 2. 車両の左側やや後方
       {
-        x: pos.x + leftX * (halfW + 1.1) - fwdX * 0.9,
-        z: pos.z + leftZ * (halfW + 1.1) - fwdZ * 0.9,
+        x: pos.x + leftX * (halfW + sideOffset + 0.15) - fwdX * 0.85,
+        z: pos.z + leftZ * (halfW + sideOffset + 0.15) - fwdZ * 0.85,
       },
-      // 3. 車の右側（運転席側）
+      // 3. 車両の右側
       {
-        x: pos.x - leftX * (halfW + 0.95) + fwdX * 0.15,
-        z: pos.z - leftZ * (halfW + 0.95) + fwdZ * 0.15,
+        x: pos.x - leftX * (halfW + sideOffset) + fwdX * 0.15,
+        z: pos.z - leftZ * (halfW + sideOffset) + fwdZ * 0.15,
       },
-      // 4. 車の後方
+      // 4. 車両の後方
       {
-        x: pos.x - fwdX * (halfL + 1.1),
-        z: pos.z - fwdZ * (halfL + 1.1),
+        x: pos.x - fwdX * (halfL + 1.05),
+        z: pos.z - fwdZ * (halfL + 1.05),
       },
     ];
 
@@ -287,13 +311,21 @@ export class VehicleController {
     const nextX = pos.x + fwdX * this.speed * clampedDt;
     const nextZ = pos.z + fwdZ * this.speed * clampedDt;
 
-    // 4. 建物・他車両・外周壁との衝突解決（すり抜け防止＋停止・反発）
+    // 4. 建物・他車両・外周壁との衝突解決（すり抜け防止＋停止・反発、バイクは車幅に合わせたスリム判定）
+    const isBike = this.vehicle.config.type === 'bike';
+    const colWidth = isBike
+      ? Math.max(0.45, this.vehicle.dimensions.width * this.vehicle.config.colliderShrink)
+      : this.vehicle.dimensions.width;
+    const colLength = isBike
+      ? Math.max(1.2, this.vehicle.dimensions.length * 0.92)
+      : this.vehicle.dimensions.length;
+
     const col = this.collisionWorld.resolveVehicleCollision(
       nextX,
       nextZ,
       this.yaw,
-      this.vehicle.dimensions.width,
-      this.vehicle.dimensions.length,
+      colWidth,
+      colLength,
       this.vehicle.config.id,
     );
 
@@ -334,14 +366,30 @@ export class VehicleController {
 
     this.vehicle.root.rotation.y = this.yaw;
 
-    // 6. 車輪回転・前輪ステアリング・車内ハンドルのビジュアル反映
+    // 6. バイク専用車体バンク（ロール角）演出：速度と舵角に応じてカーブ内側へ傾き、直進で水平復帰
+    const lean = this.vehicle.config.lean;
+    if (lean) {
+      const forwardSpeed = Math.max(0, this.speed);
+      const speedFactor = Math.min(1, forwardSpeed / lean.speedRefMs);
+      const normalizedSteer = maxSteerNow > 0.001 ? this.steerAngle / maxSteerNow : 0;
+      // +Z 前方 / +X 左側の右手系では Z 軸の負回転で左側(+X)、正回転で右側(-X)へ傾く
+      const targetRoll = -normalizedSteer * speedFactor * lean.maxRollRad;
+      const rollBlend = 1 - Math.exp(-lean.responseRate * clampedDt);
+      this.leanRoll += (targetRoll - this.leanRoll) * rollBlend;
+      if (Math.abs(this.leanRoll) < 0.0005 && Math.abs(targetRoll) < 0.0005) {
+        this.leanRoll = 0;
+      }
+      this.vehicle.setLeanRoll(this.leanRoll);
+    }
+
+    // 7. 車輪回転・前輪ステアリング・車内ハンドルのビジュアル反映
     this.vehicle.setSteerAngle(this.steerAngle);
     if (Math.abs(this.speed) > 0.005) {
       const deltaSpin = (this.speed * clampedDt) / this.wheelRadius;
       this.vehicle.addWheelSpin(deltaSpin);
     }
 
-    // 7. 主役車両自身の OBB コライダーを最新位置へ同期
+    // 8. 車両自身の OBB コライダーを最新位置へ同期
     this.syncCollider();
   }
 

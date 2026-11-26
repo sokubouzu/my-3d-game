@@ -36,7 +36,29 @@ export interface VehicleHandlingSpec {
   wheelbaseMeters: number;
 }
 
-export type VehicleAudioProfile = 'standard' | 'sports';
+export type VehicleType = 'car' | 'bike';
+
+export interface VehicleLeanConfig {
+  /** カーブ内側への最大バンク（ロール）角 (rad) */
+  maxRollRad: number;
+  /** 最大バンクに達する基準速度 (m/s) */
+  speedRefMs: number;
+  /** バンク角の追従・水平復帰速度 (1/s) */
+  responseRate: number;
+}
+
+export interface BikeRiderMountConfig {
+  /** バイク原点 (Y=0接地) からのシート跨がり Y オフセット (m) */
+  offsetY: number;
+  /** バイク原点からのシート前後 Z オフセット (m, +Z=前方) */
+  offsetZ: number;
+  /** 乗車時の軽度前傾角 (rad, +X 回転で前傾) */
+  forwardLeanRad: number;
+  /** 再生するアニメーションクリップ名（存在しない場合は Idle へフォールバック） */
+  animationName: string;
+}
+
+export type VehicleAudioProfile = 'standard' | 'sports' | 'bike';
 
 export interface VehicleEngineAudioProfileParams {
   /** 基音オシレーター波形 */
@@ -161,38 +183,79 @@ export const VEHICLE_ENGINE_AUDIO_PROFILES: Record<
     roadFreqMin: 480,
     roadFreqMax: 1160,
   },
+  bike: {
+    // 単気筒〜Vツイン2気筒カスタムバイクらしい軽快で歯切れのよい排気音（明確なアイドリング鼓動感＋鋭い吹け上がり）
+    osc1Type: 'sawtooth',
+    osc2Type: 'square',
+    harmonicOscType: 'triangle',
+    osc1Gain: 0.56,
+    osc2Gain: 0.3,
+    harmonicGain: 0.28,
+    idleFreq: 46,
+    maxFreq: 215,
+    harmonic2Ratio: 1.5,
+    harmonic3Ratio: 2.02,
+    revExponent: 0.72,
+    throttleBoost: 0.24,
+    maxRevNorm: 1.15,
+    freqTau: 0.035,
+    idlePulseBaseRate: 10.5,
+    idlePulseSpeedScale: 26,
+    idlePulseDepth: 0.13,
+    highpassFreq: 95,
+    filterMin: 460,
+    filterMax: 2100,
+    filterQ: 2.8,
+    filterRevWeight: 0.82,
+    filterThrottleWeight: 0.32,
+    midBoostGainDb: 4.5,
+    engineBaseGain: 0.27,
+    engineThrottleGain: 0.16,
+    engineSpeedGain: 0.09,
+    roadSpeedRefKmh: 135,
+    roadExponent: 1.8,
+    roadGainScale: 0.18,
+    roadFreqMin: 520,
+    roadFreqMax: 1400,
+  },
 };
 
 export interface HeroVehicleConfig {
   /** コライダー・シーン識別子 */
   id: string;
+  /** 車両種別（'car' = 四輪車 / 'bike' = 二輪バイク） */
+  type: VehicleType;
   /** docs/ASSET_MANIFEST.json の assetId */
   assetId: string;
   /** 表示用名称 */
   displayName: string;
   /** public/ からの相対 URL */
   url: string;
-  /** 目標全長 (m) — 乗用車の現実的スケール (4.3〜4.8m) */
+  /** 目標全長 (m) — 乗用車の現実的スケール (4.3〜4.8m) / バイク (2.3m) */
   targetLengthMeters: number;
   /**
    * 元モデルの前方方向を車両標準ローカル前方 (+Z) へ揃えるための Y 軸補正角 (rad)。
-   * Toyota Kijang Innova GLB は元データが -Z 前方のため Math.PI で +Z 正面へ正規化する。
+   * Toyota Kijang Innova GLB および Harley Custom Bike GLB は元データが -Z 前方のため Math.PI で +Z 正面へ正規化する。
    */
   modelForwardCorrectionY: number;
   /** 初期配置座標 (m) — Y は常に 0 厳密接地 */
   initialPosition: { x: number; z: number };
   /** 初期向き (rad, 0 = +Z 正面向き) */
   initialRotationY: number;
-  /** コリジョンボックス縮小率（ミラー等の引っかかり緩和） */
+  /** コリジョンボックス縮小率（ミラー・ハンドル端の引っかかり緩和） */
   colliderShrink: number;
   /** ロード完了前の暫定コリジョン寸法 (m) */
   placeholderDimensions: { width: number; height: number; length: number };
   /** リアルタイムシャドウ投影の有無 */
   castShadow: boolean;
-  /** 3-D: エンジン音プロファイル（standard = 静かな実用車 / sports = スポーツカー） */
+  /** 3-D: エンジン音プロファイル（standard = 静かな実用車 / sports = スポーツカー / bike = 単気筒〜2気筒バイク） */
   audioProfile: VehicleAudioProfile;
   /** 走行・操舵スペック */
   handling: VehicleHandlingSpec;
+  /** バイク用バンク（ロール角傾き）設定 */
+  lean?: VehicleLeanConfig;
+  /** バイク乗車時のプレイヤー跨がり姿勢設定 */
+  riderMount?: BikeRiderMountConfig;
   /** 4輪の独立ノード定義 */
   wheels: Record<WheelSlot, WheelNodeBinding>;
   /** ステアリングホイール独立ノード名（未分離の場合は空文字） */
@@ -207,6 +270,7 @@ export interface HeroVehicleConfig {
  */
 export const HERO_VEHICLE_CONFIG: HeroVehicleConfig = {
   id: 'hero_vehicle_innova',
+  type: 'car',
   assetId: '2011_-_13_toyota_kijang_innova_2.0_g_tgn40',
   displayName: 'Toyota Kijang Innova',
   url: './assets/vehicles/2011_-_13_toyota_kijang_innova_2.0_g_tgn40.glb',
@@ -265,6 +329,7 @@ export const HERO_VEHICLE_CONFIG: HeroVehicleConfig = {
  */
 export const SPORTS_CAR_VEHICLE_CONFIG: HeroVehicleConfig = {
   id: 'veh_porsche_north',
+  type: 'car',
   assetId: 'free_1975_porsche_911_930_turbo',
   displayName: 'Porsche 911 Turbo',
   url: './assets/vehicles/free_1975_porsche_911_930_turbo.glb',
@@ -317,8 +382,65 @@ export const SPORTS_CAR_VEHICLE_CONFIG: HeroVehicleConfig = {
   steeringWheelRatio: 0,
 };
 
-/** 運転可能な全車両リスト */
+/**
+ * 3台目の運転可能車両（街区南側路肩に配置済みだったオートバイ: Harley Custom Bike v1.2）。
+ * - 既存の静的配置（x: 4.75, z: 14, rotationY: Math.PI / 6, 全長 2.3m）を多重配置せずそのまま運転車両化。
+ * - 元モデルは -Z がフロント/ハンドル側のため modelForwardCorrectionY = Math.PI で +Z 正面へ正規化し、
+ *   initialRotationY = -5 * Math.PI / 6（Math.PI / 6 + Math.PI）で元配置と同一の見た目の向きを維持。
+ * - GLB 内部はテクスチャアトラス単位（5メッシュ）で結合されておりホイール・ハンドルの独立ノードはないため、
+ *   車体バンク（カーブ内側へのロール傾き）演出と搭乗プレイヤーの跨がり姿勢連動でバイク走行を表現。
+ */
+export const BIKE_VEHICLE_CONFIG: HeroVehicleConfig = {
+  id: 'veh_harley_bike',
+  type: 'bike',
+  assetId: 'harley_custom_bike_v1.2',
+  displayName: 'Harley Custom Bike',
+  url: './assets/vehicles/harley_custom_bike_v1.2.glb',
+  targetLengthMeters: 2.3,
+  modelForwardCorrectionY: Math.PI,
+  initialPosition: { x: 4.75, z: 14.0 },
+  initialRotationY: (-5 * Math.PI) / 6,
+  colliderShrink: 0.76,
+  placeholderDimensions: { width: 0.95, height: 1.18, length: 2.3 },
+  castShadow: true,
+  audioProfile: 'bike',
+  handling: {
+    maxForwardSpeed: 37.5, // ~135 km/h
+    maxReverseSpeed: 3.5, // ~12.6 km/h（足漕ぎ後退）
+    accelRate: 17.5,
+    reverseAccel: 4.5,
+    brakeDecel: 28.0,
+    handbrakeDecel: 38.0,
+    coastDrag: 2.4,
+    maxSteerAngle: 0.64,
+    minHighSpeedSteer: 0.16,
+    steerResponseSpeed: 11.5,
+    wheelbaseMeters: 1.67,
+  },
+  lean: {
+    maxRollRad: 0.45, // 約 26° カーブ内側へバンク
+    speedRefMs: 14.0, // 約 50 km/h でフルバンク域へ到達
+    responseRate: 7.5,
+  },
+  riderMount: {
+    offsetY: 0.34, // Driving 姿勢の Hips(0.46m) をバイクシート座面(~0.74m)へ自然に合わせる高さ
+    offsetZ: -0.34, // シート中心位置（+Z が前方、ハンドルは Z≈+0.35m）
+    forwardLeanRad: 0.14, // 約 8° の軽度前傾姿勢
+    animationName: 'Driving',
+  },
+  wheels: {
+    frontLeft: { spinNodeNames: [], steerOnlyNodeNames: [], steerable: true },
+    frontRight: { spinNodeNames: [], steerOnlyNodeNames: [], steerable: true },
+    rearLeft: { spinNodeNames: [], steerOnlyNodeNames: [], steerable: false },
+    rearRight: { spinNodeNames: [], steerOnlyNodeNames: [], steerable: false },
+  },
+  steeringWheelNodeName: '',
+  steeringWheelRatio: 0,
+};
+
+/** 運転可能な全車両リスト（乗用車・スポーツカー・バイクの計3台） */
 export const DRIVABLE_VEHICLES: readonly HeroVehicleConfig[] = [
   HERO_VEHICLE_CONFIG,
   SPORTS_CAR_VEHICLE_CONFIG,
+  BIKE_VEHICLE_CONFIG,
 ];
