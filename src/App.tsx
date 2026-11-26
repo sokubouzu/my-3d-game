@@ -13,6 +13,7 @@ import { DebugHud } from './ui/DebugHud';
 import { Minimap, type MinimapSnapshot } from './ui/Minimap';
 import { TouchControls } from './ui/TouchControls';
 import { TIME_OF_DAY_LABELS } from './world/timeOfDay';
+import { WEATHER_LABELS } from './world/weather';
 
 const INITIAL_STATUS: EngineStatus = {
   isWebGL2: false,
@@ -58,6 +59,7 @@ const INITIAL_STATUS: EngineStatus = {
   audioMuted: false,
   audioUnlocked: false,
   timeOfDay: 'day',
+  weather: 'sunny',
   coins: {
     totalCollected: 0,
     fieldCollectedCount: 0,
@@ -168,6 +170,10 @@ export function App() {
     engineRef.current?.cycleTimeOfDay();
   }, []);
 
+  const handleCycleWeather = useCallback(() => {
+    engineRef.current?.cycleWeather();
+  }, []);
+
   const handleRespawnCoins = useCallback(() => {
     engineRef.current?.respawnCoins();
   }, []);
@@ -189,6 +195,7 @@ export function App() {
   }, []);
 
   const timeLabel = TIME_OF_DAY_LABELS[status.timeOfDay];
+  const weatherLabel = WEATHER_LABELS[status.weather];
   const ta = status.timeAttack;
   const coins = status.coins;
   const coinJustCollected =
@@ -416,6 +423,89 @@ export function App() {
           </svg>
         )}
         <span className="time-of-day-label">{timeLabel.ja}</span>
+      </button>
+      <button
+        type="button"
+        className={`weather-btn is-weather-${status.weather}`}
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={handleCycleWeather}
+        aria-label={`天候を切替（現在: ${weatherLabel.ja}）`}
+        title={`Weather: ${weatherLabel.ja} (${weatherLabel.en})`}
+      >
+        {status.weather === 'sunny' && (
+          <svg
+            viewBox="0 0 24 24"
+            width="18"
+            height="18"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.1"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="4.5" />
+            <line x1="12" y1="2" x2="12" y2="4.5" />
+            <line x1="12" y1="19.5" x2="12" y2="22" />
+            <line x1="4.93" y1="4.93" x2="6.7" y2="6.7" />
+            <line x1="17.3" y1="17.3" x2="19.07" y2="19.07" />
+            <line x1="2" y1="12" x2="4.5" y2="12" />
+            <line x1="19.5" y1="12" x2="22" y2="12" />
+            <line x1="4.93" y1="19.07" x2="6.7" y2="17.3" />
+            <line x1="17.3" y1="6.7" x2="19.07" y2="4.93" />
+          </svg>
+        )}
+        {status.weather === 'cloudy' && (
+          <svg
+            viewBox="0 0 24 24"
+            width="18"
+            height="18"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.1"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
+          </svg>
+        )}
+        {status.weather === 'rain' && (
+          <svg
+            viewBox="0 0 24 24"
+            width="18"
+            height="18"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.1"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M18 10h-1.26A7.5 7.5 0 1 0 9 16h9a4.5 4.5 0 0 0 0-9z" />
+            <line x1="8" y1="19" x2="7" y2="22" />
+            <line x1="12" y1="19" x2="11" y2="22" />
+            <line x1="16" y1="19" x2="15" y2="22" />
+          </svg>
+        )}
+        {status.weather === 'fog' && (
+          <svg
+            viewBox="0 0 24 24"
+            width="18"
+            height="18"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.1"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M17.5 11h-1.1A6.5 6.5 0 1 0 9.5 14h8a3.5 3.5 0 0 0 0-7z" />
+            <line x1="4" y1="17.5" x2="20" y2="17.5" />
+            <line x1="6" y1="21" x2="18" y2="21" />
+          </svg>
+        )}
+        <span className="weather-label">{weatherLabel.ja}</span>
       </button>
       <button
         type="button"

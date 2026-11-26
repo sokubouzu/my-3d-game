@@ -419,6 +419,68 @@ body,
   pointer-events: none;
 }
 
+/* --- 5-A: 画面上部（時間帯・音声ボタン直下／ミニマップ左隣）ワンタップ天候切替ボタン --- */
+.weather-btn {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 64px);
+  right: calc(env(safe-area-inset-right, 0px) + 164px);
+  z-index: 32;
+  height: 44px;
+  min-width: 96px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(148, 163, 184, 0.55);
+  background: rgba(15, 23, 42, 0.76);
+  color: #f8fafc;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.36);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition: transform 0.08s ease, background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+
+.weather-btn:active {
+  transform: scale(0.93);
+}
+
+.weather-btn.is-weather-sunny {
+  background: rgba(180, 83, 9, 0.74);
+  border-color: rgba(253, 224, 71, 0.82);
+  color: #fef9c3;
+}
+
+.weather-btn.is-weather-cloudy {
+  background: rgba(51, 65, 85, 0.82);
+  border-color: rgba(148, 163, 184, 0.85);
+  color: #e2e8f0;
+}
+
+.weather-btn.is-weather-rain {
+  background: rgba(30, 58, 138, 0.84);
+  border-color: rgba(96, 165, 250, 0.88);
+  color: #dbeafe;
+}
+
+.weather-btn.is-weather-fog {
+  background: rgba(51, 84, 96, 0.82);
+  border-color: rgba(148, 210, 219, 0.84);
+  color: #ecfeff;
+}
+
+.weather-label {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  pointer-events: none;
+}
+
 /* --- 3-D: 画面上部（ミニマップ左隣）ワンタップ音声ミュートボタン --- */
 .audio-mute-btn {
   position: fixed;

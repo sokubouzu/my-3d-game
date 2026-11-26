@@ -31,6 +31,7 @@ export class TrafficManager {
   private readonly segments: Map<string, RoadSegment>;
   private readonly configs: readonly TrafficVehicleConfig[];
   private readonly onStatusChange?: (status: TrafficStatus) => void;
+  private readonly onVehicleLoaded?: (root: THREE.Object3D) => void;
 
   private readonly templateCache = new Map<string, THREE.Object3D>();
   private readonly loadingPromises = new Map<string, Promise<THREE.Object3D>>();
@@ -78,6 +79,7 @@ export class TrafficManager {
     maxAnisotropy: number,
     onStatusChange?: (status: TrafficStatus) => void,
     configs: readonly TrafficVehicleConfig[] = TRAFFIC_VEHICLE_CONFIGS,
+    onVehicleLoaded?: (root: THREE.Object3D) => void,
   ) {
     this.scene = scene;
     this.collisionWorld = collisionWorld;
@@ -85,6 +87,7 @@ export class TrafficManager {
     this.segments = createJapaneseRoadNetwork();
     this.configs = configs;
     this.onStatusChange = onStatusChange;
+    this.onVehicleLoaded = onVehicleLoaded;
 
     this.startLoadingAll();
   }
@@ -154,6 +157,7 @@ export class TrafficManager {
           vehicle.setLightsIntensity(this.currentLightFactor);
           this.vehicles.push(vehicle);
           this.scene.add(vehicle.root);
+          this.onVehicleLoaded?.(vehicle.root);
           this.emitStatus();
         })
         .catch(() => {

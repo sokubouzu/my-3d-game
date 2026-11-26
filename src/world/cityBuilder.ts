@@ -40,6 +40,7 @@ export function buildJapaneseCity(
   collisionWorld: CollisionWorld,
   maxAnisotropy: number,
   onProgress?: (progress: CityBuildProgress) => void,
+  onVehicleTemplateLoaded?: (root: THREE.Object3D) => void,
 ): CityBuilderHandle {
   const cityGroup = new THREE.Group();
   cityGroup.name = 'JapaneseCityRoot';
@@ -171,6 +172,9 @@ export function buildJapaneseCity(
         }
       });
       loadedTemplates.push(root);
+      if (category === 'vehicles') {
+        onVehicleTemplateLoaded?.(root);
+      }
       return root;
     });
 

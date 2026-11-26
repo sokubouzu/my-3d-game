@@ -81,6 +81,16 @@ export class SoundManager {
   private skidFilter: BiquadFilterNode | null = null;
   private skidGain: GainNode | null = null;
 
+  // 4. 5-A: 雨音（天候が RAIN の間だけループ再生し、他天候でフェードアウト停止）
+  private rainActive = false;
+  private rainBodyHighpass: BiquadFilterNode | null = null;
+  private rainPatterFilter: BiquadFilterNode | null = null;
+  private rainMasterGain: GainNode | null = null;
+  private rainLfo: OscillatorNode | null = null;
+  private rainBodySource: AudioBufferSourceNode | null = null;
+  private rainPatterSource: AudioBufferSourceNode | null = null;
+  private rainStopTimerId: number | null = null;
+
   // 状態管理
   private muted = false;
   private unlocked = false;
@@ -739,8 +749,23 @@ export class SoundManager {
     osc.stop(startTime + duration + 0.015);
   }
 
+  /**
+   * 5-A: 雨天（RAIN）の間だけノイズフィルタによる軽量な雨音をループ再生し、
+   * 他の天候に切り替わったら滑らかにフェードアウトして完全停止する。
+   * 既存の iPad WebKit 同期アンロック済み AudioContext・ミュート設定と連動。
+   */
+  public setRainActive(active: boolean): void {
+    if (this.rainActive === active) return;
+    this.rainActive = active;
+    this.syncRainPlayback();
+  }
+
   public dispose(): void {
     this.disposed = true;
+    if (this.rainStopTimerId !== null && typeof window !== 'undefined') {
+      window.clearTimeout(this.rainStopTimerId);
+      this.rainStopTimerId = null;
+    }
     if (typeof document !== 'undefined') {
       document.removeEventListener('visibilitychange', this.handleVisibilityChange);
     }
@@ -762,6 +787,11 @@ export class SoundManager {
     stopSafely(this.enginePulseLfo);
     stopSafely(this.roadSource);
     stopSafely(this.skidSource);
+    stopSafely(this.rainBodySource);
+    stopSafely(this.rainPatterSource);
+    stopSafely(this.rainLfo);
+    this.rainBodySource = null;
+    this.rainPatterSource = null;
 
     if (this.ctx) {
       const ctx = this.ctx;
@@ -831,6 +861,7 @@ export class SoundManager {
     this.unlocked = isRunning;
     if (isRunning) {
       this.applyMasterGain();
+      this.syncRainPlayback();
     }
     this.emitState();
   }
@@ -1037,6 +1068,140 @@ export class SoundManager {
     this.skidSource = skidSource;
     this.skidFilter = skidFilter;
     this.skidGain = skidGain;
+
+    // --- 4. 5-A: 雨音フィルターバス（ソース自体は雨天時のみ起動・晴天時は完全停止） ---
+    const rainMasterGain = ctx.createGain();
+    rainMasterGain.gain.setValueAtTime(0.0001, now);
+    rainMasterGain.connect(masterGain);
+
+    // ベース雨音（ピンクノイズ: 420Hz〜2900Hz、穏やかな LFO 揺らぎ付き）
+    const rainBodyHighpass = ctx.createBiquadFilter();
+    rainBodyHighpass.type = 'highpass';
+    rainBodyHighpass.frequency.setValueAtTime(420, now);
+    rainBodyHighpass.Q.setValueAtTime(0.65, now);
+
+    const rainBodyLowpass = ctx.createBiquadFilter();
+    rainBodyLowpass.type = 'lowpass';
+    rainBodyLowpass.frequency.setValueAtTime(2900, now);
+    rainBodyLowpass.Q.setValueAtTime(0.7, now);
+
+    const rainLfo = ctx.createOscillator();
+    rainLfo.type = 'sine';
+    rainLfo.frequency.setValueAtTime(0.16, now);
+    const rainLfoDepth = ctx.createGain();
+    rainLfoDepth.gain.setValueAtTime(380, now);
+    rainLfo.connect(rainLfoDepth);
+    rainLfoDepth.connect(rainBodyLowpass.frequency);
+    rainLfo.start(now);
+
+    const rainBodyGain = ctx.createGain();
+    rainBodyGain.gain.setValueAtTime(0.3, now);
+
+    rainBodyHighpass.connect(rainBodyLowpass);
+    rainBodyLowpass.connect(rainBodyGain);
+    rainBodyGain.connect(rainMasterGain);
+
+    // 高域の雨粒感（ホワイトノイズ: 2400Hz バンドパス）
+    const rainPatterFilter = ctx.createBiquadFilter();
+    rainPatterFilter.type = 'bandpass';
+    rainPatterFilter.frequency.setValueAtTime(2400, now);
+    rainPatterFilter.Q.setValueAtTime(1.1, now);
+
+    const rainPatterGain = ctx.createGain();
+    rainPatterGain.gain.setValueAtTime(0.085, now);
+
+    rainPatterFilter.connect(rainPatterGain);
+    rainPatterGain.connect(rainMasterGain);
+
+    this.rainBodyHighpass = rainBodyHighpass;
+    this.rainPatterFilter = rainPatterFilter;
+    this.rainMasterGain = rainMasterGain;
+    this.rainLfo = rainLfo;
+
+    if (this.rainActive) {
+      this.syncRainPlayback();
+    }
+  }
+
+  private syncRainPlayback(): void {
+    if (
+      this.disposed ||
+      !this.ctx ||
+      !this.rainMasterGain ||
+      !this.rainBodyHighpass ||
+      !this.rainPatterFilter ||
+      !this.pinkNoiseBuffer ||
+      !this.whiteNoiseBuffer
+    ) {
+      return;
+    }
+
+    if (this.rainStopTimerId !== null && typeof window !== 'undefined') {
+      window.clearTimeout(this.rainStopTimerId);
+      this.rainStopTimerId = null;
+    }
+
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+
+    if (this.rainActive) {
+      if (!this.rainBodySource) {
+        const bodySrc = ctx.createBufferSource();
+        bodySrc.buffer = this.pinkNoiseBuffer;
+        bodySrc.loop = true;
+        bodySrc.connect(this.rainBodyHighpass);
+        bodySrc.start(now, 0.35);
+        this.rainBodySource = bodySrc;
+      }
+      if (!this.rainPatterSource) {
+        const patterSrc = ctx.createBufferSource();
+        patterSrc.buffer = this.whiteNoiseBuffer;
+        patterSrc.loop = true;
+        patterSrc.connect(this.rainPatterFilter);
+        patterSrc.start(now, 0.7);
+        this.rainPatterSource = patterSrc;
+      }
+
+      this.rainMasterGain.gain.cancelScheduledValues(now);
+      this.rainMasterGain.gain.setTargetAtTime(1.0, now, 0.32);
+    } else {
+      this.rainMasterGain.gain.cancelScheduledValues(now);
+      this.rainMasterGain.gain.setTargetAtTime(0.0001, now, 0.22);
+
+      if (this.rainBodySource || this.rainPatterSource) {
+        if (typeof window !== 'undefined') {
+          this.rainStopTimerId = window.setTimeout(() => {
+            this.rainStopTimerId = null;
+            if (!this.rainActive) {
+              this.stopRainSources();
+            }
+          }, 800);
+        } else {
+          this.stopRainSources();
+        }
+      }
+    }
+  }
+
+  private stopRainSources(): void {
+    if (this.rainBodySource) {
+      try {
+        this.rainBodySource.stop();
+        this.rainBodySource.disconnect();
+      } catch {
+        // 既に停止済み
+      }
+      this.rainBodySource = null;
+    }
+    if (this.rainPatterSource) {
+      try {
+        this.rainPatterSource.stop();
+        this.rainPatterSource.disconnect();
+      } catch {
+        // 既に停止済み
+      }
+      this.rainPatterSource = null;
+    }
   }
 }
 

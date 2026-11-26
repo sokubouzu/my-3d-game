@@ -15,7 +15,7 @@ export interface CityEnvironmentHandle {
   status: EnvironmentStatus;
   asphaltMaterial: THREE.MeshStandardMaterial;
   pavementMaterial: THREE.MeshStandardMaterial;
-  setDayHdriBackgroundVisible: (visible: boolean) => void;
+  setDayHdriBackgroundVisible: (visible: boolean) => boolean;
   hasLoadedHdri: () => boolean;
   dispose: () => void;
 }
@@ -85,7 +85,7 @@ export function createCityEnvironment(
 
   scene.environment = currentEnvTarget.texture;
   scene.background = fallbackBgColor;
-  scene.fog = new THREE.Fog(0xb8d4eb, 95, 350);
+  scene.fog = new THREE.FogExp2(0xb8d4eb, 0.0024);
 
   // プロシージャル青空スカイドーム (TimeOfDayController 側でシェーダ空を描画するため初期非表示)
   const skyDomeGeo = new THREE.SphereGeometry(410, 24, 16);
@@ -345,7 +345,9 @@ export function createCityEnvironment(
       allowDayHdriBg = visible;
       if (visible && loadedHdriTexture) {
         scene.background = loadedHdriTexture;
+        return true;
       }
+      return false;
     },
     hasLoadedHdri: () => loadedHdriTexture !== null,
     dispose: () => {

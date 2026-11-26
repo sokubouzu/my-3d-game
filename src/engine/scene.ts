@@ -26,6 +26,10 @@ import {
   type TimeOfDayMode,
 } from '../world/timeOfDay';
 import {
+  WeatherController,
+  type WeatherMode,
+} from '../world/weather';
+import {
   DRIVABLE_VEHICLES,
   VehicleController,
   loadHeroVehicle,
@@ -101,6 +105,7 @@ export interface EngineStatus {
   audioMuted: boolean;
   audioUnlocked: boolean;
   timeOfDay: TimeOfDayMode;
+  weather: WeatherMode;
   coins: CoinStatusSnapshot;
   timeAttack: TimeAttackStatusSnapshot;
 }
@@ -116,6 +121,7 @@ export interface GameEngineHandle {
   setTouchVehicleBrake: (brake: number) => void;
   cycleVehicleSpeedMode: () => DriveSpeedMode | null;
   cycleTimeOfDay: () => TimeOfDayMode;
+  cycleWeather: () => WeatherMode;
   respawnCoins: () => void;
   abortTimeAttack: () => void;
   retryTimeAttack: () => void;
@@ -269,6 +275,7 @@ export function startGameEngine(
   const headlightOriginScratch = new THREE.Vector3();
   const headlightTargetScratch = new THREE.Vector3();
   let timeOfDayController: TimeOfDayController | null = null;
+  let weatherController: WeatherController | null = null;
 
   // 3-D: iPad Safari 対応 Web Audio 音響エンジン（ゼロアロケーション更新用フレームを事前確保）
   const vehicleAudioFrame: VehicleAudioFrame = {
@@ -371,6 +378,7 @@ export function startGameEngine(
       audioMuted,
       audioUnlocked,
       timeOfDay: timeOfDayController?.getMode() ?? 'day',
+      weather: weatherController?.getMode() ?? 'sunny',
       coins: coinSystem.getStatus(),
       timeAttack: timeAttackSystem.getStatus(),
     });
@@ -385,11 +393,17 @@ export function startGameEngine(
 
   // 3-G: 昼・夕方・夜の時間帯切替コントローラー
   timeOfDayController = new TimeOfDayController(scene, dirLight, hemiLight, {
-    setDayHdriBackgroundVisible: (visible) => {
-      cityEnv.setDayHdriBackgroundVisible(visible);
-    },
+    setDayHdriBackgroundVisible: (visible) =>
+      cityEnv.setDayHdriBackgroundVisible(visible),
   });
   timeOfDayController.syncBackgroundVisibility(cityEnv.hasLoadedHdri());
+
+  // 5-A: 天候切替システム（晴れ・曇り・雨・霧＋雨粒パーティクル＋濡れた路面/車体）
+  weatherController = new WeatherController(scene);
+  weatherController.registerRoadMaterials(
+    cityEnv.asphaltMaterial,
+    cityEnv.pavementMaterial,
+  );
 
   // 1-D: 承認済み単体 GLB モデルの街区配置 & OBB コライダー構築
   const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
@@ -400,6 +414,9 @@ export function startGameEngine(
     (progress) => {
       cityProgress = progress;
       emitStatus();
+    },
+    (vehicleRoot) => {
+      weatherController?.registerVehicleObject(vehicleRoot);
     },
   );
 
@@ -438,6 +455,7 @@ export function startGameEngine(
         }
         loadedVehicles.push(vehicle);
         scene.add(vehicle.root);
+        weatherController?.registerVehicleObject(vehicle.root);
         const vc = new VehicleController(vehicle, collisionWorld);
         vc.setLightsIntensity(timeOfDayController?.getHeadlightFactor() ?? 0);
         vehicleControllers.push(vc);
@@ -471,6 +489,10 @@ export function startGameEngine(
     (nextTrafficStatus) => {
       trafficStatus = nextTrafficStatus;
       emitStatus();
+    },
+    TRAFFIC_VEHICLE_CONFIGS,
+    (vehicleRoot) => {
+      weatherController?.registerVehicleObject(vehicleRoot);
     },
   );
 
@@ -781,9 +803,14 @@ export function startGameEngine(
       modeOrPromptChanged = true;
     }
 
-    // 3-G: 時間帯トランジション・街灯・信号・建物窓・車両ヘッドライト＆前方SpotLight更新
+    // 3-G / 5-A: 天候・時間帯トランジション・雨粒・濡れた路面・街灯・信号・建物窓・車両ライト更新
     if (timeOfDayController) {
-      timeOfDayController.update(dt, camera.position);
+      weatherController?.update(dt, camera, timeOfDayController.getNightFactor());
+      timeOfDayController.update(
+        dt,
+        camera.position,
+        weatherController?.getLightingModifier() ?? null,
+      );
       const nightFactor = timeOfDayController.getNightFactor();
       const headlightFactor = timeOfDayController.getHeadlightFactor();
 
@@ -923,6 +950,12 @@ export function startGameEngine(
     },
     cycleTimeOfDay: () => {
       const next = timeOfDayController?.cycleMode() ?? 'day';
+      emitStatus();
+      return next;
+    },
+    cycleWeather: () => {
+      const next = weatherController?.cycleMode() ?? 'sunny';
+      soundManager.setRainActive(next === 'rain');
       emitStatus();
       return next;
     },
@@ -1076,6 +1109,8 @@ export function startGameEngine(
       trafficManager.dispose();
       trafficLights.dispose();
       streetLights.dispose();
+      weatherController?.dispose();
+      weatherController = null;
       timeOfDayController?.dispose();
       timeOfDayController = null;
       scene.remove(playerHeadlightSpot);
