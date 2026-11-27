@@ -35,3 +35,4 @@ export {
 } from './vehicleController';
 export { VehicleDamageEffects } from './vehicleDamageEffects';
 export { VehicleDamageVisualController } from './vehicleDamageVisuals';
+export type { VehicleLightLayout } from './vehicleLights';

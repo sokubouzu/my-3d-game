@@ -1,3 +1,5 @@
+import type { VehicleLightLayout } from './vehicleLights';
+
 export type WheelSlot = 'frontLeft' | 'frontRight' | 'rearLeft' | 'rearRight';
 
 export interface WheelNodeBinding {
@@ -262,6 +264,18 @@ export interface HeroVehicleConfig {
   steeringWheelNodeName: string;
   /** ステアリングホイールの最大回転角倍率（前輪ステア角に対する比） */
   steeringWheelRatio: number;
+  /**
+   * 5-B2: 正規化・バウンディングボックス計測前にモデルから除外・破棄する不要ノード名一覧
+   * （例: GLB 内蔵の平面ベイク影プレーン等）。
+   */
+  excludeNodeNames?: readonly string[];
+  /**
+   * 5-B2: 細いアンテナ等で BBox 高さが実車体より高く膨らむ場合の車体ルーフ実効高さ (m)。
+   * エンジン煙・炎上位置・擦り傷パッチ・前方 SpotLight 高さの基準に使用する。
+   */
+  bodyHeightOverrideMeters?: number;
+  /** 5-B2: 車種固有のヘッドライト・テールランプ精密配置レイアウト */
+  lightLayout?: VehicleLightLayout;
 }
 
 /**
@@ -322,10 +336,13 @@ export const HERO_VEHICLE_CONFIG: HeroVehicleConfig = {
 };
 
 /**
- * 作業ID 2-C: 2台目の運転可能車両（街区北側車道に配置済みだったスポーツカー: 1975 Porsche 911 930 Turbo）。
- * - 既存の静的配置（x: -3.6, z: -22, rotationY: Math.PI, 全長 4.3m）を多重配置せずそのまま運転車両化。
+ * 作業ID 2-C / 5-B2: 2台目の運転可能車両（スポーツカー: 1975 Porsche 911 930 Turbo）。
+ * - 既存の静的配置（x: -4.2, z: -22, rotationY: Math.PI, 全長 4.3m）を多重配置せずそのまま運転車両化。
  * - 最高速 約 160 km/h (44.5 m/s)・加速強化仕様・4輪独立回転＆前輪ステアリング対応。
  * - 元モデルの前輪ノードは初期状態で約 -18.5° (-0.3236 rad) ステアしているため、直進補正角 (+0.3236 rad) を適用。
+ * - 5-B2 修正: GLB 内蔵の平面ベイク影プレーン（Plane.015_62 / Object_140）が全長 BBox を 22% 膨らませ、
+ *   車体前後へ不自然な影シートとライト用箱メッシュが飛び出していた不具合を解消。
+ *   あわせて丸型フロントレンズ・曲面リアテール位置へ精密配置（昼消灯時は GLB 本来のレンズを表示）。
  */
 export const SPORTS_CAR_VEHICLE_CONFIG: HeroVehicleConfig = {
   id: 'veh_porsche_north',
@@ -338,9 +355,25 @@ export const SPORTS_CAR_VEHICLE_CONFIG: HeroVehicleConfig = {
   initialPosition: { x: -4.2, z: -22.0 },
   initialRotationY: Math.PI,
   colliderShrink: 0.92,
-  placeholderDimensions: { width: 1.8, height: 1.35, length: 4.3 },
+  placeholderDimensions: { width: 1.91, height: 1.27, length: 4.3 },
   castShadow: false,
   audioProfile: 'sports',
+  excludeNodeNames: ['Plane.015_62', 'Object_140'],
+  bodyHeightOverrideMeters: 1.27,
+  lightLayout: {
+    frontShape: 'round',
+    frontOffset: { x: 0.639, y: 0.633, z: 1.855 },
+    frontSize: { width: 0.176, height: 0.176, depth: 0.024 },
+    frontTiltX: -0.32,
+    frontHaloOffsetZ: 0.09,
+    frontHaloScale: [0.88, 0.78],
+    rearOffset: { x: 0.49, y: 0.53, z: -1.964 },
+    rearSize: { width: 0.28, height: 0.068, depth: 0.024 },
+    rearYaw: 0.12,
+    rearHaloOffsetZ: -0.07,
+    rearHaloScale: [0.72, 0.44],
+    hideMeshWhenOff: true,
+  },
   handling: {
     maxForwardSpeed: 44.5, // ~160 km/h
     maxReverseSpeed: 8.5, // ~30 km/h

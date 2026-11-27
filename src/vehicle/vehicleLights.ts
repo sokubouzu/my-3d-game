@@ -3,6 +3,31 @@ import { createRadialGlowTexture } from '../world/streetLights';
 import type { VehicleType } from './vehicleConfig';
 import type { VehicleDimensions } from './vehicleModel';
 
+export interface VehicleLightLayout {
+  /** 前照灯形状（'box' = 角型 / 'round' = 丸型レンズ） */
+  frontShape?: 'box' | 'round';
+  /** 前照灯ローカル配置（+X 左側、右側は -X 対称） */
+  frontOffset: { x: number; y: number; z: number };
+  /** 前照灯寸法（round の場合は width を直径として使用） */
+  frontSize: { width: number; height: number; depth: number };
+  /** 前照灯 X 軸チルト角 (rad, 負 = レンズ面上向き傾斜) */
+  frontTiltX?: number;
+  /** 前照灯ハロー Z オフセットおよびスケール */
+  frontHaloOffsetZ?: number;
+  frontHaloScale?: readonly [number, number];
+  /** テールランプローカル配置（+X 左側、右側は -X 対称） */
+  rearOffset: { x: number; y: number; z: number };
+  /** テールランプ寸法 */
+  rearSize: { width: number; height: number; depth: number };
+  /** テールランプ Y 軸追従角 (rad, +X 左側基準・右側は反転) */
+  rearYaw?: number;
+  /** テールランプハロー Z オフセットおよびスケール */
+  rearHaloOffsetZ?: number;
+  rearHaloScale?: readonly [number, number];
+  /** 消灯かつ正常時（昼間）は補助発光メッシュを非表示にし、GLB 本来のレンズを見せる */
+  hideMeshWhenOff?: boolean;
+}
+
 export interface VehicleLightRig {
   group: THREE.Group;
   /** 0 = 消灯（昼）, 0.8 = 夕方, 1.0 = 夜（全灯） */
@@ -27,14 +52,16 @@ const TAILLIGHT_EMISSIVE = new THREE.Color(0xff1e24);
 const BLACK_COLOR = new THREE.Color(0x000000);
 
 /**
- * 3-G / 5-B: 車両（乗用車・スポーツカー・AI交通車両）およびバイク共通の
+ * 3-G / 5-B / 5-B2: 車両（乗用車・スポーツカー・AI交通車両）およびバイク共通の
  * ヘッドライト（白〜淡い暖色）＆テールランプ（赤）発光メッシュ＋軽量ハロー演出リグ。
- * - 車体の正規化寸法（+Z 前方、Y=0 接地）に合わせて自動配置する。
+ * - 車体の正規化寸法（+Z 前方、Y=0 接地）または車種別 VehicleLightLayout に合わせて精密配置する。
  * - 5-B にて左右ヘッドライト独立の損傷点滅・消灯（破損レンズ暗化）に対応。
+ * - 5-B2 にてスポーツカー等の丸型・曲面レンズへ埋め込みフィットさせ、昼間消灯時の不自然な飛び出しを解消。
  */
 export function createVehicleLightRig(
   type: VehicleType,
   dimensions: VehicleDimensions,
+  layout?: VehicleLightLayout,
 ): VehicleLightRig {
   const group = new THREE.Group();
   group.name = 'VehicleLightRig';
@@ -116,9 +143,13 @@ export function createVehicleLightRig(
     tailHaloMat,
   );
 
+  const leftHeadMeshes: THREE.Mesh[] = [];
+  const rightHeadMeshes: THREE.Mesh[] = [];
+  const tailMeshes: THREE.Mesh[] = [];
   const leftHeadHalos: THREE.Sprite[] = [];
   const rightHeadHalos: THREE.Sprite[] = [];
   const tailHalos: THREE.Sprite[] = [];
+  const hideMeshWhenOff = Boolean(layout?.hideMeshWhenOff);
 
   const { width, height, length } = dimensions;
 
@@ -134,6 +165,7 @@ export function createVehicleLightRig(
     const headMesh = new THREE.Mesh(headGeo, leftHeadlightMat);
     headMesh.position.set(0, frontY, frontZ);
     group.add(headMesh);
+    leftHeadMeshes.push(headMesh);
 
     const headHalo = new THREE.Sprite(leftHeadHaloMat);
     headHalo.position.set(0, frontY, frontZ + 0.08);
@@ -147,6 +179,7 @@ export function createVehicleLightRig(
     const tailMesh = new THREE.Mesh(tailGeo, taillightMat);
     tailMesh.position.set(0, rearY, rearZ);
     group.add(tailMesh);
+    tailMeshes.push(tailMesh);
 
     const tailHalo = new THREE.Sprite(tailHaloMat);
     tailHalo.position.set(0, rearY, rearZ - 0.06);
@@ -157,43 +190,64 @@ export function createVehicleLightRig(
   } else {
     // 四輪乗用車・スポーツカー・AI交通車両: 左右独立ヘッドライト + 左右テールランプ
     const isLowSports = height < 1.45;
-    const headGeo = new THREE.BoxGeometry(
-      Math.max(0.2, width * 0.14),
-      Math.max(0.09, height * 0.075),
-      0.06,
-    );
+    const frontShape = layout?.frontShape ?? 'box';
+
+    let headGeo: THREE.BufferGeometry;
+    if (frontShape === 'round' && layout) {
+      const radius = Math.max(0.05, layout.frontSize.width * 0.5);
+      const depth = Math.max(0.014, layout.frontSize.depth);
+      const cyl = new THREE.CylinderGeometry(radius, radius, depth, 16);
+      cyl.rotateX(Math.PI * 0.5);
+      headGeo = cyl;
+    } else {
+      headGeo = new THREE.BoxGeometry(
+        layout ? layout.frontSize.width : Math.max(0.2, width * 0.14),
+        layout ? layout.frontSize.height : Math.max(0.09, height * 0.075),
+        layout ? layout.frontSize.depth : 0.06,
+      );
+    }
+
     const tailGeo = new THREE.BoxGeometry(
-      Math.max(0.22, width * 0.16),
-      Math.max(0.08, height * 0.07),
-      0.055,
+      layout ? layout.rearSize.width : Math.max(0.22, width * 0.16),
+      layout ? layout.rearSize.height : Math.max(0.08, height * 0.07),
+      layout ? layout.rearSize.depth : 0.055,
     );
     geometries.push(headGeo, tailGeo);
 
-    const headX = width * 0.34;
-    const headY = height * (isLowSports ? 0.44 : 0.42);
-    const headZ = length * 0.482;
+    const headX = layout ? layout.frontOffset.x : width * 0.34;
+    const headY = layout ? layout.frontOffset.y : height * (isLowSports ? 0.44 : 0.42);
+    const headZ = layout ? layout.frontOffset.z : length * 0.482;
+    const headTiltX = layout?.frontTiltX ?? 0;
+    const headHaloOffsetZ = layout?.frontHaloOffsetZ ?? 0.1;
+    const headHaloScale = layout?.frontHaloScale ?? [0.95, 0.72];
 
-    const tailX = width * 0.35;
-    const tailY = height * (isLowSports ? 0.48 : 0.47);
-    const tailZ = -length * 0.482;
+    const tailX = layout ? layout.rearOffset.x : width * 0.35;
+    const tailY = layout ? layout.rearOffset.y : height * (isLowSports ? 0.48 : 0.47);
+    const tailZ = layout ? layout.rearOffset.z : -length * 0.482;
+    const tailYaw = layout?.rearYaw ?? 0;
+    const tailHaloOffsetZ = layout?.rearHaloOffsetZ ?? -0.08;
+    const tailHaloScale = layout?.rearHaloScale ?? [0.76, 0.52];
 
     // +X = 左側, -X = 右側
     const sides: ReadonlyArray<{
       side: number;
       headMat: THREE.MeshStandardMaterial;
       haloMat: THREE.SpriteMaterial;
+      headList: THREE.Mesh[];
       haloList: THREE.Sprite[];
     }> = [
       {
         side: 1,
         headMat: leftHeadlightMat,
         haloMat: leftHeadHaloMat,
+        headList: leftHeadMeshes,
         haloList: leftHeadHalos,
       },
       {
         side: -1,
         headMat: rightHeadlightMat,
         haloMat: rightHeadHaloMat,
+        headList: rightHeadMeshes,
         haloList: rightHeadHalos,
       },
     ];
@@ -201,22 +255,32 @@ export function createVehicleLightRig(
     for (const s of sides) {
       const headMesh = new THREE.Mesh(headGeo, s.headMat);
       headMesh.position.set(s.side * headX, headY, headZ);
+      if (headTiltX !== 0) {
+        headMesh.rotation.x = headTiltX;
+      }
+      headMesh.visible = !hideMeshWhenOff;
       group.add(headMesh);
+      s.headList.push(headMesh);
 
       const headHalo = new THREE.Sprite(s.haloMat);
-      headHalo.position.set(s.side * headX, headY, headZ + 0.1);
-      headHalo.scale.set(0.95, 0.72, 1);
+      headHalo.position.set(s.side * headX, headY, headZ + headHaloOffsetZ);
+      headHalo.scale.set(headHaloScale[0], headHaloScale[1], 1);
       headHalo.visible = false;
       group.add(headHalo);
       s.haloList.push(headHalo);
 
       const tailMesh = new THREE.Mesh(tailGeo, taillightMat);
       tailMesh.position.set(s.side * tailX, tailY, tailZ);
+      if (tailYaw !== 0) {
+        tailMesh.rotation.y = s.side * tailYaw;
+      }
+      tailMesh.visible = !hideMeshWhenOff;
       group.add(tailMesh);
+      tailMeshes.push(tailMesh);
 
       const tailHalo = new THREE.Sprite(tailHaloMat);
-      tailHalo.position.set(s.side * tailX, tailY, tailZ - 0.08);
-      tailHalo.scale.set(0.76, 0.52, 1);
+      tailHalo.position.set(s.side * tailX, tailY, tailZ + tailHaloOffsetZ);
+      tailHalo.scale.set(tailHaloScale[0], tailHaloScale[1], 1);
       tailHalo.visible = false;
       group.add(tailHalo);
       tailHalos.push(tailHalo);
@@ -231,6 +295,7 @@ export function createVehicleLightRig(
   const applyHeadChannel = (
     mat: THREE.MeshStandardMaterial,
     haloMat: THREE.SpriteMaterial,
+    meshes: THREE.Mesh[],
     halos: THREE.Sprite[],
     effective: number,
     damageMul: number,
@@ -245,6 +310,10 @@ export function createVehicleLightRig(
       mat.emissive.copy(BLACK_COLOR);
       mat.emissiveIntensity = 0;
     }
+    const showMesh = !hideMeshWhenOff || isLit || isBroken;
+    for (let i = 0; i < meshes.length; i += 1) {
+      meshes[i].visible = showMesh;
+    }
     haloMat.opacity = effective * 0.85;
     for (let i = 0; i < halos.length; i += 1) {
       halos[i].visible = isLit;
@@ -258,6 +327,7 @@ export function createVehicleLightRig(
       applyHeadChannel(
         leftHeadlightMat,
         leftHeadHaloMat,
+        leftHeadMeshes,
         leftHeadHalos,
         f * bikeMul,
         bikeMul,
@@ -266,6 +336,7 @@ export function createVehicleLightRig(
       applyHeadChannel(
         leftHeadlightMat,
         leftHeadHaloMat,
+        leftHeadMeshes,
         leftHeadHalos,
         f * leftMul,
         leftMul,
@@ -273,6 +344,7 @@ export function createVehicleLightRig(
       applyHeadChannel(
         rightHeadlightMat,
         rightHeadHaloMat,
+        rightHeadMeshes,
         rightHeadHalos,
         f * rightMul,
         rightMul,
@@ -287,6 +359,10 @@ export function createVehicleLightRig(
     } else {
       taillightMat.emissive.copy(BLACK_COLOR);
       taillightMat.emissiveIntensity = 0;
+    }
+    const showTailMesh = !hideMeshWhenOff || tailLit;
+    for (let i = 0; i < tailMeshes.length; i += 1) {
+      tailMeshes[i].visible = showTailMesh;
     }
     tailHaloMat.opacity = tailEff * 0.72;
     for (let i = 0; i < tailHalos.length; i += 1) {
@@ -329,6 +405,9 @@ export function createVehicleLightRig(
     geometries.length = 0;
     materials.length = 0;
     textures.length = 0;
+    leftHeadMeshes.length = 0;
+    rightHeadMeshes.length = 0;
+    tailMeshes.length = 0;
     leftHeadHalos.length = 0;
     rightHeadHalos.length = 0;
     tailHalos.length = 0;

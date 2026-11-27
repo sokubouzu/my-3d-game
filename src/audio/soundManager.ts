@@ -661,7 +661,7 @@ export class SoundManager {
   }
 
   /**
-   * 5-B: 車両大爆発の衝撃音（重低音ドロップ＋爆風ローパス轟音＋破片アタック、距離減衰付き）。
+   * 5-B / 5-B2: 車両大爆発の衝撃音（重低音サブベース＋爆風ローパス轟音＋破片クラック、距離減衰付き）。
    */
   public playExplosion(distanceMeters = 0): void {
     if (
@@ -678,43 +678,59 @@ export class SoundManager {
 
     const ctx = this.ctx;
     const now = ctx.currentTime;
-    const atten = Math.max(0.16, Math.min(1, 1 / (1 + Math.max(0, distanceMeters - 6) * 0.032)));
+    const atten = Math.max(0.16, Math.min(1, 1 / (1 + Math.max(0, distanceMeters - 6) * 0.03)));
 
-    // 1. 爆風の重低音衝撃波 (155Hz -> 28Hz)
+    // 1a. 重低音サブベース・パンチ (84Hz -> 24Hz)
+    const subOsc = ctx.createOscillator();
+    subOsc.type = 'sine';
+    subOsc.frequency.setValueAtTime(84, now);
+    subOsc.frequency.exponentialRampToValueAtTime(24, now + 0.62);
+
+    const subGain = ctx.createGain();
+    subGain.gain.setValueAtTime(0.0001, now);
+    subGain.gain.linearRampToValueAtTime(0.95 * atten, now + 0.01);
+    subGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.85);
+
+    subOsc.connect(subGain);
+    subGain.connect(this.masterGain);
+    subOsc.start(now);
+    subOsc.stop(now + 0.88);
+
+    // 1b. 中低音ブラストドロップ (175Hz -> 36Hz、iPad 内蔵スピーカーでも迫力が出る帯域)
     const boomOsc = ctx.createOscillator();
     boomOsc.type = 'triangle';
-    boomOsc.frequency.setValueAtTime(155, now);
-    boomOsc.frequency.exponentialRampToValueAtTime(28, now + 0.52);
+    boomOsc.frequency.setValueAtTime(175, now);
+    boomOsc.frequency.exponentialRampToValueAtTime(36, now + 0.54);
 
     const boomGain = ctx.createGain();
     boomGain.gain.setValueAtTime(0.0001, now);
-    boomGain.gain.linearRampToValueAtTime(0.85 * atten, now + 0.012);
-    boomGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.72);
+    boomGain.gain.linearRampToValueAtTime(0.86 * atten, now + 0.012);
+    boomGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.76);
 
     boomOsc.connect(boomGain);
     boomGain.connect(this.masterGain);
     boomOsc.start(now);
-    boomOsc.stop(now + 0.76);
+    boomOsc.stop(now + 0.8);
 
-    // 2. 轟音テール（ピンクノイズのローパス掃引 2200Hz -> 160Hz）
+    // 2. 轟音テール（ピンクノイズのローパス掃引 2400Hz -> 130Hz）
     const rumbleSrc = ctx.createBufferSource();
     rumbleSrc.buffer = this.pinkNoiseBuffer;
 
     const rumbleFilter = ctx.createBiquadFilter();
     rumbleFilter.type = 'lowpass';
-    rumbleFilter.frequency.setValueAtTime(2200, now);
-    rumbleFilter.frequency.exponentialRampToValueAtTime(160, now + 1.35);
-    rumbleFilter.Q.setValueAtTime(1.2, now);
+    rumbleFilter.frequency.setValueAtTime(2400, now);
+    rumbleFilter.frequency.exponentialRampToValueAtTime(130, now + 1.55);
+    rumbleFilter.Q.setValueAtTime(1.25, now);
 
     const rumbleGain = ctx.createGain();
     rumbleGain.gain.setValueAtTime(0.0001, now);
-    rumbleGain.gain.linearRampToValueAtTime(0.82 * atten, now + 0.018);
-    rumbleGain.gain.exponentialRampToValueAtTime(0.0001, now + 1.48);
+    rumbleGain.gain.linearRampToValueAtTime(0.88 * atten, now + 0.016);
+    rumbleGain.gain.exponentialRampToValueAtTime(0.0001, now + 1.72);
 
     rumbleSrc.connect(rumbleFilter);
     rumbleFilter.connect(rumbleGain);
     rumbleGain.connect(this.masterGain);
-    rumbleSrc.start(now, 0.1, 1.55);
+    rumbleSrc.start(now, 0.1, 1.8);
 
     // 3. 破片・閃光の瞬間アタック（ホワイトノイズ高域）
     const crackSrc = ctx.createBufferSource();
@@ -722,19 +738,73 @@ export class SoundManager {
 
     const crackFilter = ctx.createBiquadFilter();
     crackFilter.type = 'bandpass';
-    crackFilter.frequency.setValueAtTime(2400, now);
-    crackFilter.frequency.exponentialRampToValueAtTime(520, now + 0.32);
-    crackFilter.Q.setValueAtTime(0.7, now);
+    crackFilter.frequency.setValueAtTime(2600, now);
+    crackFilter.frequency.exponentialRampToValueAtTime(480, now + 0.36);
+    crackFilter.Q.setValueAtTime(0.75, now);
 
     const crackGain = ctx.createGain();
     crackGain.gain.setValueAtTime(0.0001, now);
-    crackGain.gain.linearRampToValueAtTime(0.55 * atten, now + 0.004);
-    crackGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.34);
+    crackGain.gain.linearRampToValueAtTime(0.6 * atten, now + 0.004);
+    crackGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.38);
 
     crackSrc.connect(crackFilter);
     crackFilter.connect(crackGain);
     crackGain.connect(this.masterGain);
-    crackSrc.start(now, 0.2, 0.38);
+    crackSrc.start(now, 0.2, 0.42);
+  }
+
+  /**
+   * 5-B2: 爆発で跳ね上がった車体が地面にドスンと落下する際の金属着地音（距離減衰付き）。
+   */
+  public playBlastThud(distanceMeters = 0): void {
+    if (
+      !this.ctx ||
+      this.ctx.state !== 'running' ||
+      !this.masterGain ||
+      !this.unlocked ||
+      this.muted ||
+      this.disposed
+    ) {
+      return;
+    }
+    if (!this.whiteNoiseBuffer) return;
+
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+    const atten = Math.max(0.12, Math.min(1, 1 / (1 + Math.max(0, distanceMeters - 6) * 0.04)));
+
+    const osc = ctx.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(140, now);
+    osc.frequency.exponentialRampToValueAtTime(42, now + 0.22);
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.linearRampToValueAtTime(0.55 * atten, now + 0.008);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.26);
+
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+    osc.start(now);
+    osc.stop(now + 0.28);
+
+    const noiseSrc = ctx.createBufferSource();
+    noiseSrc.buffer = this.whiteNoiseBuffer;
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(760, now);
+    filter.Q.setValueAtTime(1.1, now);
+
+    const nGain = ctx.createGain();
+    nGain.gain.setValueAtTime(0.0001, now);
+    nGain.gain.linearRampToValueAtTime(0.32 * atten, now + 0.006);
+    nGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
+
+    noiseSrc.connect(filter);
+    filter.connect(nGain);
+    nGain.connect(this.masterGain);
+    noiseSrc.start(now, 0.15, 0.24);
   }
 
   /**

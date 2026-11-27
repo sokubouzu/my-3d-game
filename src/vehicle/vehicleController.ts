@@ -37,7 +37,12 @@ export interface VehicleDamageTickResult {
   fireBeep: boolean;
   fireBeepUrgency: number;
   explodedNow: boolean;
+  wreckLandedNow: boolean;
   readyToRespawn: boolean;
+  fireLightIntensity: number;
+  fireLightX: number;
+  fireLightY: number;
+  fireLightZ: number;
 }
 
 export interface DriveSpeedModeConfig {
@@ -91,13 +96,18 @@ export interface VehicleTelemetry {
 const REVERSE_HOLD_DELAY = 0.22; // 秒: 停車後のブレーキ長押しでバック移行
 const EXIT_MAX_SPEED = 1.2; // m/s (~4.3 km/h 以下で降車可能)
 const DOOR_INTERACT_MARGIN = 2.4; // m: 車体外面からの乗車可能距離（車体中心から約 2.5〜3.0m）
+const LIGHT_DAMAGE_HP = 70; // HP 70% 以下: 軽傷（ボンネットから細い白煙）
+const HEAVY_DAMAGE_HP = 45; // HP 45% 以下: 中傷（濃いグレー〜黒煙・オイル漏れ・火花）
+const IGNITE_HP = 15; // HP 15% 以下〜0%: 炎上直前（ボンネットから赤い火柱＋2.5秒警告音）
 const BURN_COUNTDOWN_SEC = 2.5; // 秒: 発火から大爆発までの緊急カウントダウン
-const WRECK_RESPAWN_SEC = 9.0; // 秒: 全損残骸から安全な道路上への自動復帰時間（8〜10秒）
+const WRECK_FULL_FIRE_SEC = 7.6; // 秒: 爆発後の激しい炎上継続時間
+const WRECK_EXTINGUISH_SEC = 9.5; // 秒: 鎮火完了時刻（7.6〜9.5秒で炎が徐々に縮小・鎮火）
+const WRECK_RESPAWN_SEC = 10.5; // 秒: 鎮火フェードアウト完了〜近接道路自動リスポーン時刻
 const IMPACT_DAMAGE_COOLDOWN_SEC = 0.26; // 秒: 連続衝突の多段ヒット防止
 
 /**
- * 作業ID 2-B / 2-C / 5-B: 運転可能車両（乗用車・スポーツカー・バイク）の物理・車輪回転・ステアリング・
- * バイク車体バンク演出・OBB衝突解決・乗降位置計算・段階的ダメージ/発火/爆発/自動リスポーンを管理するモジュール。
+ * 作業ID 2-B / 2-C / 5-B / 5-B2: 運転可能車両（乗用車・スポーツカー・バイク）の物理・車輪回転・ステアリング・
+ * バイク車体バンク演出・OBB衝突解決・乗降位置計算・5段階ダメージ/発火/爆発跳ね上がり/炎上継続/自動リスポーンを管理するモジュール。
  */
 export class VehicleController {
   private readonly vehicle: LoadedHeroVehicle;
@@ -112,10 +122,11 @@ export class VehicleController {
   private reverseHoldTimer = 0;
   private isOccupied = false;
 
-  // 5-B: 耐久度・ダメージ演出・発火＆自動リスポーン状態
+  // 5-B / 5-B2: 耐久度・5段階ダメージ演出・爆発跳ね上がり物理＆自動リスポーン状態
   private hp = 100;
   private damageState: VehicleDamageState = 'intact';
   private burnTimer = 0;
+  private burnStartHp = 0;
   private fireBeepTimer = 0;
   private respawnTimer = 0;
   private wreckElapsed = 0;
@@ -123,8 +134,21 @@ export class VehicleController {
   private misfireClock = 0;
   private smokeEmitTimer = 0;
   private fireEmitTimer = 0;
+  private emberEmitTimer = 0;
   private damageSparkTimer = 0.6;
   private oilLeakDistanceAccum = 0;
+
+  // 5-B2: 爆発瞬間の車体跳ね上がり＆傾き着地リアクション状態
+  private blastHopY = 0;
+  private blastHopVelY = 0;
+  private blastPitch = 0;
+  private blastPitchVel = 0;
+  private blastRoll = 0;
+  private blastRollVel = 0;
+  private blastRestPitch = 0;
+  private blastRestRoll = 0;
+  private blastBounceCount = 0;
+  private blastThudPending = false;
 
   private pendingImpact: VehicleImpactEvent | null = null;
   private readonly impactEventScratch: VehicleImpactEvent = {
@@ -141,6 +165,7 @@ export class VehicleController {
   };
   private readonly enginePosScratch = new THREE.Vector3();
   private readonly oilPosScratch = new THREE.Vector3();
+  private readonly wreckSpotScratch = new THREE.Vector3();
 
   constructor(vehicle: LoadedHeroVehicle, collisionWorld: CollisionWorld) {
     this.vehicle = vehicle;
@@ -444,6 +469,7 @@ export class VehicleController {
     this.leanRoll = 0;
     this.reverseHoldTimer = 0;
     this.pendingImpact = null;
+    this.resetBlastTransform();
     this.yaw = normalizeAngle(yaw);
 
     this.vehicle.root.position.set(x, Math.max(0, y), z);
@@ -455,8 +481,23 @@ export class VehicleController {
     this.syncCollider();
   }
 
+  private resetBlastTransform(): void {
+    this.blastHopY = 0;
+    this.blastHopVelY = 0;
+    this.blastPitch = 0;
+    this.blastPitchVel = 0;
+    this.blastRoll = 0;
+    this.blastRollVel = 0;
+    this.blastRestPitch = 0;
+    this.blastRestRoll = 0;
+    this.blastBounceCount = 0;
+    this.blastThudPending = false;
+    this.vehicle.bodyGroup.position.y = 0;
+    this.vehicle.bodyGroup.rotation.set(0, 0, 0);
+  }
+
   /**
-   * 5-B: 耐久度 100%・凹み頂点・擦り傷/煤・ライト破損を新品状態へ完全復元し、安全車道へスポーンさせる。
+   * 5-B / 5-B2: 耐久度 100%・凹み頂点・擦り傷/煤・ライト破損・爆発姿勢を新品状態へ完全復元し、安全車道へスポーンさせる。
    */
   public repairAndRespawn(
     x: number,
@@ -468,12 +509,14 @@ export class VehicleController {
     this.hp = 100;
     this.damageState = 'intact';
     this.burnTimer = 0;
+    this.burnStartHp = 0;
     this.fireBeepTimer = 0;
     this.respawnTimer = 0;
     this.wreckElapsed = 0;
     this.impactCooldown = 0;
     this.oilLeakDistanceAccum = 0;
     this.pendingImpact = null;
+    this.resetBlastTransform();
     this.vehicle.damageVisuals.reset(rainAmount);
     this.respawnAt(x, y, z, yaw);
   }
@@ -515,15 +558,49 @@ export class VehicleController {
     }
     this.misfireClock += clampedDt;
 
-    // 全損残骸は完全不動（コライダーのみ維持）
+    // 5-B2: 全損残骸は走行不可だが、爆発瞬間の跳ね上がり＆傾き落下バウンド物理を再生する
     if (this.damageState === 'wrecked') {
       this.speed = 0;
       this.steerAngle = 0;
       this.reverseHoldTimer = 0;
-      if (this.vehicle.config.lean && Math.abs(this.leanRoll) > 0.001) {
-        this.leanRoll *= Math.exp(-6 * clampedDt);
-        this.vehicle.setLeanRoll(this.leanRoll);
+      this.leanRoll = 0;
+
+      if (this.blastHopY > 0 || Math.abs(this.blastHopVelY) > 0.01) {
+        this.blastHopVelY -= 15.8 * clampedDt;
+        this.blastHopY += this.blastHopVelY * clampedDt;
+        if (this.blastHopY <= 0) {
+          this.blastHopY = 0;
+          if (Math.abs(this.blastHopVelY) > 1.3 && this.blastBounceCount < 2) {
+            if (this.blastBounceCount === 0) {
+              this.blastThudPending = true;
+            }
+            this.blastBounceCount += 1;
+            this.blastHopVelY = Math.abs(this.blastHopVelY) * 0.24;
+            this.blastPitchVel *= -0.35;
+            this.blastRollVel *= 0.45;
+          } else {
+            this.blastHopVelY = 0;
+          }
+        }
       }
+
+      // ピッチ・ロールを爆発傾き→破損着地姿勢へ減衰収束
+      const springK = this.blastHopY > 0.01 ? 6.5 : 18.0;
+      const damp = this.blastHopY > 0.01 ? 2.4 : 6.2;
+      this.blastPitchVel +=
+        ((this.blastRestPitch - this.blastPitch) * springK -
+          this.blastPitchVel * damp) *
+        clampedDt;
+      this.blastRollVel +=
+        ((this.blastRestRoll - this.blastRoll) * springK -
+          this.blastRollVel * damp) *
+        clampedDt;
+      this.blastPitch = Math.max(-0.42, Math.min(0.36, this.blastPitch + this.blastPitchVel * clampedDt));
+      this.blastRoll = Math.max(-0.78, Math.min(0.78, this.blastRoll + this.blastRollVel * clampedDt));
+
+      this.vehicle.bodyGroup.position.y = this.blastHopY;
+      this.vehicle.bodyGroup.rotation.x = this.blastPitch;
+      this.vehicle.bodyGroup.rotation.z = this.blastRoll;
       this.syncCollider();
       return;
     }
@@ -703,9 +780,9 @@ export class VehicleController {
       }
     }
 
-    // 走行距離をオイル漏れトラッキング用に積算
+    // 走行距離をオイル漏れトラッキング用に積算（中傷 HP 45% 以下）
     const movedDist = Math.hypot(pos.x - prevX, pos.z - prevZ);
-    if (this.hp <= 40 && movedDist > 0.001) {
+    if (this.hp <= HEAVY_DAMAGE_HP && movedDist > 0.001) {
       this.oilLeakDistanceAccum += movedDist;
     }
 
@@ -778,14 +855,15 @@ export class VehicleController {
       damage = Math.min(68, Math.max(2, energy * profileScale * 0.92));
       this.hp = Math.max(0, this.hp - damage);
 
-      if (this.hp <= 0) {
-        this.hp = 0;
+      // 5-B2: 5段階ダメージ進行（HP70%軽傷 -> HP45%中傷 -> HP15%以下炎上直前2.5秒カウントダウン）
+      if (this.hp <= IGNITE_HP) {
         this.damageState = 'burning';
         this.burnTimer = BURN_COUNTDOWN_SEC;
+        this.burnStartHp = this.hp;
         this.fireBeepTimer = 0;
-      } else if (this.hp <= 40) {
+      } else if (this.hp <= HEAVY_DAMAGE_HP) {
         this.damageState = 'heavy';
-      } else if (this.hp <= 70) {
+      } else if (this.hp <= LIGHT_DAMAGE_HP) {
         this.damageState = 'light';
       }
     }
@@ -833,7 +911,8 @@ export class VehicleController {
   }
 
   /**
-   * 5-B: 毎フレームの段階的ダメージ演出（煙・火花・オイル漏れ・ライト点滅・発火カウントダウン・大爆発・自動リスポーン計時）を更新する。
+   * 5-B / 5-B2: 毎フレームの5段階リアルダメージ演出
+   * （軽傷白煙 -> 中傷黒煙＆オイル漏れ＆火花 -> 炎上直前2.5秒火柱＆警告音 -> 大爆発＆車体跳ね上がり＆破片飛散 -> 8〜10秒炎上継続＆鎮火フェードアウト＆自動リスポーン）
    */
   public updateDamageLifecycle(
     dt: number,
@@ -847,18 +926,48 @@ export class VehicleController {
     out.fireBeep = false;
     out.fireBeepUrgency = 0;
     out.explodedNow = false;
+    out.wreckLandedNow = false;
     out.readyToRespawn = false;
+    out.fireLightIntensity = 0;
 
     const isBurning = this.damageState === 'burning';
     const isWrecked = this.damageState === 'wrecked';
+    const isBike = this.vehicle.config.type === 'bike';
 
-    // 1. ボディ表面（傷/煤/黒焦げ＋雨濡れ合成）および破損ヘッドライト点滅の更新
+    // 炎上強度および残骸フェードアウト透過度を算出
+    let visualFireIntensity = 0;
+    let wreckFadeOpacity = 1;
+    if (isBurning) {
+      visualFireIntensity = 0.35 + (1 - this.burnTimer / BURN_COUNTDOWN_SEC) * 0.65;
+    } else if (isWrecked) {
+      if (this.wreckElapsed <= WRECK_FULL_FIRE_SEC) {
+        visualFireIntensity = 1.0;
+      } else if (this.wreckElapsed < WRECK_EXTINGUISH_SEC) {
+        visualFireIntensity = Math.max(
+          0,
+          1 -
+            (this.wreckElapsed - WRECK_FULL_FIRE_SEC) /
+              (WRECK_EXTINGUISH_SEC - WRECK_FULL_FIRE_SEC),
+        );
+      } else {
+        visualFireIntensity = 0;
+        const fadeSpan = Math.max(0.1, WRECK_RESPAWN_SEC - WRECK_EXTINGUISH_SEC);
+        wreckFadeOpacity = Math.max(
+          0,
+          1 - (this.wreckElapsed - WRECK_EXTINGUISH_SEC) / fadeSpan,
+        );
+      }
+    }
+
+    // 1. ボディ表面（傷/煤/黒焦げ/赤熱/鎮火フェードアウト＋雨濡れ合成）および破損ヘッドライト点滅の更新
     this.vehicle.damageVisuals.update(
       clampedDt,
       this.hp / 100,
       isBurning,
       isWrecked,
       rainAmount,
+      visualFireIntensity,
+      wreckFadeOpacity,
     );
 
     // 2. 衝突瞬間の金属火花パーティクル放出
@@ -873,52 +982,80 @@ export class VehicleController {
       );
     }
 
-    // エンジンワールド座標を計算（煙・火花・炎の発生源）
+    // エンジンワールド座標を計算（煙・火花・炎の発生源、爆発跳ね上がり高さにも追従）
     const eng = this.computeEngineWorldPosition(this.enginePosScratch);
     const fwdX = Math.sin(this.yaw);
     const fwdZ = Math.cos(this.yaw);
     const vx = fwdX * this.speed;
     const vz = fwdZ * this.speed;
 
-    // 3. 耐久度別の煙・火花・オイル漏れ演出
+    // 3. 耐久度別の5段階エフェクト
     if (this.damageState === 'light') {
-      // 耐久 70% 以下: エンジン付近から薄い白煙が上昇
+      // 【段階1: 軽傷（HP 70% 以下）】ボンネット／エンジン部から細い白煙が風に流されながら上昇
       this.smokeEmitTimer -= clampedDt;
       if (this.smokeEmitTimer <= 0) {
-        const ratio = Math.max(0, Math.min(1, (70 - this.hp) / 30));
+        const ratio = Math.max(
+          0,
+          Math.min(1, (LIGHT_DAMAGE_HP - this.hp) / (LIGHT_DAMAGE_HP - HEAVY_DAMAGE_HP)),
+        );
         this.smokeEmitTimer = 0.16 - ratio * 0.05;
-        effects.emitEngineSmoke(eng.x, eng.y, eng.z, 0.08 + ratio * 0.14, 0.72 + ratio * 0.25, vx, vz);
+        effects.emitEngineSmoke(
+          eng.x,
+          eng.y,
+          eng.z,
+          0.06 + ratio * 0.14,
+          0.62 + ratio * 0.24,
+          vx,
+          vz,
+          1.35,
+          0.95,
+        );
       }
     } else if (this.damageState === 'heavy') {
-      // 耐久 40% 以下: 濃い黒煙 + 時折小さな火花 + 走行中路面オイル漏れ痕
+      // 【段階2: 中傷（HP 45% 以下）】濃いグレー〜黒煙へ変化し量が増える＋路面オイル漏れ痕＋時折パチパチ火花
       this.smokeEmitTimer -= clampedDt;
       if (this.smokeEmitTimer <= 0) {
-        const ratio = Math.max(0, Math.min(1, (40 - this.hp) / 40));
-        this.smokeEmitTimer = 0.095 - ratio * 0.03;
-        effects.emitEngineSmoke(eng.x, eng.y, eng.z, 0.78 + ratio * 0.16, 0.95 + ratio * 0.35, vx, vz);
+        const ratio = Math.max(
+          0,
+          Math.min(1, (HEAVY_DAMAGE_HP - this.hp) / (HEAVY_DAMAGE_HP - IGNITE_HP)),
+        );
+        this.smokeEmitTimer = 0.088 - ratio * 0.032;
+        effects.emitEngineSmoke(
+          eng.x,
+          eng.y,
+          eng.z,
+          0.62 + ratio * 0.28,
+          0.92 + ratio * 0.42,
+          vx,
+          vz,
+          1.15,
+          1.1,
+        );
       }
 
       this.damageSparkTimer -= clampedDt;
       if (this.damageSparkTimer <= 0) {
-        this.damageSparkTimer = 0.5 + Math.random() * 0.85;
-        effects.emitDamageSparks(eng.x, eng.y - 0.12, eng.z);
+        this.damageSparkTimer = 0.42 + Math.random() * 0.72;
+        effects.emitDamageSparks(eng.x, eng.y - 0.1, eng.z);
       }
 
-      // 走行中の路面上に黒いオイル漏れ痕を点々と残す（リングバッファ）
-      if (this.oilLeakDistanceAccum >= 1.35) {
+      // 走行中の路面上に光沢のある黒いオイル漏れ痕を点々と残す（リングバッファ）
+      if (this.oilLeakDistanceAccum >= 1.25) {
         this.oilLeakDistanceAccum = 0;
         const oilPos = this.computeOilLeakWorldPosition(this.oilPosScratch);
         const groundY = Math.max(
           0,
           this.collisionWorld.getGroundHeight(oilPos.x, oilPos.z),
         );
-        const dropScale = this.vehicle.config.type === 'bike' ? 0.44 : 0.68;
+        const dropScale = isBike ? 0.46 : 0.7;
         effects.stampOilDrop(oilPos.x, groundY, oilPos.z, dropScale, false);
       }
     } else if (isBurning) {
-      // 4. 発火カウントダウン（約 2.5秒間）：激しい炎＋黒煙＋緊急警告音ピピピピ…
+      // 【段階3: 炎上直前（HP 15% 以下〜0%）】ボンネットから赤い火柱と黒煙が急拡大＋約2.5秒間の緊急警告音
       this.burnTimer = Math.max(0, this.burnTimer - clampedDt);
       const urgency = 1 - this.burnTimer / BURN_COUNTDOWN_SEC;
+      // 残りHPを2.5秒かけて0%へ滑らかに低下させる
+      this.hp = Math.max(0, this.burnStartHp * (1 - urgency));
 
       this.fireBeepTimer -= clampedDt;
       if (this.fireBeepTimer <= 0) {
@@ -927,55 +1064,166 @@ export class VehicleController {
         this.fireBeepTimer = Math.max(0.11, 0.34 - urgency * 0.22);
       }
 
+      // 火勢が急激に強まる多層赤い火柱
       this.fireEmitTimer -= clampedDt;
       if (this.fireEmitTimer <= 0) {
-        this.fireEmitTimer = 0.042;
-        effects.emitFireFlame(eng.x, eng.y - 0.08, eng.z, 1.05 + urgency * 0.45);
+        this.fireEmitTimer = Math.max(0.024, 0.052 - urgency * 0.026);
+        const pillarScale = (isBike ? 0.72 : 0.95) + urgency * 0.75;
+        effects.emitFireFlame(eng.x, eng.y - 0.06, eng.z, pillarScale, 0.35 + urgency * 0.5);
+        if (urgency > 0.45) {
+          effects.emitFireFlame(
+            eng.x + (Math.random() - 0.5) * 0.35,
+            eng.y + 0.12,
+            eng.z + (Math.random() - 0.5) * 0.35,
+            pillarScale * 0.82,
+            0.75,
+          );
+        }
       }
 
       this.smokeEmitTimer -= clampedDt;
       if (this.smokeEmitTimer <= 0) {
-        this.smokeEmitTimer = 0.058;
-        effects.emitEngineSmoke(eng.x, eng.y + 0.18, eng.z, 0.94, 1.35, vx * 0.3, vz * 0.3);
+        this.smokeEmitTimer = Math.max(0.042, 0.068 - urgency * 0.022);
+        effects.emitEngineSmoke(
+          eng.x,
+          eng.y + 0.24,
+          eng.z,
+          0.92,
+          1.25 + urgency * 0.55,
+          vx * 0.3,
+          vz * 0.3,
+          1.0,
+          1.3,
+        );
       }
 
       this.damageSparkTimer -= clampedDt;
       if (this.damageSparkTimer <= 0) {
-        this.damageSparkTimer = 0.26 + Math.random() * 0.28;
+        this.damageSparkTimer = Math.max(0.14, 0.32 - urgency * 0.16) + Math.random() * 0.18;
         effects.emitDamageSparks(eng.x, eng.y, eng.z);
       }
 
+      // ボンネット炎上の路面照り返しライト
+      out.fireLightIntensity = 0.28 + urgency * 0.45;
+      out.fireLightX = eng.x;
+      out.fireLightY = eng.y + 0.65;
+      out.fireLightZ = eng.z;
+
       if (this.burnTimer <= 0) {
-        // 大爆発発生 -> 黒焦げ残骸へ移行
+        // 【段階4: 大爆発の瞬間】閃光・衝撃波・破片飛散バウンド・車体跳ね上がり＆傾き落下
         const pos = this.vehicle.root.position;
         const groundY = Math.max(
           0,
           this.collisionWorld.getGroundHeight(pos.x, pos.z),
         );
+        this.hp = 0;
         this.damageState = 'wrecked';
         this.respawnTimer = WRECK_RESPAWN_SEC;
         this.wreckElapsed = 0;
         this.speed = 0;
+
+        // 爆発の衝撃で車体自体が宙に跳ね上がって傾き、ドスンと地面に落ちる物理リアクション
+        const leanSign = Math.random() < 0.5 ? -1 : 1;
+        this.blastHopY = 0.03;
+        this.blastHopVelY = isBike ? 5.5 : 4.7;
+        this.blastPitch = 0;
+        this.blastPitchVel = isBike ? -2.2 : -1.75;
+        this.blastRoll = 0;
+        this.blastRollVel = leanSign * (isBike ? 3.2 : 1.85);
+        this.blastRestPitch = isBike ? -0.04 : -0.028;
+        this.blastRestRoll = leanSign * (isBike ? 0.58 : 0.055);
+        this.blastBounceCount = 0;
+        this.blastThudPending = false;
+
         this.vehicle.damageVisuals.applyExplosionWreckDeformation();
-        effects.triggerExplosion(pos.x, groundY, pos.z);
+        effects.triggerExplosion(pos.x, groundY, pos.z, isBike);
         out.explodedNow = true;
       }
     } else if (isWrecked) {
-      // 5. 黒焦げ残骸状態: くすぶり煙＋初期残り火、約9秒後に自動リスポーン通知
+      // 【段階5: 炎上継続（約8〜10秒）〜鎮火＆フェードアウト＆自動リスポーン】
       this.wreckElapsed += clampedDt;
       this.respawnTimer = Math.max(0, this.respawnTimer - clampedDt);
 
-      const coolFactor = Math.max(0, 1 - this.wreckElapsed / WRECK_RESPAWN_SEC);
-      this.smokeEmitTimer -= clampedDt;
-      if (this.smokeEmitTimer <= 0) {
-        this.smokeEmitTimer = 0.12 + (1 - coolFactor) * 0.12;
-        effects.emitEngineSmoke(eng.x, eng.y, eng.z, 0.9, 0.8 + coolFactor * 0.45, 0, 0);
+      const pos = this.vehicle.root.position;
+      const dims = this.vehicle.dimensions;
+
+      // 跳ね上がった車体が地面へドスンと落下した瞬間の着地インパクト通知＋火花
+      if (this.blastThudPending) {
+        this.blastThudPending = false;
+        out.wreckLandedNow = true;
+        effects.emitImpactSparks(pos.x, pos.y + 0.15, pos.z, 0, 1, 0.55);
       }
-      if (coolFactor > 0.35) {
+
+      // 多層の炎＋高く立ち上る黒煙＋揺らぐ赤オレンジ PointLight
+      if (visualFireIntensity > 0.04) {
         this.fireEmitTimer -= clampedDt;
         if (this.fireEmitTimer <= 0) {
-          this.fireEmitTimer = 0.12;
-          effects.emitFireFlame(eng.x, eng.y - 0.15, eng.z, 0.55 * coolFactor);
+          this.fireEmitTimer = 0.034 + (1 - visualFireIntensity) * 0.07;
+          // ボンネット（エンジン部）のメイン火柱
+          const mainScale = (isBike ? 0.72 : 1.15) * (0.45 + 0.65 * visualFireIntensity);
+          effects.emitFireFlame(eng.x, eng.y - 0.06, eng.z, mainScale, 0.6);
+
+          // キャビン中央・後方にも炎を広げて車体全体が激しく燃える多層表現
+          if (!isBike && visualFireIntensity > 0.28) {
+            const spotOffset =
+              (Math.random() < 0.65 ? 0.04 : -0.26) * dims.length;
+            this.wreckSpotScratch.set(
+              pos.x + fwdX * spotOffset + (Math.random() - 0.5) * dims.width * 0.36,
+              pos.y + this.blastHopY + dims.height * (0.45 + Math.random() * 0.25),
+              pos.z + fwdZ * spotOffset + (Math.random() - 0.5) * dims.width * 0.36,
+            );
+            effects.emitFireFlame(
+              this.wreckSpotScratch.x,
+              this.wreckSpotScratch.y,
+              this.wreckSpotScratch.z,
+              mainScale * 0.9,
+              0.42,
+            );
+          }
+        }
+
+        // 高く立ち昇る濃い黒煙柱
+        this.smokeEmitTimer -= clampedDt;
+        if (this.smokeEmitTimer <= 0) {
+          this.smokeEmitTimer = 0.055 + (1 - visualFireIntensity) * 0.095;
+          const smokeZ = (Math.random() - 0.25) * dims.length * 0.45;
+          effects.emitEngineSmoke(
+            pos.x + fwdX * smokeZ,
+            pos.y + this.blastHopY + dims.height * 0.68,
+            pos.z + fwdZ * smokeZ,
+            0.93,
+            (isBike ? 0.95 : 1.38) * (0.55 + 0.55 * visualFireIntensity),
+            0,
+            0,
+            1.1,
+            1.55,
+          );
+        }
+
+        // 立ち昇る火の粉
+        this.emberEmitTimer -= clampedDt;
+        if (this.emberEmitTimer <= 0) {
+          this.emberEmitTimer = 0.16 + (1 - visualFireIntensity) * 0.22;
+          effects.emitBurningEmbers(
+            pos.x + fwdX * dims.length * 0.12,
+            pos.y + this.blastHopY + dims.height * 0.6,
+            pos.z + fwdZ * dims.length * 0.12,
+            isBike ? 0.45 : 1.0,
+            visualFireIntensity > 0.6 ? 3 : 2,
+          );
+        }
+
+        // 揺らぐ赤オレンジの路面・周囲照り返し PointLight 情報
+        out.fireLightIntensity = visualFireIntensity;
+        out.fireLightX = pos.x + fwdX * dims.length * 0.12;
+        out.fireLightY = pos.y + this.blastHopY + dims.height + 0.55;
+        out.fireLightZ = pos.z + fwdZ * dims.length * 0.12;
+      } else if (wreckFadeOpacity > 0.2) {
+        // 鎮火直後のくすぶり薄煙
+        this.smokeEmitTimer -= clampedDt;
+        if (this.smokeEmitTimer <= 0) {
+          this.smokeEmitTimer = 0.2;
+          effects.emitEngineSmoke(eng.x, eng.y, eng.z, 0.68, 0.55 * wreckFadeOpacity, 0, 0, 1.2, 0.85);
         }
       }
 
@@ -990,10 +1238,14 @@ export class VehicleController {
     const dims = this.vehicle.dimensions;
     const isBike = this.vehicle.config.type === 'bike';
     const localZ = isBike ? dims.length * 0.05 : dims.length * 0.34;
-    const localY = isBike ? dims.height * 0.46 : dims.height * 0.58;
+    const localY = isBike ? dims.height * 0.46 : dims.height * 0.56;
     const fwdX = Math.sin(this.yaw);
     const fwdZ = Math.cos(this.yaw);
-    out.set(pos.x + fwdX * localZ, pos.y + localY, pos.z + fwdZ * localZ);
+    out.set(
+      pos.x + fwdX * localZ,
+      pos.y + this.blastHopY + localY,
+      pos.z + fwdZ * localZ,
+    );
     return out;
   }
 

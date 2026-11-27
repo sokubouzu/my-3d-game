@@ -33,6 +33,9 @@ interface TrackedDamageMaterial {
   baseEnvMapIntensity: number;
   baseEmissive: THREE.Color;
   baseEmissiveIntensity: number;
+  baseTransparent: boolean;
+  baseOpacity: number;
+  baseDepthWrite: boolean;
 }
 
 interface ScuffPatch {
@@ -44,10 +47,11 @@ interface ScuffPatch {
 
 const TIRE_PATTERN = /(tire|tyre|rubber|tread|wheel)/i;
 const GLASS_PATTERN = /(glass|window|windshield|kaca|cristal|lens)/i;
+const CLEARCOAT_PATTERN = /(^coat$|clearcoat|lacquer)/i;
 
 const SOOT_COLOR = new THREE.Color(0x2d2926);
 const CHARRED_COLOR = new THREE.Color(0x1b1918);
-const EMBER_COLOR = new THREE.Color(0x7c2008);
+const EMBER_COLOR = new THREE.Color(0x9a2606);
 const SCRATCH_COLOR = new THREE.Color();
 
 const MAX_SCUFF_PATCHES = 5;
@@ -123,9 +127,9 @@ function releaseScuffTexture(): void {
 }
 
 /**
- * PHASE 5-B: 車両ごとの段階的損傷ビジュアルコントローラー。
+ * PHASE 5-B / 5-B2: 車両ごとの段階的損傷ビジュアルコントローラー。
  * - 車体ボディ頂点の局所デフォーム（凹み）＆初期頂点配列からの完全復元
- * - 損傷度＋雨濡れ質感（5-A）の競合なし合成（擦り傷・煤・黒焦げ）
+ * - 損傷度＋雨濡れ質感（5-A）の競合なし合成（擦り傷・煤・黒焦げ・鎮火フェードアウト）
  * - 衝突面の軽量擦り傷/煤パッチデカール
  * - 片側ヘッドライトの破損点滅・消灯（VehicleLightRig 連携）
  */
@@ -146,7 +150,7 @@ export class VehicleDamageVisualController {
   private flickerPhase = 0;
   private lastHeadSpotMul = 1;
   private lastSurfaceKey = '';
-  private emberCooldown = 0;
+  private isFadingWreck = false;
 
   private readonly scratchVec = new THREE.Vector3();
   private readonly scratchInvBody = new THREE.Matrix4();
@@ -193,10 +197,13 @@ export class VehicleDamageVisualController {
         if (m.blending === THREE.AdditiveBlending || m.emissiveIntensity > 1.2) {
           continue;
         }
+        // 5-B2: スポーツカー等のクリアコート層 (coat) はボディ塗装と 1:1 で同時変形させる
+        const isClearCoat = CLEARCOAT_PATTERN.test(m.name);
         const isGlass =
-          Boolean(m.transparent && m.opacity < 0.85) ||
-          GLASS_PATTERN.test(m.name) ||
-          GLASS_PATTERN.test(obj.name);
+          !isClearCoat &&
+          (Boolean(m.transparent && m.opacity < 0.85) ||
+            GLASS_PATTERN.test(m.name) ||
+            GLASS_PATTERN.test(obj.name));
         if (isGlass) hasGlassMat = true;
 
         if (!seenMaterials.has(m)) {
@@ -215,6 +222,9 @@ export class VehicleDamageVisualController {
             baseEnvMapIntensity: m.envMapIntensity,
             baseEmissive: m.emissive.clone(),
             baseEmissiveIntensity: m.emissiveIntensity,
+            baseTransparent: m.transparent,
+            baseOpacity: m.opacity,
+            baseDepthWrite: m.depthWrite,
           });
         }
       }
@@ -442,7 +452,6 @@ export class VehicleDamageVisualController {
     this.applyImpactDent(0, hh, hl, 0, -1, 0.95);
     this.applyImpactDent(hw, hh * 0.9, hl * 0.35, -1, -0.3, 0.72);
     this.applyImpactDent(-hw, hh * 0.9, -hl * 0.25, 1, 0.2, 0.68);
-    this.emberCooldown = 1.0;
   }
 
   private placeScuffPatch(
@@ -461,26 +470,26 @@ export class VehicleDamageVisualController {
     const hl = this.dimensions.length * 0.5;
     const isBike = this.vehicleType === 'bike';
 
-    // 衝突面法線（外向き = -push）に沿って車体表面ギリギリに貼る
+    // 衝突面法線（外向き = -push）に沿って車体表面ギリギリに貼る（曲面フェンダーから浮きにくい範囲にクランプ）
     const outX = -pushX;
     const outZ = -pushZ;
-    const clampedX = Math.max(-hw * 0.92, Math.min(hw * 0.92, localX));
-    const clampedY = Math.max(hh * 0.28, Math.min(hh * 0.78, localY));
-    const clampedZ = Math.max(-hl * 0.92, Math.min(hl * 0.92, localZ));
+    const clampedX = Math.max(-hw * 0.86, Math.min(hw * 0.86, localX));
+    const clampedY = Math.max(hh * 0.26, Math.min(hh * 0.74, localY));
+    const clampedZ = Math.max(-hl * 0.86, Math.min(hl * 0.86, localZ));
 
     const patchSize = isBike
       ? 0.24 + intensity01 * 0.24
-      : 0.48 + intensity01 * 0.52;
+      : 0.44 + intensity01 * 0.48;
 
     slot.mesh.position.set(
-      clampedX + outX * 0.035,
+      clampedX + outX * 0.028,
       clampedY,
-      clampedZ + outZ * 0.035,
+      clampedZ + outZ * 0.028,
     );
     // 表面外向きへ回転
     const yaw = Math.atan2(outX, outZ);
     slot.mesh.rotation.set(0, yaw, (Math.random() - 0.5) * 0.6);
-    slot.mesh.scale.set(patchSize * 1.25, patchSize * 0.85, 1);
+    slot.mesh.scale.set(patchSize * 1.2, patchSize * 0.82, 1);
     slot.baseOpacity = Math.min(0.82, 0.32 + intensity01 * 0.5);
     slot.mat.opacity = slot.baseOpacity;
     slot.active = true;
@@ -489,7 +498,7 @@ export class VehicleDamageVisualController {
 
   /**
    * 毎フレーム更新:
-   * - 損傷度（擦り傷・煤・黒焦げ）と天候の雨濡れ（rainAmount）を競合なく合成
+   * - 損傷度（擦り傷・煤・黒焦げ・鎮火フェードアウト）と天候の雨濡れ（rainAmount）を競合なく合成
    * - 中破〜重破のヘッドライト点滅・片側消灯・全損消灯を更新
    * - 前方 SpotLight へ反映する実効ヘッドライト倍率 (0..1) を返す
    */
@@ -499,17 +508,25 @@ export class VehicleDamageVisualController {
     isBurning: boolean,
     isWrecked: boolean,
     rainAmount: number,
+    wreckFireIntensity = 0,
+    wreckFadeOpacity = 1,
   ): number {
     const damageRatio = 1 - Math.max(0, Math.min(1, hpRatio));
-    if (isWrecked && this.emberCooldown > 0) {
-      this.emberCooldown = Math.max(0, this.emberCooldown - dt * 0.22);
-    }
+    const clampedFire = Math.max(0, Math.min(1, wreckFireIntensity));
+    const clampedFade = isWrecked ? Math.max(0, Math.min(1, wreckFadeOpacity)) : 1;
 
-    // 1. ボディマテリアル（雨濡れ + 擦り傷/煤/黒焦げ）の更新（変化時のみ実行）
-    const surfaceKey = `${Math.round(damageRatio * 40)}_${isBurning ? 1 : 0}_${isWrecked ? 1 : 0}_${Math.round(rainAmount * 40)}_${Math.round(this.emberCooldown * 20)}`;
+    // 1. ボディマテリアル（雨濡れ + 擦り傷/煤/黒焦げ/残骸フェード）の更新（変化時のみ実行）
+    const surfaceKey = `${Math.round(damageRatio * 40)}_${isBurning ? 1 : 0}_${isWrecked ? 1 : 0}_${Math.round(rainAmount * 40)}_${Math.round(clampedFire * 20)}_${Math.round(clampedFade * 30)}`;
     if (surfaceKey !== this.lastSurfaceKey) {
       this.lastSurfaceKey = surfaceKey;
-      this.applySurfaceMaterials(damageRatio, isBurning, isWrecked, rainAmount);
+      this.applySurfaceMaterials(
+        damageRatio,
+        isBurning,
+        isWrecked,
+        rainAmount,
+        clampedFire,
+        clampedFade,
+      );
     }
 
     // 2. ヘッドライト破損・チカチカ点滅・消灯ロジック
@@ -568,26 +585,47 @@ export class VehicleDamageVisualController {
     isBurning: boolean,
     isWrecked: boolean,
     rainAmount: number,
+    wreckFireIntensity: number,
+    wreckFadeOpacity: number,
   ): void {
     const wet = Math.max(0, Math.min(1, rainAmount));
     // 軽傷は 0.15 以降から徐々に傷・煤が目立ち始める
     const scuffFactor = Math.max(0, Math.min(1, (damageRatio - 0.12) / 0.88));
+    const shouldFade = isWrecked && wreckFadeOpacity < 0.995;
+    const fadeModeChanged = shouldFade !== this.isFadingWreck;
+    this.isFadingWreck = shouldFade;
 
     for (let i = 0; i < this.trackedMaterials.length; i += 1) {
       const entry = this.trackedMaterials[i];
       const mat = entry.mat;
 
+      if (shouldFade) {
+        if (!mat.transparent) {
+          mat.transparent = true;
+          mat.needsUpdate = true;
+        }
+        mat.depthWrite = false;
+        mat.opacity = entry.baseOpacity * wreckFadeOpacity;
+      } else if (fadeModeChanged) {
+        if (mat.transparent !== entry.baseTransparent) {
+          mat.transparent = entry.baseTransparent;
+          mat.needsUpdate = true;
+        }
+        mat.depthWrite = entry.baseDepthWrite;
+        mat.opacity = entry.baseOpacity;
+      }
+
       if (isWrecked) {
-        // 全損黒焦げ残骸
-        mat.color.copy(entry.baseColor).lerp(CHARRED_COLOR, entry.isGlass ? 0.78 : 0.88);
-        mat.roughness = Math.min(0.96, Math.max(0.84, entry.baseRoughness + 0.55));
-        mat.metalness = Math.min(entry.baseMetalness, 0.12);
-        mat.envMapIntensity = Math.min(entry.baseEnvMapIntensity, 0.35);
-        if (!entry.isTire && !entry.isGlass && this.emberCooldown > 0.02) {
-          mat.emissive.copy(entry.baseEmissive).lerp(EMBER_COLOR, this.emberCooldown * 0.65);
+        // 全損黒焦げ残骸（炎上継続中は高温の赤熱グロー、鎮火に向けて黒炭化）
+        mat.color.copy(entry.baseColor).lerp(CHARRED_COLOR, entry.isGlass ? 0.82 : 0.91);
+        mat.roughness = Math.min(0.96, Math.max(0.86, entry.baseRoughness + 0.58));
+        mat.metalness = Math.min(entry.baseMetalness, 0.1);
+        mat.envMapIntensity = Math.min(entry.baseEnvMapIntensity, 0.3);
+        if (!entry.isTire && !entry.isGlass && wreckFireIntensity > 0.02) {
+          mat.emissive.copy(entry.baseEmissive).lerp(EMBER_COLOR, wreckFireIntensity * 0.72);
           mat.emissiveIntensity = Math.max(
             entry.baseEmissiveIntensity,
-            this.emberCooldown * 0.55,
+            wreckFireIntensity * 0.68,
           );
         } else {
           mat.emissive.copy(entry.baseEmissive);
@@ -628,21 +666,23 @@ export class VehicleDamageVisualController {
       mat.envMapIntensity = envIntensity;
 
       if (isBurning && !entry.isTire && !entry.isGlass) {
-        mat.emissive.copy(entry.baseEmissive).lerp(EMBER_COLOR, 0.38);
-        mat.emissiveIntensity = Math.max(entry.baseEmissiveIntensity, 0.38);
+        const glow = 0.32 + wreckFireIntensity * 0.36;
+        mat.emissive.copy(entry.baseEmissive).lerp(EMBER_COLOR, glow);
+        mat.emissiveIntensity = Math.max(entry.baseEmissiveIntensity, glow);
       } else {
         mat.emissive.copy(entry.baseEmissive);
         mat.emissiveIntensity = entry.baseEmissiveIntensity;
       }
     }
 
-    // 煤パッチの濃さも損傷度に合わせて補強
+    // 煤パッチの濃さも損傷度・残骸フェードに合わせて同期
     for (let i = 0; i < this.scuffPatches.length; i += 1) {
       const p = this.scuffPatches[i];
       if (!p.active) continue;
-      p.mat.opacity = isWrecked
+      const baseAlpha = isWrecked
         ? Math.min(0.92, p.baseOpacity + 0.3)
         : Math.min(0.85, p.baseOpacity + scuffFactor * 0.25);
+      p.mat.opacity = baseAlpha * wreckFadeOpacity;
     }
   }
 
@@ -673,13 +713,26 @@ export class VehicleDamageVisualController {
       p.mat.opacity = 0;
       p.mesh.visible = false;
     }
+
+    // 残骸フェードアウトで変更した透明フラグを確実に初期状態へ復元
+    for (let i = 0; i < this.trackedMaterials.length; i += 1) {
+      const entry = this.trackedMaterials[i];
+      const mat = entry.mat;
+      if (mat.transparent !== entry.baseTransparent) {
+        mat.transparent = entry.baseTransparent;
+        mat.needsUpdate = true;
+      }
+      mat.depthWrite = entry.baseDepthWrite;
+      mat.opacity = entry.baseOpacity;
+    }
+    this.isFadingWreck = false;
+
     this.nextScuffSlot = 0;
-    this.emberCooldown = 0;
     this.brokenHeadlightSide = 'left';
     this.lastHeadSpotMul = 1;
     this.lastSurfaceKey = '';
 
-    this.applySurfaceMaterials(0, false, false, rainAmount);
+    this.applySurfaceMaterials(0, false, false, rainAmount, 0, 1);
     this.lightRig.setDamageMultipliers(1, 1, 1);
   }
 

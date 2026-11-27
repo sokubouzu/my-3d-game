@@ -86,6 +86,34 @@ export async function loadHeroVehicle(
   const model = gltf.scene;
   const anisotropy = Math.min(4, Math.max(1, maxAnisotropy));
 
+  // 5-B2: 正規化・BBox 計測前に GLB 内の不要ノード（平面ベイク影プレーン等）を除去＆破棄
+  if (config.excludeNodeNames && config.excludeNodeNames.length > 0) {
+    const excludeSet = new Set(config.excludeNodeNames);
+    const toRemove: THREE.Object3D[] = [];
+    model.traverse((obj) => {
+      if (excludeSet.has(obj.name)) {
+        toRemove.push(obj);
+      }
+    });
+    for (const target of toRemove) {
+      target.traverse((child) => {
+        if (!(child instanceof THREE.Mesh)) return;
+        child.geometry?.dispose();
+        const mats = Array.isArray(child.material)
+          ? child.material
+          : [child.material];
+        for (const mat of mats) {
+          if (!mat) continue;
+          const stdMat = mat as THREE.MeshStandardMaterial;
+          stdMat.map?.dispose();
+          stdMat.alphaMap?.dispose();
+          mat.dispose();
+        }
+      });
+      target.parent?.remove(target);
+    }
+  }
+
   // M1 iPad Air 向けテクスチャ異方性・シャドウ設定
   model.traverse((obj) => {
     if (!(obj instanceof THREE.Mesh)) return;
@@ -150,12 +178,16 @@ export async function loadHeroVehicle(
 
   const dimensions: VehicleDimensions = {
     width: scaledSize.x,
-    height: scaledSize.y,
+    height: config.bodyHeightOverrideMeters ?? scaledSize.y,
     length: scaledSize.z,
   };
 
-  // 3-G: ヘッドライト・テールランプ発光リグ（bodyGroup にアタッチしてバイクバンクにも追従）
-  const lightRig = createVehicleLightRig(config.type, dimensions);
+  // 3-G / 5-B2: ヘッドライト・テールランプ発光リグ（bodyGroup にアタッチしてバイクバンクにも追従）
+  const lightRig = createVehicleLightRig(
+    config.type,
+    dimensions,
+    config.lightLayout,
+  );
   bodyGroup.add(lightRig.group);
 
   // 5-B: 車体局所デフォーム（凹み）・擦り傷/煤・ライト破損ビジュアル制御

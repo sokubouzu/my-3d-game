@@ -268,14 +268,19 @@ export function startGameEngine(
   const coinSystem = new CoinCollectibleSystem(scene, collisionWorld);
   const timeAttackSystem = new TimeAttackSystem(scene);
 
-  // 5-B: 全車両共有の軽量ダメージエフェクト（火花・白煙/黒煙・炎・爆発・リングバッファ路面オイル漏れ痕）
+  // 5-B / 5-B2: 全車両共有の軽量ダメージエフェクト（火花・白煙/黒煙・炎・爆発・飛散破片・リングバッファ路面オイル漏れ痕）
   const damageEffects = new VehicleDamageEffects(scene);
   const damageTickScratch: VehicleDamageTickResult = {
     impact: null,
     fireBeep: false,
     fireBeepUrgency: 0,
     explodedNow: false,
+    wreckLandedNow: false,
     readyToRespawn: false,
+    fireLightIntensity: 0,
+    fireLightX: 0,
+    fireLightY: 0,
+    fireLightZ: 0,
   };
   const respawnSearchPosScratch = new THREE.Vector3();
   let ejectDamageFlashTimeMs = 0;
@@ -771,12 +776,33 @@ export function startGameEngine(
       }
     }
 
-    // 5-B: 全運転可能車両のダメージ演出（煙・火花・オイル漏れ・ライト点滅・発火警告・大爆発・緊急脱出・自動リスポーン）
+    // 5-B / 5-B2: 全運転可能車両の5段階ダメージ演出（白煙・黒煙・火花・オイル漏れ・ライト点滅・発火警告・大爆発・跳ね上がり着地・炎上継続・自動リスポーン）
     const rainAmountNow = weatherController?.getRainAmount() ?? 0;
+    let bestFireScore = 0;
+    let bestFireIntensity = 0;
+    let bestFireX = 0;
+    let bestFireY = -50;
+    let bestFireZ = 0;
+
     for (let i = 0; i < vehicleControllers.length; i += 1) {
       const vc = vehicleControllers[i];
       const wasActive = controlMode === 'vehicle' && activeVehicle === vc;
       vc.updateDamageLifecycle(dt, damageEffects, rainAmountNow, damageTickScratch);
+
+      if (damageTickScratch.fireLightIntensity > 0.01) {
+        const fDist = Math.hypot(
+          damageTickScratch.fireLightX - focusPos.x,
+          damageTickScratch.fireLightZ - focusPos.z,
+        );
+        const score = damageTickScratch.fireLightIntensity / (1 + fDist * 0.06);
+        if (score > bestFireScore) {
+          bestFireScore = score;
+          bestFireIntensity = damageTickScratch.fireLightIntensity;
+          bestFireX = damageTickScratch.fireLightX;
+          bestFireY = damageTickScratch.fireLightY;
+          bestFireZ = damageTickScratch.fireLightZ;
+        }
+      }
 
       if (damageTickScratch.impact) {
         const imp = damageTickScratch.impact;
@@ -806,6 +832,18 @@ export function startGameEngine(
         }
       }
 
+      if (damageTickScratch.wreckLandedNow) {
+        vc.getPosition(tempVehiclePos);
+        const dist = Math.hypot(
+          tempVehiclePos.x - focusPos.x,
+          tempVehiclePos.z - focusPos.z,
+        );
+        if (dist < 42) {
+          soundManager.playBlastThud(dist);
+          tpsCamera.addShake(Math.max(0.08, 0.36 / (1 + dist * 0.06)), 5.4);
+        }
+      }
+
       if (damageTickScratch.explodedNow) {
         vc.getPosition(tempVehiclePos);
         const dist = Math.hypot(
@@ -813,8 +851,8 @@ export function startGameEngine(
           tempVehiclePos.z - focusPos.z,
         );
         soundManager.playExplosion(dist);
-        const shakeStr = Math.max(0.18, 1.05 / (1 + dist * 0.04));
-        tpsCamera.addShake(shakeStr, 2.7);
+        const shakeStr = Math.max(0.22, 1.25 / (1 + dist * 0.036));
+        tpsCamera.addShake(shakeStr, 2.5);
 
         if (wasActive && playerController) {
           // 爆発瞬間にまだ乗車中なら自動で車外へ緊急脱出（非グロテスクな衝撃演出）
@@ -836,13 +874,13 @@ export function startGameEngine(
           focusPos.copy(playerPos);
           ejectDamageFlashTimeMs = performance.now();
           showVehicleAlert(
-            `緊急脱出！${vc.getDisplayName()} が爆発しました（約9秒後に近くへ自動復帰）`,
+            `緊急脱出！${vc.getDisplayName()} が爆発しました（約10秒後に近くへ自動復帰）`,
             'danger',
             4500,
           );
         } else {
           showVehicleAlert(
-            `${vc.getDisplayName()} が爆発炎上しました（約9秒後に近くへ自動復帰）`,
+            `${vc.getDisplayName()} が爆発炎上しました（約10秒後に近くへ自動復帰）`,
             'info',
             4000,
           );
@@ -894,6 +932,7 @@ export function startGameEngine(
       }
     }
 
+    damageEffects.setWreckFireLight(bestFireX, bestFireY, bestFireZ, bestFireIntensity);
     damageEffects.update(dt, currentDpr);
 
     // 3-B: 交差点信号サイクル更新（青 -> 黄 -> 赤）
