@@ -5,15 +5,40 @@ import { createRadialGlowTexture } from './streetLights';
 export interface ExpandedWorldHandle {
   group: THREE.Group;
   setNightFactor: (factor: number) => void;
+  setProceduralBenchesVisible: (visible: boolean) => void;
   dispose: () => void;
 }
 
-interface BenchPlacement {
+export interface BenchPlacement {
   id: string;
   x: number;
   z: number;
   yaw: number;
 }
+
+const PARK_CX = (CITY_METRICS.parkBounds.minX + CITY_METRICS.parkBounds.maxX) * 0.5;
+const PARK_CZ = (CITY_METRICS.parkBounds.minZ + CITY_METRICS.parkBounds.maxZ) * 0.5;
+
+/** 公園10脚 ＋ 駅前広場4脚 = 計14脚のベンチ配置座標（PHASE 5-G2 GLB差し替えと共有） */
+export const EXPANDED_BENCH_PLACEMENTS: readonly BenchPlacement[] = [
+  // 公園中央広場まわり4脚
+  { id: 'bench_park_c1', x: PARK_CX - 6.8, z: PARK_CZ - 3.6, yaw: Math.PI * 0.35 },
+  { id: 'bench_park_c2', x: PARK_CX + 6.8, z: PARK_CZ - 3.6, yaw: -Math.PI * 0.35 },
+  { id: 'bench_park_c3', x: PARK_CX - 6.8, z: PARK_CZ + 3.6, yaw: Math.PI * 0.65 },
+  { id: 'bench_park_c4', x: PARK_CX + 6.8, z: PARK_CZ + 3.6, yaw: -Math.PI * 0.65 },
+  // 公園遊歩道沿い6脚
+  { id: 'bench_park_w1', x: 30, z: PARK_CZ - 3.4, yaw: 0 },
+  { id: 'bench_park_w2', x: 38, z: PARK_CZ + 3.4, yaw: Math.PI },
+  { id: 'bench_park_e1', x: 72, z: PARK_CZ - 3.4, yaw: 0 },
+  { id: 'bench_park_e2', x: 80, z: PARK_CZ + 3.4, yaw: Math.PI },
+  { id: 'bench_park_n1', x: 40, z: CITY_METRICS.parkBounds.minZ + 3.4, yaw: 0 },
+  { id: 'bench_park_s1', x: 70, z: CITY_METRICS.parkBounds.maxZ - 3.4, yaw: Math.PI },
+  // 駅前ロータリー広場4脚（西側は駅キャノピー沿いへ整列、東側はバスシェルター下へ収容）
+  { id: 'bench_plaza_w1', x: -27.2, z: 97.5, yaw: Math.PI / 2 },
+  { id: 'bench_plaza_w2', x: -27.2, z: 110.5, yaw: Math.PI / 2 },
+  { id: 'bench_plaza_e1', x: 26.2, z: 95.5, yaw: -Math.PI / 2 },
+  { id: 'bench_plaza_e2', x: 26.2, z: 112.5, yaw: -Math.PI / 2 },
+];
 
 interface FenceSegmentSpec {
   id: string;
@@ -663,28 +688,18 @@ export function buildExpandedWorld(
   );
 
   // =========================================================================
-  // 5. ベンチ一括配置（公園10脚 ＋ 駅前広場4脚 = 14脚、InstancedMesh）
+  // 5. ベンチ一括配置（公園10脚 ＋ 駅前広場4脚 = 14脚、GLBロード完了まで簡易フォールバック表示）
   // =========================================================================
-  const benches: BenchPlacement[] = [
-    // 公園中央広場まわり4脚
-    { id: 'bench_park_c1', x: parkCx - 6.8, z: parkCz - 3.6, yaw: Math.PI * 0.35 },
-    { id: 'bench_park_c2', x: parkCx + 6.8, z: parkCz - 3.6, yaw: -Math.PI * 0.35 },
-    { id: 'bench_park_c3', x: parkCx - 6.8, z: parkCz + 3.6, yaw: Math.PI * 0.65 },
-    { id: 'bench_park_c4', x: parkCx + 6.8, z: parkCz + 3.6, yaw: -Math.PI * 0.65 },
-    // 公園遊歩道沿い6脚
-    { id: 'bench_park_w1', x: 30, z: parkCz - 3.4, yaw: 0 },
-    { id: 'bench_park_w2', x: 38, z: parkCz + 3.4, yaw: Math.PI },
-    { id: 'bench_park_e1', x: 72, z: parkCz - 3.4, yaw: 0 },
-    { id: 'bench_park_e2', x: 80, z: parkCz + 3.4, yaw: Math.PI },
-    { id: 'bench_park_n1', x: 40, z: parkB.minZ + 3.4, yaw: 0 },
-    { id: 'bench_park_s1', x: 70, z: parkB.maxZ - 3.4, yaw: Math.PI },
-    // 駅前ロータリー広場4脚（西側は駅キャノピー沿いへ整列、東側はバスシェルター下へ収容）
-    { id: 'bench_plaza_w1', x: -27.2, z: 97.5, yaw: Math.PI / 2 },
-    { id: 'bench_plaza_w2', x: -27.2, z: 110.5, yaw: Math.PI / 2 },
-    { id: 'bench_plaza_e1', x: 26.2, z: 95.5, yaw: -Math.PI / 2 },
-    { id: 'bench_plaza_e2', x: 26.2, z: 112.5, yaw: -Math.PI / 2 },
-  ];
-  buildInstancedBenches(root, benches, trackGeo, trackMat, addCollider);
+  const proceduralBenchGroup = new THREE.Group();
+  proceduralBenchGroup.name = 'ProceduralFallbackBenches';
+  root.add(proceduralBenchGroup);
+  buildInstancedBenches(
+    proceduralBenchGroup,
+    EXPANDED_BENCH_PLACEMENTS,
+    trackGeo,
+    trackMat,
+    addCollider,
+  );
 
   // =========================================================================
   // 6. 公園・駅前広場の夜間グローブ灯（InstancedMesh ＋ 加算ハロー）
@@ -830,6 +845,9 @@ export function buildExpandedWorld(
   return {
     group: root,
     setNightFactor,
+    setProceduralBenchesVisible: (visible: boolean) => {
+      proceduralBenchGroup.visible = visible;
+    },
     dispose: () => {
       for (const id of colliderIds) {
         collisionWorld.removeCollider(id);

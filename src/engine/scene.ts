@@ -21,6 +21,7 @@ import {
 import { StreetLightSystem } from '../world/streetLights';
 import { buildExpandedWorld } from '../world/expandedWorld';
 import { buildJapaneseStreetProps } from '../world/japaneseProps';
+import { buildG2GlbEnhancements } from '../world/g2GlbEnhancements';
 import {
   TimeOfDayController,
   type TimeOfDayMode,
@@ -166,7 +167,7 @@ export function startGameEngine(
     55,
     window.innerWidth / window.innerHeight,
     0.1,
-    480,
+    560,
   );
   const tpsCamera = new ThirdPersonCamera(camera, {
     initialDistance: 4.2,
@@ -484,6 +485,17 @@ export function startGameEngine(
     scene,
     collisionWorld,
     maxAnisotropy,
+  );
+  // 5-G2: 既存エリアのGLB差し替え＆景観リアル化（ベンチ・公園遊具・ガソリンスタンド・遠景ビル群・道路小物抜粋）
+  const g2Enhancements = buildG2GlbEnhancements(
+    scene,
+    collisionWorld,
+    maxAnisotropy,
+    {
+      onParkBenchesLoaded: () => {
+        expandedWorld.setProceduralBenchesVisible(false);
+      },
+    },
   );
 
   // 2-A / 2-B / 2-C: 運転可能な全車両（Innova + Porsche 911 Turbo + Harley Bike）をロード＆ OBB コライダー・VehicleController 構築
@@ -1025,6 +1037,7 @@ export function startGameEngine(
       cityBuilder.setNightFactor(nightFactor);
       expandedWorld.setNightFactor(nightFactor);
       japaneseProps.setNightFactor(nightFactor);
+      g2Enhancements.setNightFactor(nightFactor);
       coinSystem.setNightFactor(nightFactor);
       trafficManager.setLightsIntensity(headlightFactor);
       for (let i = 0; i < vehicleControllers.length; i += 1) {
@@ -1355,6 +1368,7 @@ export function startGameEngine(
       activeVehicle = null;
       nearbyVehicle = null;
 
+      g2Enhancements.dispose();
       japaneseProps.dispose();
       expandedWorld.dispose();
       cityBuilder.dispose();
