@@ -27,6 +27,7 @@ interface TrackedDamageMaterial {
   mat: THREE.MeshStandardMaterial;
   isTire: boolean;
   isGlass: boolean;
+  isNativeLight: boolean;
   baseColor: THREE.Color;
   baseRoughness: number;
   baseMetalness: number;
@@ -194,13 +195,18 @@ export class VehicleDamageVisualController {
       let hasGlassMat = false;
       for (const m of mats) {
         if (!(m instanceof THREE.MeshStandardMaterial)) continue;
-        if (m.blending === THREE.AdditiveBlending || m.emissiveIntensity > 1.2) {
+        const isNativeLight = lightRig.managedNativeMaterials.has(m);
+        if (
+          !isNativeLight &&
+          (m.blending === THREE.AdditiveBlending || m.emissiveIntensity > 1.2)
+        ) {
           continue;
         }
         // 5-B2: スポーツカー等のクリアコート層 (coat) はボディ塗装と 1:1 で同時変形させる
         const isClearCoat = CLEARCOAT_PATTERN.test(m.name);
         const isGlass =
           !isClearCoat &&
+          !isNativeLight &&
           (Boolean(m.transparent && m.opacity < 0.85) ||
             GLASS_PATTERN.test(m.name) ||
             GLASS_PATTERN.test(obj.name));
@@ -216,6 +222,7 @@ export class VehicleDamageVisualController {
             mat: m,
             isTire,
             isGlass,
+            isNativeLight,
             baseColor: m.color.clone(),
             baseRoughness: m.roughness,
             baseMetalness: m.metalness,
@@ -621,15 +628,17 @@ export class VehicleDamageVisualController {
         mat.roughness = Math.min(0.96, Math.max(0.86, entry.baseRoughness + 0.58));
         mat.metalness = Math.min(entry.baseMetalness, 0.1);
         mat.envMapIntensity = Math.min(entry.baseEnvMapIntensity, 0.3);
-        if (!entry.isTire && !entry.isGlass && wreckFireIntensity > 0.02) {
-          mat.emissive.copy(entry.baseEmissive).lerp(EMBER_COLOR, wreckFireIntensity * 0.72);
-          mat.emissiveIntensity = Math.max(
-            entry.baseEmissiveIntensity,
-            wreckFireIntensity * 0.68,
-          );
-        } else {
-          mat.emissive.copy(entry.baseEmissive);
-          mat.emissiveIntensity = entry.baseEmissiveIntensity;
+        if (!entry.isNativeLight) {
+          if (!entry.isTire && !entry.isGlass && wreckFireIntensity > 0.02) {
+            mat.emissive.copy(entry.baseEmissive).lerp(EMBER_COLOR, wreckFireIntensity * 0.72);
+            mat.emissiveIntensity = Math.max(
+              entry.baseEmissiveIntensity,
+              wreckFireIntensity * 0.68,
+            );
+          } else {
+            mat.emissive.copy(entry.baseEmissive);
+            mat.emissiveIntensity = entry.baseEmissiveIntensity;
+          }
         }
         continue;
       }
@@ -665,13 +674,15 @@ export class VehicleDamageVisualController {
       mat.metalness = entry.baseMetalness * (1 - scuffFactor * 0.35);
       mat.envMapIntensity = envIntensity;
 
-      if (isBurning && !entry.isTire && !entry.isGlass) {
-        const glow = 0.32 + wreckFireIntensity * 0.36;
-        mat.emissive.copy(entry.baseEmissive).lerp(EMBER_COLOR, glow);
-        mat.emissiveIntensity = Math.max(entry.baseEmissiveIntensity, glow);
-      } else {
-        mat.emissive.copy(entry.baseEmissive);
-        mat.emissiveIntensity = entry.baseEmissiveIntensity;
+      if (!entry.isNativeLight) {
+        if (isBurning && !entry.isTire && !entry.isGlass) {
+          const glow = 0.32 + wreckFireIntensity * 0.36;
+          mat.emissive.copy(entry.baseEmissive).lerp(EMBER_COLOR, glow);
+          mat.emissiveIntensity = Math.max(entry.baseEmissiveIntensity, glow);
+        } else {
+          mat.emissive.copy(entry.baseEmissive);
+          mat.emissiveIntensity = entry.baseEmissiveIntensity;
+        }
       }
     }
 

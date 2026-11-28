@@ -182,11 +182,12 @@ export async function loadHeroVehicle(
     length: scaledSize.z,
   };
 
-  // 3-G / 5-B2: ヘッドライト・テールランプ発光リグ（bodyGroup にアタッチしてバイクバンクにも追従）
+  // 3-G / 5-B2 / 5-Fix2: ヘッドライト・テールランプ発光リグ（bodyGroup にアタッチしてバイクバンクにも追従）
   const lightRig = createVehicleLightRig(
     config.type,
     dimensions,
     config.lightLayout,
+    model,
   );
   bodyGroup.add(lightRig.group);
 
@@ -293,6 +294,187 @@ export async function loadHeroVehicle(
   };
 }
 
+type WheelNodeBucket = Record<WheelSlot, THREE.Object3D[]>;
+
+function createEmptyWheelBuckets(): WheelNodeBucket {
+  return {
+    frontLeft: [],
+    frontRight: [],
+    rearLeft: [],
+    rearRight: [],
+  };
+}
+
+function buildCompactedSubGeometry(
+  source: THREE.BufferGeometry,
+  triIndices: number[],
+): THREE.BufferGeometry {
+  const posAttr = source.getAttribute('position');
+  const vertCount = posAttr.count;
+  const remap = new Int32Array(vertCount);
+  remap.fill(-1);
+  const oldIndices: number[] = [];
+  const newIndices = new Array<number>(triIndices.length);
+
+  for (let i = 0; i < triIndices.length; i += 1) {
+    const oldIdx = triIndices[i];
+    let mapped = remap[oldIdx];
+    if (mapped === -1) {
+      mapped = oldIndices.length;
+      remap[oldIdx] = mapped;
+      oldIndices.push(oldIdx);
+    }
+    newIndices[i] = mapped;
+  }
+
+  const newVertCount = oldIndices.length;
+  const out = new THREE.BufferGeometry();
+
+  for (const attrName of Object.keys(source.attributes)) {
+    const attr = source.attributes[attrName];
+    const itemSize = attr.itemSize;
+    const dst = new Float32Array(newVertCount * itemSize);
+
+    if (
+      !(attr instanceof THREE.InterleavedBufferAttribute) &&
+      attr.array instanceof Float32Array
+    ) {
+      const srcArr = attr.array;
+      for (let i = 0; i < newVertCount; i += 1) {
+        const srcBase = oldIndices[i] * itemSize;
+        const dstBase = i * itemSize;
+        for (let k = 0; k < itemSize; k += 1) {
+          dst[dstBase + k] = srcArr[srcBase + k];
+        }
+      }
+      out.setAttribute(
+        attrName,
+        new THREE.BufferAttribute(dst, itemSize, attr.normalized),
+      );
+    } else {
+      for (let i = 0; i < newVertCount; i += 1) {
+        const srcIdx = oldIndices[i];
+        const base = i * itemSize;
+        if (itemSize >= 1) dst[base] = attr.getX(srcIdx);
+        if (itemSize >= 2) dst[base + 1] = attr.getY(srcIdx);
+        if (itemSize >= 3) dst[base + 2] = attr.getZ(srcIdx);
+        if (itemSize >= 4) dst[base + 3] = attr.getW(srcIdx);
+      }
+      out.setAttribute(attrName, new THREE.BufferAttribute(dst, itemSize, false));
+    }
+  }
+
+  const indexArr =
+    newVertCount > 65535
+      ? new Uint32Array(newIndices)
+      : new Uint16Array(newIndices);
+  out.setIndex(new THREE.BufferAttribute(indexArr, 1));
+  out.computeBoundingBox();
+  out.computeBoundingSphere();
+  return out;
+}
+
+/**
+ * 5-Fix2: マテリアル単位で4輪（または片側2輪）が1メッシュへ結合された車両 GLB から、
+ * 車両ローカル空間（+Z 前方 / +X 左）の象限ごとに頂点コンパクト分割した独立車輪メッシュを生成する。
+ * 元の共有マテリアルはそのまま再利用し、元ジオメトリのみ破棄するため VRAM 増分はほぼゼロ。
+ */
+function splitMergedWheelMeshesIntoSlots(
+  model: THREE.Object3D,
+  config: HeroVehicleConfig,
+): { spin: WheelNodeBucket; steerOnly: WheelNodeBucket } {
+  const spin = createEmptyWheelBuckets();
+  const steerOnly = createEmptyWheelBuckets();
+  const splitCfg = config.splitMergedWheelMeshes;
+  if (!splitCfg) {
+    return { spin, steerOnly };
+  }
+
+  model.updateMatrixWorld(true);
+  const v0 = new THREE.Vector3();
+  const v1 = new THREE.Vector3();
+  const v2 = new THREE.Vector3();
+
+  const processMeshList = (
+    meshNames: readonly string[] | undefined,
+    targetBucket: WheelNodeBucket,
+  ): void => {
+    if (!meshNames || meshNames.length === 0) return;
+
+    for (const meshName of meshNames) {
+      const obj = model.getObjectByName(meshName);
+      if (!(obj instanceof THREE.Mesh) || !obj.parent) continue;
+      const geo = obj.geometry;
+      if (!(geo instanceof THREE.BufferGeometry)) continue;
+      const posAttr = geo.getAttribute('position');
+      if (!posAttr || posAttr.count === 0) continue;
+
+      const worldMat = obj.matrixWorld;
+      const indexAttr = geo.getIndex();
+      const triCount = indexAttr
+        ? Math.floor(indexAttr.count / 3)
+        : Math.floor(posAttr.count / 3);
+
+      const slotTris: Record<WheelSlot, number[]> = {
+        frontLeft: [],
+        frontRight: [],
+        rearLeft: [],
+        rearRight: [],
+      };
+
+      for (let t = 0; t < triCount; t += 1) {
+        const i0 = indexAttr ? indexAttr.getX(t * 3) : t * 3;
+        const i1 = indexAttr ? indexAttr.getX(t * 3 + 1) : t * 3 + 1;
+        const i2 = indexAttr ? indexAttr.getX(t * 3 + 2) : t * 3 + 2;
+
+        v0.fromBufferAttribute(posAttr, i0).applyMatrix4(worldMat);
+        v1.fromBufferAttribute(posAttr, i1).applyMatrix4(worldMat);
+        v2.fromBufferAttribute(posAttr, i2).applyMatrix4(worldMat);
+
+        const cx = (v0.x + v1.x + v2.x) / 3;
+        const cz = (v0.z + v1.z + v2.z) / 3;
+        const slot: WheelSlot =
+          cz >= 0
+            ? cx >= 0
+              ? 'frontLeft'
+              : 'frontRight'
+            : cx >= 0
+              ? 'rearLeft'
+              : 'rearRight';
+        slotTris[slot].push(i0, i1, i2);
+      }
+
+      const parent = obj.parent;
+      let createdAny = false;
+      for (const slot of WHEEL_SLOTS) {
+        const tris = slotTris[slot];
+        if (tris.length === 0) continue;
+        const subGeo = buildCompactedSubGeometry(geo, tris);
+        const subMesh = new THREE.Mesh(subGeo, obj.material);
+        subMesh.name = `${obj.name}__${slot}`;
+        subMesh.position.copy(obj.position);
+        subMesh.quaternion.copy(obj.quaternion);
+        subMesh.scale.copy(obj.scale);
+        subMesh.castShadow = obj.castShadow;
+        subMesh.receiveShadow = obj.receiveShadow;
+        parent.add(subMesh);
+        targetBucket[slot].push(subMesh);
+        createdAny = true;
+      }
+
+      if (createdAny) {
+        parent.remove(obj);
+        geo.dispose();
+      }
+    }
+  };
+
+  processMeshList(splitCfg.spinMeshNames, spin);
+  processMeshList(splitCfg.steerOnlyMeshNames, steerOnly);
+  model.updateMatrixWorld(true);
+  return { spin, steerOnly };
+}
+
 /**
  * 車両 GLB 内の独立ノード（4輪・ブレーキ・ステアリング）を検索し、
  * 車両ローカル空間（+Z 前方 / +X 左 / +Y 上）で素直に回転できるピボット階層へ組み替える。
@@ -302,6 +484,8 @@ function buildVehicleRig(
   model: THREE.Object3D,
   config: HeroVehicleConfig,
 ): VehicleRig {
+  const splitBuckets = splitMergedWheelMeshesIntoSlots(model, config);
+
   const wheels: Record<WheelSlot, WheelRig | null> = {
     frontLeft: null,
     frontRight: null,
@@ -312,8 +496,8 @@ function buildVehicleRig(
 
   for (const slot of WHEEL_SLOTS) {
     const binding = config.wheels[slot];
-    const spinNodes: THREE.Object3D[] = [];
-    const steerOnlyNodes: THREE.Object3D[] = [];
+    const spinNodes: THREE.Object3D[] = [...splitBuckets.spin[slot]];
+    const steerOnlyNodes: THREE.Object3D[] = [...splitBuckets.steerOnly[slot]];
 
     for (const name of binding.spinNodeNames) {
       const found = model.getObjectByName(name);

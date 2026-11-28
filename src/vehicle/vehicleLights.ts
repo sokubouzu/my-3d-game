@@ -12,6 +12,8 @@ export interface VehicleLightLayout {
   frontSize: { width: number; height: number; depth: number };
   /** 前照灯 X 軸チルト角 (rad, 負 = レンズ面上向き傾斜) */
   frontTiltX?: number;
+  /** 前照灯 Y 軸追従角 (rad, +X 左側基準・右側は反転) */
+  frontYaw?: number;
   /** 前照灯ハロー Z オフセットおよびスケール */
   frontHaloOffsetZ?: number;
   frontHaloScale?: readonly [number, number];
@@ -26,10 +28,21 @@ export interface VehicleLightLayout {
   rearHaloScale?: readonly [number, number];
   /** 消灯かつ正常時（昼間）は補助発光メッシュを非表示にし、GLB 本来のレンズを見せる */
   hideMeshWhenOff?: boolean;
+  /**
+   * 5-Fix2: GLB 内蔵の自発光フロントライト系マテリアル名一覧。
+   * 指定した場合、昼消灯・夕方/夜点灯・破損点滅/消灯を VehicleLightRig と自動同期する。
+   */
+  nativeFrontMaterialNames?: readonly string[];
+  /**
+   * 5-Fix2: GLB 内蔵の自発光リアライト/リフレクター系マテリアル名一覧。
+   */
+  nativeRearMaterialNames?: readonly string[];
 }
 
 export interface VehicleLightRig {
   group: THREE.Group;
+  /** VehicleLightRig が発光制御を直接所有する GLB 内蔵ライトマテリアル一覧 */
+  managedNativeMaterials: ReadonlySet<THREE.Material>;
   /** 0 = 消灯（昼）, 0.8 = 夕方, 1.0 = 夜（全灯） */
   setIntensity: (factor: number) => void;
   /**
@@ -52,19 +65,70 @@ const TAILLIGHT_EMISSIVE = new THREE.Color(0xff1e24);
 const BLACK_COLOR = new THREE.Color(0x000000);
 
 /**
- * 3-G / 5-B / 5-B2: 車両（乗用車・スポーツカー・AI交通車両）およびバイク共通の
+ * 3-G / 5-B / 5-B2 / 5-Fix2: 車両（乗用車・スポーツカー・スーパーカー・AI交通車両）およびバイク共通の
  * ヘッドライト（白〜淡い暖色）＆テールランプ（赤）発光メッシュ＋軽量ハロー演出リグ。
  * - 車体の正規化寸法（+Z 前方、Y=0 接地）または車種別 VehicleLightLayout に合わせて精密配置する。
  * - 5-B にて左右ヘッドライト独立の損傷点滅・消灯（破損レンズ暗化）に対応。
  * - 5-B2 にてスポーツカー等の丸型・曲面レンズへ埋め込みフィットさせ、昼間消灯時の不自然な飛び出しを解消。
+ * - 5-Fix2 にて GLB 内蔵の自発光 LED レンズ（head_light / tail_light 等）の昼夜・破損同期にも対応。
  */
 export function createVehicleLightRig(
   type: VehicleType,
   dimensions: VehicleDimensions,
   layout?: VehicleLightLayout,
+  model?: THREE.Object3D,
 ): VehicleLightRig {
   const group = new THREE.Group();
   group.name = 'VehicleLightRig';
+
+  const managedNativeMaterials = new Set<THREE.Material>();
+  const nativeFrontEntries: Array<{
+    mat: THREE.MeshStandardMaterial;
+    baseEmissive: THREE.Color;
+  }> = [];
+  const nativeRearEntries: Array<{
+    mat: THREE.MeshStandardMaterial;
+    baseEmissive: THREE.Color;
+    isReflector: boolean;
+  }> = [];
+
+  if (
+    model &&
+    ((layout?.nativeFrontMaterialNames &&
+      layout.nativeFrontMaterialNames.length > 0) ||
+      (layout?.nativeRearMaterialNames &&
+        layout.nativeRearMaterialNames.length > 0))
+  ) {
+    const frontNames = new Set(layout?.nativeFrontMaterialNames ?? []);
+    const rearNames = new Set(layout?.nativeRearMaterialNames ?? []);
+    model.traverse((obj) => {
+      if (!(obj instanceof THREE.Mesh)) return;
+      const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+      for (const m of mats) {
+        if (!(m instanceof THREE.MeshStandardMaterial)) continue;
+        if (managedNativeMaterials.has(m)) continue;
+        if (frontNames.has(m.name)) {
+          managedNativeMaterials.add(m);
+          const baseEmissive =
+            m.emissive.r + m.emissive.g + m.emissive.b > 0.01
+              ? m.emissive.clone()
+              : HEADLIGHT_EMISSIVE.clone();
+          nativeFrontEntries.push({ mat: m, baseEmissive });
+        } else if (rearNames.has(m.name)) {
+          managedNativeMaterials.add(m);
+          const baseEmissive =
+            m.emissive.r + m.emissive.g + m.emissive.b > 0.01
+              ? m.emissive.clone()
+              : TAILLIGHT_EMISSIVE.clone();
+          nativeRearEntries.push({
+            mat: m,
+            baseEmissive,
+            isReflector: /reflector/i.test(m.name),
+          });
+        }
+      }
+    });
+  }
 
   const geometries: THREE.BufferGeometry[] = [];
   const materials: THREE.Material[] = [];
@@ -218,6 +282,7 @@ export function createVehicleLightRig(
     const headY = layout ? layout.frontOffset.y : height * (isLowSports ? 0.44 : 0.42);
     const headZ = layout ? layout.frontOffset.z : length * 0.482;
     const headTiltX = layout?.frontTiltX ?? 0;
+    const headYaw = layout?.frontYaw ?? 0;
     const headHaloOffsetZ = layout?.frontHaloOffsetZ ?? 0.1;
     const headHaloScale = layout?.frontHaloScale ?? [0.95, 0.72];
 
@@ -257,6 +322,9 @@ export function createVehicleLightRig(
       headMesh.position.set(s.side * headX, headY, headZ);
       if (headTiltX !== 0) {
         headMesh.rotation.x = headTiltX;
+      }
+      if (headYaw !== 0) {
+        headMesh.rotation.y = s.side * headYaw;
       }
       headMesh.visible = !hideMeshWhenOff;
       group.add(headMesh);
@@ -351,6 +419,18 @@ export function createVehicleLightRig(
       );
     }
 
+    const avgHeadEff = f * Math.max(0, Math.min(1, (leftMul + rightMul) * 0.5));
+    for (let i = 0; i < nativeFrontEntries.length; i += 1) {
+      const entry = nativeFrontEntries[i];
+      if (avgHeadEff > 0.03) {
+        entry.mat.emissive.copy(entry.baseEmissive);
+        entry.mat.emissiveIntensity = 1.2 + avgHeadEff * 3.6;
+      } else {
+        entry.mat.emissive.copy(BLACK_COLOR);
+        entry.mat.emissiveIntensity = 0;
+      }
+    }
+
     const tailEff = f * tailMul;
     const tailLit = tailEff > 0.03;
     if (tailLit) {
@@ -367,6 +447,19 @@ export function createVehicleLightRig(
     tailHaloMat.opacity = tailEff * 0.72;
     for (let i = 0; i < tailHalos.length; i += 1) {
       tailHalos[i].visible = tailLit;
+    }
+
+    for (let i = 0; i < nativeRearEntries.length; i += 1) {
+      const entry = nativeRearEntries[i];
+      if (tailLit) {
+        entry.mat.emissive.copy(entry.baseEmissive);
+        entry.mat.emissiveIntensity = entry.isReflector
+          ? 0.45 + tailEff * 1.4
+          : 1.15 + tailEff * 2.85;
+      } else {
+        entry.mat.emissive.copy(BLACK_COLOR);
+        entry.mat.emissiveIntensity = 0;
+      }
     }
   };
 
@@ -411,12 +504,16 @@ export function createVehicleLightRig(
     leftHeadHalos.length = 0;
     rightHeadHalos.length = 0;
     tailHalos.length = 0;
+    nativeFrontEntries.length = 0;
+    nativeRearEntries.length = 0;
+    managedNativeMaterials.clear();
   };
 
   setIntensity(0);
 
   return {
     group,
+    managedNativeMaterials,
     setIntensity,
     setDamageMultipliers,
     dispose,

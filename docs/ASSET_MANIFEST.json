@@ -1,6 +1,6 @@
 {
-  "schemaVersion": "1.9.0",
-  "taskId": "5-G2c",
+  "schemaVersion": "1.10.0",
+  "taskId": "5-Fix2",
   "targetDevice": "iPad Air (5th gen, Apple M1 / 8GB RAM)",
   "summary": {
     "totalAssets": 63,
@@ -1933,30 +1933,28 @@
           "note": "GLBバイナリ検証・用途別配置済み、および1-D街区コード配置・CIビルド＆GitHub Pagesデプロイ成功（状態B）。実ブラウザでの描画確認（状態C）・衝突/動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
         },
         "cityPlacement": {
-          "taskId": "2-B",
-          "instanceCount": 2,
+          "taskId": "5-Fix2",
+          "status": "promoted_to_drivable_supercar",
+          "instanceCount": 1,
           "instances": [
             {
               "instanceId": "veh_mazda_furai_east",
               "positionXZ": [
                 18.0,
-                3.6
+                4.35
               ],
+              "rotationYRad": -1.5708,
               "fitMode": "length",
               "targetSizeMeters": 4.6,
-              "hasCollision": true
-            },
-            {
-              "instanceId": "veh_mazda_furai_west",
-              "positionXZ": [
-                -20.0,
-                -3.6
-              ],
-              "fitMode": "length",
-              "targetSizeMeters": 4.6,
-              "hasCollision": true
+              "hasCollision": true,
+              "drivable": true,
+              "castShadow": false,
+              "maxSpeedKmh": 178,
+              "audioProfile": "supercar",
+              "wheelRigMode": "splitMergedWheelMeshes (4 wheels + front steer calipers)"
             }
-          ]
+          ],
+          "note": "PHASE 5-Fix2にて東側路肩(18.0, 4.35)配置の veh_mazda_furai_east を4台目の運転可能車両（最高速約178km/h・4輪独立回転＆前輪ステア・GLB内蔵LED同期ライト・5段階ダメージ/爆発/リスポーン完全対応・castShadow=false）へ昇格。西側路肩の重複駐車枠はキャッシュ済み thunderbolt_96_interceptor（castShadow=false）へ置換しVRAM二重確保を回避。"
         }
       },
       {
@@ -2700,18 +2698,29 @@
           "note": "GLBバイナリ検証・用途別配置済み、および1-D街区コード配置・CIビルド＆GitHub Pagesデプロイ成功（状態B）。実ブラウザでの描画確認（状態C）・衝突/動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
         },
         "cityPlacement": {
-          "taskId": "1-D",
-          "instanceCount": 1,
+          "taskId": "5-Fix2",
+          "instanceCount": 2,
           "instances": [
             {
               "instanceId": "veh_thunderbolt_south",
               "positionXZ": [
-                -3.6,
+                -4.35,
                 18.0
               ],
               "fitMode": "length",
               "targetSizeMeters": 4.7,
               "hasCollision": true
+            },
+            {
+              "instanceId": "veh_thunderbolt_west",
+              "positionXZ": [
+                -20.0,
+                -4.35
+              ],
+              "fitMode": "length",
+              "targetSizeMeters": 4.7,
+              "hasCollision": true,
+              "castShadow": false
             }
           ]
         }

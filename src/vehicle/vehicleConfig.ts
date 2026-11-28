@@ -60,7 +60,19 @@ export interface BikeRiderMountConfig {
   animationName: string;
 }
 
-export type VehicleAudioProfile = 'standard' | 'sports' | 'bike';
+export type VehicleAudioProfile = 'standard' | 'sports' | 'supercar' | 'bike';
+
+export interface MergedWheelSplitConfig {
+  /**
+   * 5-Fix2: 4輪または片側2輪が1メッシュへ結合されている回転車輪ノード名（タイヤ・リム・ブレーキローター等）。
+   * ロード時に車両ローカル空間の象限（FL/FR/RL/RR）で頂点コンパクト分割し、独立ピボットへ自動組み替えする。
+   */
+  spinMeshNames: readonly string[];
+  /**
+   * 5-Fix2: 4輪が1メッシュへ結合されているステアリング追従のみノード名（ブレーキキャリパー・バッジ等）。
+   */
+  steerOnlyMeshNames?: readonly string[];
+}
 
 export interface VehicleEngineAudioProfileParams {
   /** 基音オシレーター波形 */
@@ -112,6 +124,7 @@ export interface VehicleEngineAudioProfileParams {
  * 車種別エンジン音・ロードノイズチューニング定義。
  * - standard: 静かな実用車・ミニバン向け（triangle/sine 中心、カットオフ 220Hz〜420Hz、低いエンジン音＋ロードノイズ主体）
  * - sports: 高回転まで伸びるスポーツカー向け（sawtooth 倍音＋680Hz〜2600Hz フィルター開度で差別化）
+ * - supercar: 20B 3ローター／レーシングスーパーカー向け（完全5度＆3倍音の鋭く高回転へ吹け上がる排気音）
  */
 export const VEHICLE_ENGINE_AUDIO_PROFILES: Record<
   VehicleAudioProfile,
@@ -185,6 +198,41 @@ export const VEHICLE_ENGINE_AUDIO_PROFILES: Record<
     roadFreqMin: 480,
     roadFreqMax: 1160,
   },
+  supercar: {
+    // Mazda Furai (3ローター・プロトタイプレーシングカー) 向けの甲高く鋭い高回転スポーツ排気音
+    osc1Type: 'sawtooth',
+    osc2Type: 'sawtooth',
+    harmonicOscType: 'sawtooth',
+    osc1Gain: 0.48,
+    osc2Gain: 0.46,
+    harmonicGain: 0.34,
+    idleFreq: 102,
+    maxFreq: 388,
+    harmonic2Ratio: 1.505,
+    harmonic3Ratio: 3.015,
+    revExponent: 0.72,
+    throttleBoost: 0.22,
+    maxRevNorm: 1.15,
+    freqTau: 0.032,
+    idlePulseBaseRate: 17,
+    idlePulseSpeedScale: 28,
+    idlePulseDepth: 0.06,
+    highpassFreq: 118,
+    filterMin: 780,
+    filterMax: 3350,
+    filterQ: 2.75,
+    filterRevWeight: 0.88,
+    filterThrottleWeight: 0.3,
+    midBoostGainDb: 5.8,
+    engineBaseGain: 0.31,
+    engineThrottleGain: 0.16,
+    engineSpeedGain: 0.12,
+    roadSpeedRefKmh: 165,
+    roadExponent: 1.9,
+    roadGainScale: 0.25,
+    roadFreqMin: 520,
+    roadFreqMax: 1380,
+  },
   bike: {
     // 単気筒〜Vツイン2気筒カスタムバイクらしい軽快で歯切れのよい排気音（明確なアイドリング鼓動感＋鋭い吹け上がり）
     osc1Type: 'sawtooth',
@@ -250,7 +298,7 @@ export interface HeroVehicleConfig {
   placeholderDimensions: { width: number; height: number; length: number };
   /** リアルタイムシャドウ投影の有無 */
   castShadow: boolean;
-  /** 3-D: エンジン音プロファイル（standard = 静かな実用車 / sports = スポーツカー / bike = 単気筒〜2気筒バイク） */
+  /** 3-D / 5-Fix2: エンジン音プロファイル（standard / sports / supercar / bike） */
   audioProfile: VehicleAudioProfile;
   /** 走行・操舵スペック */
   handling: VehicleHandlingSpec;
@@ -260,6 +308,8 @@ export interface HeroVehicleConfig {
   riderMount?: BikeRiderMountConfig;
   /** 4輪の独立ノード定義 */
   wheels: Record<WheelSlot, WheelNodeBinding>;
+  /** 5-Fix2: マテリアル単位で結合された4輪メッシュの自動象限分割設定 */
+  splitMergedWheelMeshes?: MergedWheelSplitConfig;
   /** ステアリングホイール独立ノード名（未分離の場合は空文字） */
   steeringWheelNodeName: string;
   /** ステアリングホイールの最大回転角倍率（前輪ステア角に対する比） */
@@ -471,9 +521,92 @@ export const BIKE_VEHICLE_CONFIG: HeroVehicleConfig = {
   steeringWheelRatio: 0,
 };
 
-/** 運転可能な全車両リスト（乗用車・スポーツカー・バイクの計3台） */
+/**
+ * 作業ID 5-Fix2: 4台目の運転可能車両（レーシング・スーパーカー: 2008 Mazda Furai）。
+ * - 東側車道路肩に静的配置されていた veh_mazda_furai_east（x: 18, z: 4.35, rotationY: -Math.PI/2, 全長 4.6m）を
+ *   同一位置・同一向きのまま運転可能スーパーカーとして統合（castShadow: false でシャドウ負荷増ゼロ）。
+ * - GLB バイナリ精密検査の結果、不要な地面ベイク影プレーンはなく +Z 正面・実寸 1.95m×1.07m×4.60m・Y=0 厳密接地。
+ * - GLB 内はマテリアル単位で4輪（タイヤ・リム・スポーク・ローター・キャリパー）が結合されていたため、
+ *   splitMergedWheelMeshes によるロード時象限コンパクト分割で4輪独立回転＋前輪ステア＆キャリパー追従を実現。
+ * - ポルシェ911を上回る最高速 約 178 km/h (49.5 m/s)・鋭い加速/ブレーキング・レーシングステア応答・
+ *   3ローター系高回転エンジン音（audioProfile: 'supercar'）・GLB 内蔵 LED レンズ同期ライト（hideMeshWhenOff）を搭載。
+ */
+export const SUPERCAR_VEHICLE_CONFIG: HeroVehicleConfig = {
+  id: 'veh_mazda_furai_east',
+  type: 'car',
+  assetId: '2008__mazda_furai',
+  displayName: 'Mazda Furai',
+  url: './assets/vehicles/2008__mazda_furai.glb',
+  targetLengthMeters: 4.6,
+  modelForwardCorrectionY: 0,
+  initialPosition: { x: 18.0, z: 4.35 },
+  initialRotationY: -Math.PI / 2,
+  colliderShrink: 0.92,
+  placeholderDimensions: { width: 1.95, height: 1.07, length: 4.6 },
+  castShadow: false,
+  audioProfile: 'supercar',
+  lightLayout: {
+    frontShape: 'box',
+    // Object_34 (detail_glass_clear) 実測レンズポッド中心 (±0.774, 0.553, 1.691) に合わせて傾斜フィット
+    frontOffset: { x: 0.76, y: 0.545, z: 1.715 },
+    frontSize: { width: 0.14, height: 0.055, depth: 0.02 },
+    frontTiltX: -0.58,
+    frontYaw: 0.34,
+    frontHaloOffsetZ: 0.12,
+    frontHaloScale: [0.96, 0.72],
+    // Object_53 (tail_light_lod0) 実測テールブレード帯 (±0.19..±0.78, y=0.45..0.55, z=-2.08..-1.91) に密着
+    rearOffset: { x: 0.5, y: 0.485, z: -2.015 },
+    rearSize: { width: 0.36, height: 0.048, depth: 0.02 },
+    rearYaw: 0.16,
+    rearHaloOffsetZ: -0.09,
+    rearHaloScale: [0.92, 0.48],
+    hideMeshWhenOff: true,
+    nativeFrontMaterialNames: ['head_light'],
+    nativeRearMaterialNames: ['tail_light_lod0', 'reflector'],
+  },
+  handling: {
+    maxForwardSpeed: 49.5, // ~178 km/h
+    maxReverseSpeed: 9.5, // ~34 km/h
+    accelRate: 24.5,
+    reverseAccel: 8.5,
+    brakeDecel: 37.0,
+    handbrakeDecel: 50.0,
+    coastDrag: 0.95,
+    maxSteerAngle: 0.58,
+    minHighSpeedSteer: 0.105,
+    steerResponseSpeed: 12.5,
+    wheelbaseMeters: 2.77,
+  },
+  wheels: {
+    frontLeft: { spinNodeNames: [], steerOnlyNodeNames: [], steerable: true },
+    frontRight: { spinNodeNames: [], steerOnlyNodeNames: [], steerable: true },
+    rearLeft: { spinNodeNames: [], steerOnlyNodeNames: [], steerable: false },
+    rearRight: { spinNodeNames: [], steerOnlyNodeNames: [], steerable: false },
+  },
+  splitMergedWheelMeshes: {
+    spinMeshNames: [
+      'Object_52', // tyre_fx (4輪タイヤ)
+      'Object_41', // inner_rim (4輪インナーリム)
+      'Object_43', // outer_rim (4輪アウターリム)
+      'Object_50', // material_42 (左側スポーク FL/RL)
+      'Object_51', // material_42 (右側スポーク FR/RR)
+      'Object_54', // wheel_black (4輪ホイールトリム)
+      'Object_55', // rotor (4輪ブレーキローター)
+      'Object_37', // material (ローターセンターハット FL/RR)
+    ],
+    steerOnlyMeshNames: [
+      'Object_31', // caliper (4輪ブレーキキャリパー: 前輪はステア追従・非回転)
+      'Object_28', // badge (4輪キャリパーロゴ)
+    ],
+  },
+  steeringWheelNodeName: '',
+  steeringWheelRatio: 0,
+};
+
+/** 運転可能な全車両リスト（乗用車・ポルシェ911・バイク・マツダ風籟の計4台） */
 export const DRIVABLE_VEHICLES: readonly HeroVehicleConfig[] = [
   HERO_VEHICLE_CONFIG,
   SPORTS_CAR_VEHICLE_CONFIG,
   BIKE_VEHICLE_CONFIG,
+  SUPERCAR_VEHICLE_CONFIG,
 ];

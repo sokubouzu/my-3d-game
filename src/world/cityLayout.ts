@@ -373,38 +373,25 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
   },
   // ※ veh_porsche_north (free_1975_porsche_911_930_turbo.glb / x:-4.2, z:-22) は
   //    作業ID 2-C にて同一位置のまま運転可能スポーツカー（2台目）へ昇格したため静的配置から除外。
+  // ※ veh_mazda_furai_east (2008__mazda_furai.glb / x:18, z:4.35, rotationY:-Math.PI/2) は
+  //    作業ID 5-Fix2 にて同一位置のまま運転可能スーパーカー（4台目）へ昇格したため静的配置から除外。
+  //    西側路肩の重複駐車枠は既存のキャッシュ済み車両（thunderbolt_96_interceptor / castShadow: false）へ置換し、
+  //    未操作同型クローンによる誤認と VRAM 二重確保（~22MB）・シャドウ負荷を解消。
   {
-    instanceId: 'veh_mazda_furai_east',
-    assetId: '2008__mazda_furai',
+    instanceId: 'veh_thunderbolt_west',
+    assetId: 'thunderbolt_96_interceptor_-_low_poly_model',
     category: 'vehicles',
-    url: './assets/vehicles/2008__mazda_furai.glb',
-    x: 18,
-    z: 4.35,
-    rotationY: -Math.PI / 2,
-    fitMode: 'length',
-    targetSize: 4.6,
-    maxFootprint: 4.8,
-    hasCollision: true,
-    colliderShrink: 0.92,
-    placeholderFootprint: { width: 2.0, depth: 4.6, height: 1.2 },
-    castShadow: true,
-    priority: 2,
-  },
-  {
-    instanceId: 'veh_mazda_furai_west',
-    assetId: '2008__mazda_furai',
-    category: 'vehicles',
-    url: './assets/vehicles/2008__mazda_furai.glb',
+    url: './assets/vehicles/thunderbolt_96_interceptor_-_low_poly_model.glb',
     x: -20,
     z: -4.35,
     rotationY: Math.PI / 2,
     fitMode: 'length',
-    targetSize: 4.6,
-    maxFootprint: 4.8,
+    targetSize: 4.7,
+    maxFootprint: 4.9,
     hasCollision: true,
     colliderShrink: 0.92,
-    placeholderFootprint: { width: 2.0, depth: 4.6, height: 1.2 },
-    castShadow: true,
+    placeholderFootprint: { width: 2.0, depth: 4.7, height: 1.6 },
+    castShadow: false,
     priority: 1,
   },
   {

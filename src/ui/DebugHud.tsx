@@ -33,7 +33,7 @@ export function DebugHud({ status }: DebugHudProps) {
 
       {expanded && (
         <div className="hud-details">
-          <div className="hud-title">my-3d-game (Phase 5-Fix1)</div>
+          <div className="hud-title">my-3d-game (Phase 5-Fix2)</div>
           <div>
             API: {status.isWebGL2 ? 'WebGL2' : 'WebGL1'} | DPR:{' '}
             {status.dpr.toFixed(2)} | Time: {status.timeOfDay.toUpperCase()} |

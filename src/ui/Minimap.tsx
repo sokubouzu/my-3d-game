@@ -73,7 +73,7 @@ function strokeRoundedRectPath(
 
 function createEmptySnapshot(): MinimapSnapshot {
   const drivableVehicles: MinimapVehiclePoint[] = [];
-  for (let i = 0; i < 4; i += 1) {
+  for (let i = 0; i < 6; i += 1) {
     drivableVehicles.push({ id: '', x: 0, z: 0, yaw: 0, isActive: false });
   }
   const trafficVehicles: MinimapVehiclePoint[] = [];
@@ -407,7 +407,7 @@ export function Minimap({ getSnapshot }: MinimapProps) {
         ctx.restore();
       }
 
-      // 7. 運転可能車両3台（シアン／ゴールド／ピンクの強調アイコン・発火/残骸状態も区別表示・レーダー外でも端に表示）
+      // 7. 運転可能車両4台（シアン／ゴールド／バイオレット／ピンクの強調アイコン・発火/残骸状態も区別表示・レーダー外でも端に表示）
       const clampRadius = MINIMAP_HALF_PX - 9;
       for (let i = 0; i < snapshot.drivableCount; i += 1) {
         const dv = snapshot.drivableVehicles[i];
@@ -424,9 +424,16 @@ export function Minimap({ getSnapshot }: MinimapProps) {
           my = cy + (dy / dist) * clampRadius;
         }
 
+        const isSupercar = dv.id.includes('furai') || dv.id.includes('mazda');
         const isSports = dv.id.includes('porsche');
         const isBike = dv.id.includes('bike') || dv.id.includes('harley');
-        const baseFill = isBike ? '#f472b6' : isSports ? '#facc15' : '#38bdf8';
+        const baseFill = isBike
+          ? '#f472b6'
+          : isSupercar
+            ? '#c084fc'
+            : isSports
+              ? '#facc15'
+              : '#38bdf8';
         const fill = dv.isWrecked
           ? '#475569'
           : dv.isBurning

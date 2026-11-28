@@ -849,7 +849,8 @@ export class VehicleController {
       const profileScale =
         this.vehicle.config.audioProfile === 'bike'
           ? 1.22
-          : this.vehicle.config.audioProfile === 'sports'
+          : this.vehicle.config.audioProfile === 'sports' ||
+              this.vehicle.config.audioProfile === 'supercar'
             ? 1.05
             : 0.92;
       damage = Math.min(68, Math.max(2, energy * profileScale * 0.92));
