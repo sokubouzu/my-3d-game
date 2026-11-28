@@ -63,6 +63,7 @@ export function buildJapaneseCity(
   const loadedTemplates: THREE.Group[] = [];
   const trackedEmissives: TrackedEmissiveMaterial[] = [];
   const trackedMatSet = new Set<THREE.Material>();
+  const registeredColliderIds = new Set<string>();
   let currentNightFactor = 0;
 
   const applyNightFactorToMaterial = (
@@ -108,6 +109,7 @@ export function buildJapaneseCity(
         0,
         fp.height,
       );
+      registeredColliderIds.add(placement.instanceId);
     }
   }
   emitProgress();
@@ -197,6 +199,7 @@ export function buildJapaneseCity(
         placement,
         cityGroup,
         collisionWorld,
+        registeredColliderIds,
       );
       loadedCount += 1;
     } catch (err: unknown) {
@@ -242,9 +245,10 @@ export function buildJapaneseCity(
       isDisposed = true;
       trackedEmissives.length = 0;
       trackedMatSet.clear();
-      for (const placement of JAPANESE_CITY_PLACEMENTS) {
-        collisionWorld.removeCollider(placement.instanceId);
+      for (const id of registeredColliderIds) {
+        collisionWorld.removeCollider(id);
       }
+      registeredColliderIds.clear();
       scene.remove(cityGroup);
 
       const disposedGeometries = new Set<THREE.BufferGeometry>();
@@ -297,24 +301,41 @@ export function buildJapaneseCity(
 
 /**
  * 各単体モデルを空の親 THREE.Group (position.y = 0 固定) に包み、
- * スケール設定後に updateMatrixWorld(true) -> Box3 計測 -> 子モデル position.y = -box.min.y
+ * 不要ノード除外 → スケール設定 → updateMatrixWorld(true) → Box3 計測 → 接地オフセット適用
  * で埋まりゼロ・浮きゼロ接地を行う。
- * また配置後に全ワールド Box3.min.y をチェックし、min.y > 0.5 の浮遊オブジェクトは除外する。
+ * また localColliders 指定時は建物本体・塀など実体構造物のみへ OBB を登録し、敷地内を通行可能化する。
  */
 function normalizeAndAttachModel(
   model: THREE.Object3D,
   placement: CityAssetPlacement,
   parentGroup: THREE.Group,
   collisionWorld: CollisionWorld,
+  registeredColliderIds: Set<string>,
 ): void {
   model.position.set(0, 0, 0);
   model.rotation.set(0, 0, 0);
   model.scale.set(1, 1, 1);
+
+  // PHASE 5-Fix1: 不要ノード（白い地面プレート Carretera_Material_0 等）を計測前にクローンから除外
+  if (placement.excludeNodeNames && placement.excludeNodeNames.length > 0) {
+    const excludeSet = new Set(placement.excludeNodeNames);
+    const toRemove: THREE.Object3D[] = [];
+    model.traverse((obj) => {
+      if (excludeSet.has(obj.name)) {
+        toRemove.push(obj);
+      }
+    });
+    for (const node of toRemove) {
+      node.parent?.remove(node);
+    }
+  }
+
   model.updateMatrixWorld(true);
 
   const rawBox = new THREE.Box3().setFromObject(model);
   if (rawBox.isEmpty()) {
     collisionWorld.removeCollider(placement.instanceId);
+    registeredColliderIds.delete(placement.instanceId);
     return;
   }
 
@@ -349,8 +370,13 @@ function normalizeAndAttachModel(
   const scaledCenter = scaledBox.getCenter(new THREE.Vector3());
   const scaledSize = scaledBox.getSize(new THREE.Vector3());
 
-  // 水平中心を原点揃え、子モデルの position.y = -box.min.y で Y = 0 厳密接地
-  model.position.set(-scaledCenter.x, -scaledBox.min.y, -scaledCenter.z);
+  // 水平中心を原点揃え、rawGroundY 指定時は地下基礎を除いた実地面基準で厳密接地
+  const targetGroundY = placement.groundSurfaceY ?? 0;
+  const modelPosY =
+    placement.rawGroundY !== undefined
+      ? targetGroundY - placement.rawGroundY * scale
+      : targetGroundY - scaledBox.min.y;
+  model.position.set(-scaledCenter.x, modelPosY, -scaledCenter.z);
   model.updateMatrixWorld(true);
 
   // シャドウ設定
@@ -377,21 +403,60 @@ function normalizeAndAttachModel(
     );
     parentGroup.remove(wrapper);
     collisionWorld.removeCollider(placement.instanceId);
+    registeredColliderIds.delete(placement.instanceId);
     return;
   }
 
   // 修正後の実測サイズで OBB コライダーを完全同期
   if (placement.hasCollision) {
-    const shrink = placement.colliderShrink ?? 0.92;
-    collisionWorld.upsertCollider(
-      placement.instanceId,
-      placement.x,
-      placement.z,
-      Math.max(0.4, scaledSize.x * shrink),
-      Math.max(0.4, scaledSize.z * shrink),
-      placement.rotationY,
-      0,
-      Math.max(0.5, finalWorldBox.max.y),
-    );
+    if (placement.localColliders && placement.localColliders.length > 0) {
+      // 暫定1ボックスコライダーを外し、建物本体・塀のみの分割構造 OBB へ差し替え
+      collisionWorld.removeCollider(placement.instanceId);
+      registeredColliderIds.delete(placement.instanceId);
+
+      const cosY = Math.cos(placement.rotationY);
+      const sinY = Math.sin(placement.rotationY);
+      const minColY = Math.max(0, targetGroundY - 0.1);
+
+      for (const lc of placement.localColliders) {
+        const rcx = (lc.minX + lc.maxX) * 0.5;
+        const rcz = (lc.minZ + lc.maxZ) * 0.5;
+        const lx = rcx * scale - scaledCenter.x;
+        const lz = rcz * scale - scaledCenter.z;
+        const wx = placement.x + lx * cosY + lz * sinY;
+        const wz = placement.z - lx * sinY + lz * cosY;
+        const w = Math.max(0.25, (lc.maxX - lc.minX) * scale);
+        const d = Math.max(0.25, (lc.maxZ - lc.minZ) * scale);
+        const maxColY =
+          lc.maxY !== undefined
+            ? Math.max(0.5, lc.maxY * scale + modelPosY)
+            : Math.max(0.5, finalWorldBox.max.y);
+        const subId = `${placement.instanceId}__${lc.suffix}`;
+        collisionWorld.upsertCollider(
+          subId,
+          wx,
+          wz,
+          w,
+          d,
+          placement.rotationY,
+          minColY,
+          maxColY,
+        );
+        registeredColliderIds.add(subId);
+      }
+    } else {
+      const shrink = placement.colliderShrink ?? 0.92;
+      collisionWorld.upsertCollider(
+        placement.instanceId,
+        placement.x,
+        placement.z,
+        Math.max(0.4, scaledSize.x * shrink),
+        Math.max(0.4, scaledSize.z * shrink),
+        placement.rotationY,
+        0,
+        Math.max(0.5, finalWorldBox.max.y),
+      );
+      registeredColliderIds.add(placement.instanceId);
+    }
   }
 }

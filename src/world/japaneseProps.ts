@@ -649,7 +649,7 @@ function buildGuardrailLayout(swY: number): GuardrailRun[] {
     { id: 'gr_ring_out_e', x0: outEdge, z0: -straightHalf, x1: outEdge, z1: straightHalf, baseY: 0, hasReflector: true },
   );
 
-  // 外周内側直線（4方向T字交差点 ±16m と 公園北入口 x∈[48,62] を広く開放）
+  // 外周内側直線（4方向T字交差点 ±16m・公園北入口 x∈[48,62]・西ガソリンスタンド出入口 z∈[-87,-65] を広く開放）
   const inEdge = ringSpan - outerOffset; // 125.45
   runs.push(
     { id: 'gr_ring_in_n1', x0: -straightHalf, z0: -inEdge, x1: -16, z1: -inEdge, baseY: 0 },
@@ -657,7 +657,8 @@ function buildGuardrailLayout(swY: number): GuardrailRun[] {
     { id: 'gr_ring_in_n3', x0: 62, z0: -inEdge, x1: straightHalf, z1: -inEdge, baseY: 0 },
     { id: 'gr_ring_in_s1', x0: -straightHalf, z0: inEdge, x1: -16, z1: inEdge, baseY: 0 },
     { id: 'gr_ring_in_s2', x0: 16, z0: inEdge, x1: straightHalf, z1: inEdge, baseY: 0 },
-    { id: 'gr_ring_in_w1', x0: -inEdge, z0: -straightHalf, x1: -inEdge, z1: -16, baseY: 0 },
+    { id: 'gr_ring_in_w1a', x0: -inEdge, z0: -straightHalf, x1: -inEdge, z1: -87, baseY: 0, hasReflector: true },
+    { id: 'gr_ring_in_w1b', x0: -inEdge, z0: -65, x1: -inEdge, z1: -16, baseY: 0, hasReflector: true },
     { id: 'gr_ring_in_w2', x0: -inEdge, z0: 16, x1: -inEdge, z1: straightHalf, baseY: 0 },
     { id: 'gr_ring_in_e1', x0: inEdge, z0: -straightHalf, x1: inEdge, z1: -16, baseY: 0 },
     { id: 'gr_ring_in_e2', x0: inEdge, z0: 16, x1: inEdge, z1: straightHalf, baseY: 0 },
@@ -788,6 +789,9 @@ function buildInstancedGuardrails(
     reflectorMat,
     Math.max(1, reflectorPosts.length),
   );
+  beamInst.frustumCulled = false;
+  postInst.frustumCulled = false;
+  reflInst.frustumCulled = false;
 
   const dummy = new THREE.Object3D();
   let bIdx = 0;

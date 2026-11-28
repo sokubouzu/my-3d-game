@@ -34,11 +34,18 @@ function getAudioContextConstructor(): AudioContextCtor | null {
 
 const MASTER_GAIN_LEVEL = 1.0;
 
+// PHASE 5-Fix1: カスタムバイク用 5速ギア速度テーブル（1始まり: index 1..5）
+const BIKE_GEAR_MIN_KMH = [0, 0, 22, 46, 72, 98] as const;
+const BIKE_GEAR_MAX_KMH = [0, 34, 62, 90, 118, 148] as const;
+const BIKE_GEAR_UPSHIFT_KMH = [0, 31, 58, 86, 113, 999] as const;
+const BIKE_GEAR_DOWNSHIFT_KMH = [0, -1, 21, 44, 69, 94] as const;
+
 /**
- * 作業ID 3-D: iPadOS Safari 対応・外部音声ファイル不要の手続き型 Web Audio エンジン。
+ * 作業ID 3-D / 5-Fix1: iPadOS Safari 対応・外部音声ファイル不要の手続き型 Web Audio エンジン。
  *
- * - エンジン音・走行音・スキッド音・街の環境音は初期化時に1回だけ常設ノードグラフを構築し、
- *   毎フレームは setTargetAtTime によるパラメータ更新のみを行う（M1 iPad Air 60FPS 維持）。
+ * - エンジン音・カスタムバイク専用 V ツイン排気＆風切り音・走行音・スキッド音・街の環境音は
+ *   初期化時に1回だけ常設ノードグラフを構築し、毎フレームは setTargetAtTime による
+ *   パラメータ更新のみを行う（M1 iPad Air 60FPS 維持）。
  * - iPadOS Safari の音声制限解除のため、ユーザー操作の同期コールバック内で
  *   AudioContext 生成・resume()・短い確認チャイム音の oscillator.start() を一括実行し、
  *   ctx.state === 'running' になるまで再試行する。
@@ -57,7 +64,7 @@ export class SoundManager {
   private ambientLfo: OscillatorNode | null = null;
   private ambientSource: AudioBufferSourceNode | null = null;
 
-  // 2. 車両エンジン音＆ロードノイズ（常設）
+  // 2. 四輪車両エンジン音＆ロードノイズ（常設）
   private engineOsc1: OscillatorNode | null = null;
   private engineOsc2: OscillatorNode | null = null;
   private engineHarmonicOsc: OscillatorNode | null = null;
@@ -71,6 +78,27 @@ export class SoundManager {
   private engineFilter: BiquadFilterNode | null = null;
   private engineGain: GainNode | null = null;
   private currentEngineProfile: VehicleAudioProfile | null = null;
+
+  // 2a-bike. PHASE 5-Fix1: カスタムバイク専用 45° Vツイン排気＆オープンエア風切り音（常設）
+  private bikePulseSource: AudioBufferSourceNode | null = null;
+  private bikePulseGain: GainNode | null = null;
+  private bikeGrowlOsc1: OscillatorNode | null = null;
+  private bikeGrowlOsc2: OscillatorNode | null = null;
+  private bikeGrowlGain: GainNode | null = null;
+  private bikeLopeLfo: OscillatorNode | null = null;
+  private bikeLopeGain: GainNode | null = null;
+  private bikeDriveGain: GainNode | null = null;
+  private bikeMufflerFilter: BiquadFilterNode | null = null;
+  private bikeMasterGain: GainNode | null = null;
+  private bikeWindSource: AudioBufferSourceNode | null = null;
+  private bikeWindBandpass: BiquadFilterNode | null = null;
+  private bikeWindGain: GainNode | null = null;
+  private bikeGear = 1;
+  private bikeRpmNorm = 0;
+  private bikeShiftDipRemaining = 0;
+  private bikeDecelBurble = 0;
+  private bikePrevThrottle = 0;
+  private bikeLastUpdateTime = -1;
 
   private roadSource: AudioBufferSourceNode | null = null;
   private roadFilter: BiquadFilterNode | null = null;
@@ -271,12 +299,32 @@ export class SoundManager {
     const now = this.ctx.currentTime;
 
     if (!frame.isDriving) {
-      // 降車時はエンジン音・走行音・スキッド音を滑らかに減衰停止
+      // 降車時は車・バイク双方のエンジン音・風切り音・走行音・スキッド音を滑らかに減衰停止
       this.engineGain.gain.setTargetAtTime(0.0001, now, 0.14);
+      this.bikeMasterGain?.gain.setTargetAtTime(0.0001, now, 0.14);
+      this.bikeWindGain?.gain.setTargetAtTime(0.0001, now, 0.12);
       this.roadGain.gain.setTargetAtTime(0.0001, now, 0.12);
       this.skidGain.gain.setTargetAtTime(0.0001, now, 0.05);
+      this.bikeGear = 1;
+      this.bikeRpmNorm = 0;
+      this.bikeShiftDipRemaining = 0;
+      this.bikeDecelBurble = 0;
+      this.bikePrevThrottle = 0;
+      this.bikeLastUpdateTime = -1;
       return;
     }
+
+    if (frame.profile === 'bike') {
+      // バイク乗車時: 四輪車エンジンバスをミュートし、専用 V ツイン排気＆風切り音バスを駆動
+      this.engineGain.gain.setTargetAtTime(0.0001, now, 0.06);
+      this.updateBikeAudio(frame, now);
+      return;
+    }
+
+    // 四輪車（standard / sports）乗車時はバイク専用バスを確実にミュート
+    this.bikeMasterGain?.gain.setTargetAtTime(0.0001, now, 0.06);
+    this.bikeWindGain?.gain.setTargetAtTime(0.0001, now, 0.08);
+    this.bikeLastUpdateTime = -1;
 
     const tuning = VEHICLE_ENGINE_AUDIO_PROFILES[frame.profile];
 
@@ -285,7 +333,7 @@ export class SoundManager {
       this.engineOsc1.type = tuning.osc1Type;
       this.engineOsc2.type = tuning.osc2Type;
       this.engineHarmonicOsc.type = tuning.harmonicOscType;
-      this.enginePulseLfo.type = frame.profile === 'bike' ? 'triangle' : 'sine';
+      this.enginePulseLfo.type = 'sine';
       this.engineOsc1Mix.gain.setTargetAtTime(tuning.osc1Gain, now, 0.04);
       this.engineOsc2Mix.gain.setTargetAtTime(tuning.osc2Gain, now, 0.04);
       this.engineHarmonicMix.gain.setTargetAtTime(tuning.harmonicGain, now, 0.04);
@@ -305,7 +353,7 @@ export class SoundManager {
     const throttleBoost = throttle * tuning.throttleBoost;
     const revNorm = Math.min(tuning.maxRevNorm, revCurve + throttleBoost);
 
-    // 車種別の基本周波数＆倍音設計（standard: 静かな実用車 / sports: 高回転スポーツカー / bike: 単気筒〜2気筒バイク）
+    // 車種別の基本周波数＆倍音設計（standard: 静かな実用車 / sports: 高回転スポーツカー）
     const baseFreq = tuning.idleFreq + (tuning.maxFreq - tuning.idleFreq) * revNorm;
     const freqTau = tuning.freqTau;
     this.engineOsc1.frequency.setTargetAtTime(baseFreq, now, freqTau);
@@ -320,14 +368,10 @@ export class SoundManager {
       freqTau,
     );
 
-    // アイドリング時の鼓動感（バイクは単気筒〜2気筒らしい歯切れよい鼓動を低〜中速域まで維持）
-    const isBike = frame.profile === 'bike';
+    // アイドリング時の鼓動感
     const idlePulseRate =
-      tuning.idlePulseBaseRate +
-      (isBike ? revNorm : speedNorm) * tuning.idlePulseSpeedScale;
-    const pulseFade = isBike
-      ? Math.max(0.22, 1 - Math.min(1, speedNorm * 1.4))
-      : 1 - Math.min(1, speedNorm * 2.5);
+      tuning.idlePulseBaseRate + speedNorm * tuning.idlePulseSpeedScale;
+    const pulseFade = 1 - Math.min(1, speedNorm * 2.5);
     const idlePulseDepth = pulseFade * tuning.idlePulseDepth;
     this.enginePulseLfo.frequency.setTargetAtTime(idlePulseRate, now, 0.08);
     this.enginePulseGain.gain.setTargetAtTime(idlePulseDepth, now, 0.08);
@@ -372,6 +416,184 @@ export class SoundManager {
       );
       const targetSkidGain = 0.15 + skidIntensity * 0.25;
       const targetSkidFreq = 920 + skidIntensity * 520;
+      this.skidFilter.frequency.setTargetAtTime(targetSkidFreq, now, 0.04);
+      this.skidGain.gain.setTargetAtTime(targetSkidGain, now, 0.03);
+    } else {
+      this.skidGain.gain.setTargetAtTime(0.0001, now, 0.055);
+    }
+  }
+
+  /**
+   * PHASE 5-Fix1: カスタムバイク（Harley Custom Bike）専用の V ツイン排気音・5速ギア変速・
+   * 荒々しい吹け上がり・高速風切り音＆ロードノイズをゼロアロケーションで毎フレーム更新する。
+   */
+  private updateBikeAudio(frame: VehicleAudioFrame, now: number): void {
+    if (
+      !this.bikePulseSource ||
+      !this.bikePulseGain ||
+      !this.bikeGrowlOsc1 ||
+      !this.bikeGrowlOsc2 ||
+      !this.bikeGrowlGain ||
+      !this.bikeLopeLfo ||
+      !this.bikeLopeGain ||
+      !this.bikeDriveGain ||
+      !this.bikeMufflerFilter ||
+      !this.bikeMasterGain ||
+      !this.bikeWindBandpass ||
+      !this.bikeWindGain ||
+      !this.roadFilter ||
+      !this.roadGain ||
+      !this.skidFilter ||
+      !this.skidGain
+    ) {
+      return;
+    }
+
+    const dt =
+      this.bikeLastUpdateTime < 0
+        ? 0.016
+        : Math.max(0.001, Math.min(0.08, now - this.bikeLastUpdateTime));
+    this.bikeLastUpdateTime = now;
+
+    const speedKmh = Math.max(0, frame.speedKmh);
+    const speedNorm = Math.min(1, speedKmh / 135);
+    const throttle = Math.max(0, Math.min(1, frame.throttle));
+    const brake = Math.max(0, Math.min(1, frame.brake));
+
+    // 5速シーケンシャルギア（実速度連動＋ヒステリシスで自然なシフトアップ／ダウンを再現）
+    // 1速: 0..34, 2速: 22..62, 3速: 46..90, 4速: 72..118, 5速: 98..148 km/h
+    const baseUpshiftKmh = BIKE_GEAR_UPSHIFT_KMH[this.bikeGear];
+    const downshiftKmh = BIKE_GEAR_DOWNSHIFT_KMH[this.bikeGear];
+    // アクセル開度が浅いときは早めにシフトアップ、全開時は引っ張って伸びのある加速音に
+    const upshiftThreshold = baseUpshiftKmh * (0.82 + 0.18 * throttle);
+
+    if (
+      !frame.isReversing &&
+      this.bikeGear < 5 &&
+      throttle > 0.12 &&
+      speedKmh >= upshiftThreshold
+    ) {
+      this.bikeGear += 1;
+      // シフトアップ瞬間の点火カット・排気抜けディップ（約95ms）
+      this.bikeShiftDipRemaining = 0.095;
+    } else if (this.bikeGear > 1 && speedKmh <= downshiftKmh) {
+      this.bikeGear -= 1;
+      this.bikeDecelBurble = Math.min(1, this.bikeDecelBurble + 0.45);
+    }
+
+    // 高回転・中高速からアクセルを戻したときの排気アフターバーブル（ゴボゴボ感）
+    if (this.bikePrevThrottle - throttle > 0.18 && speedKmh > 22) {
+      this.bikeDecelBurble = Math.min(1, this.bikeDecelBurble + 0.65);
+    }
+    this.bikePrevThrottle = throttle;
+
+    if (this.bikeShiftDipRemaining > 0) {
+      this.bikeShiftDipRemaining = Math.max(0, this.bikeShiftDipRemaining - dt);
+    }
+    if (this.bikeDecelBurble > 0) {
+      this.bikeDecelBurble = Math.max(0, this.bikeDecelBurble - dt * 1.45);
+    }
+
+    const activeMinKmh = BIKE_GEAR_MIN_KMH[this.bikeGear];
+    const activeMaxKmh = BIKE_GEAR_MAX_KMH[this.bikeGear];
+    const gearSpan = Math.max(12, activeMaxKmh - activeMinKmh);
+    const gearProgress = Math.max(
+      0,
+      Math.min(1.06, (speedKmh - activeMinKmh) / gearSpan),
+    );
+
+    // 停車・微速時のクラッチミート／空吹かし反応＋走行中のギア回転数
+    const lowSpeedRev = speedKmh < 10 ? throttle * 0.42 * (1 - speedKmh / 10) : 0;
+    const gearWeight = 0.84 + (this.bikeGear - 1) * 0.025;
+    let targetRpm = Math.min(
+      1.08,
+      Math.max(lowSpeedRev, gearProgress * gearWeight + throttle * 0.24),
+    );
+    if (this.bikeShiftDipRemaining > 0) {
+      // シフトアップ直後は新ギアの回転数へスパッと落として変速感を明確化
+      targetRpm = Math.min(targetRpm, Math.max(0.28, gearProgress * 0.78));
+    }
+
+    // 吹け上がりは鋭く、回転落ちはフライホイール慣性を残す非対称スムージング
+    const rpmRate = targetRpm >= this.bikeRpmNorm ? 13.5 : 6.2;
+    this.bikeRpmNorm += (targetRpm - this.bikeRpmNorm) * Math.min(1, rpmRate * dt);
+    const rpm = Math.max(0, Math.min(1.08, this.bikeRpmNorm));
+
+    // 1. 45° Vツイン排気パルスループの再生速度（0.94x アイドル鼓動 -> 4.35x 高回転咆哮）
+    const targetPlaybackRate = 0.94 + rpm * 3.35 + throttle * 0.14;
+    const shiftTau = this.bikeShiftDipRemaining > 0 ? 0.025 : 0.04;
+    this.bikePulseSource.playbackRate.setTargetAtTime(
+      targetPlaybackRate,
+      now,
+      shiftTau,
+    );
+
+    // アイドリング時は V ツインパルス主体、高回転ではわずかに引き締めて咆哮へ繋げる
+    const shiftCutScale = this.bikeShiftDipRemaining > 0 ? 0.48 : 1.0;
+    const targetPulseMix = (0.98 - rpm * 0.22) * shiftCutScale;
+    this.bikePulseGain.gain.setTargetAtTime(targetPulseMix, now, 0.03);
+
+    // 2. 中高回転の荒々しい伸び・吸気/カムうなり（完全5度ハーモニック）
+    const growlBaseHz = 42 + rpm * 168 + throttle * 16;
+    this.bikeGrowlOsc1.frequency.setTargetAtTime(growlBaseHz, now, 0.035);
+    this.bikeGrowlOsc2.frequency.setTargetAtTime(growlBaseHz * 1.504, now, 0.035);
+    const targetGrowlGain =
+      (0.075 + Math.pow(rpm, 1.15) * 0.27 + throttle * 0.16) * shiftCutScale;
+    this.bikeGrowlGain.gain.setTargetAtTime(targetGrowlGain, now, 0.04);
+
+    // 3. アイドリングの不規則ローピング＆減速バブル揺らぎ
+    const idleFactor = 1 - Math.min(1, speedNorm * 2.4);
+    const lopeFreq = 2.3 + rpm * 3.4 + this.bikeDecelBurble * 4.5;
+    const lopeDepth = idleFactor * 0.068 + this.bikeDecelBurble * 0.055;
+    this.bikeLopeLfo.frequency.setTargetAtTime(lopeFreq, now, 0.08);
+    this.bikeLopeGain.gain.setTargetAtTime(lopeDepth, now, 0.06);
+
+    // 4. サチュレーションドライブ＆マフラーレゾナンスフィルター（アクセル開度で豹変する排気音色）
+    const targetDrive =
+      0.56 + throttle * 0.94 + rpm * 0.44 + this.bikeDecelBurble * 0.24;
+    this.bikeDriveGain.gain.setTargetAtTime(targetDrive, now, 0.045);
+
+    const targetMufflerFreq =
+      430 +
+      Math.pow(rpm, 0.95) * 1680 +
+      throttle * 980 +
+      this.bikeDecelBurble * 260;
+    this.bikeMufflerFilter.frequency.setTargetAtTime(targetMufflerFreq, now, 0.045);
+    this.bikeMufflerFilter.Q.setTargetAtTime(1.75 + throttle * 0.75, now, 0.06);
+
+    const targetBikeMaster =
+      (0.35 + throttle * 0.16 + rpm * 0.1 + this.bikeDecelBurble * 0.04) *
+      (this.bikeShiftDipRemaining > 0 ? 0.56 : 1.0);
+    this.bikeMasterGain.gain.setTargetAtTime(targetBikeMaster, now, 0.035);
+
+    // 5. 高速走行時のオープンエア風切り音（14km/h超から立ち上がり、80〜135km/hで爽快な疾走感）
+    const windNorm = Math.max(0, Math.min(1, (speedKmh - 14) / 121));
+    const targetWindGain =
+      windNorm > 0.01 ? Math.pow(windNorm, 1.72) * 0.34 : 0.0001;
+    const targetWindFreq = 360 + windNorm * 1120;
+    this.bikeWindBandpass.frequency.setTargetAtTime(targetWindFreq, now, 0.07);
+    this.bikeWindGain.gain.setTargetAtTime(targetWindGain, now, 0.08);
+
+    // 6. 二輪タイヤ＆アスファルト路面ロードノイズ
+    const roadNorm = Math.min(1, speedKmh / 135);
+    const targetRoadGain =
+      roadNorm > 0.03 ? Math.pow(roadNorm, 1.55) * 0.2 : 0.0001;
+    const targetRoadFreq = 500 + roadNorm * 880;
+    this.roadFilter.frequency.setTargetAtTime(targetRoadFreq, now, 0.08);
+    this.roadGain.gain.setTargetAtTime(targetRoadGain, now, 0.09);
+
+    // 7. 急ブレーキ時のタイヤスキッド音
+    const isHardBraking =
+      !frame.isReversing &&
+      speedKmh >= 18 &&
+      (frame.handbrake || brake >= 0.35);
+    if (isHardBraking) {
+      const skidIntensity = Math.min(
+        1,
+        ((speedKmh - 14) / 65) * (frame.handbrake ? 1.0 : brake),
+      );
+      const targetSkidGain = 0.14 + skidIntensity * 0.24;
+      const targetSkidFreq = 980 + skidIntensity * 520;
       this.skidFilter.frequency.setTargetAtTime(targetSkidFreq, now, 0.04);
       this.skidGain.gain.setTargetAtTime(targetSkidGain, now, 0.03);
     } else {
@@ -1002,6 +1224,11 @@ export class SoundManager {
     stopSafely(this.engineOsc2);
     stopSafely(this.engineHarmonicOsc);
     stopSafely(this.enginePulseLfo);
+    stopSafely(this.bikePulseSource);
+    stopSafely(this.bikeGrowlOsc1);
+    stopSafely(this.bikeGrowlOsc2);
+    stopSafely(this.bikeLopeLfo);
+    stopSafely(this.bikeWindSource);
     stopSafely(this.roadSource);
     stopSafely(this.skidSource);
     stopSafely(this.rainBodySource);
@@ -1242,6 +1469,128 @@ export class SoundManager {
     this.engineGain = engineGain;
     this.currentEngineProfile = 'standard';
 
+    // --- 2a-bike. PHASE 5-Fix1: カスタムバイク（45° Vツイン）専用常設エンジン＆排気＆風切り音バス ---
+    const bikePulseBuffer = createVTwinExhaustPulseBuffer(ctx);
+
+    const bikePulseSource = ctx.createBufferSource();
+    bikePulseSource.buffer = bikePulseBuffer;
+    bikePulseSource.loop = true;
+    bikePulseSource.playbackRate.setValueAtTime(0.95, now);
+
+    const bikePulseGain = ctx.createGain();
+    bikePulseGain.gain.setValueAtTime(0.95, now);
+
+    // 高回転域の荒々しい伸び・カム/吸気うなりを重ねる 2 オシレーター（完全5度デチューン）
+    const bikeGrowlOsc1 = ctx.createOscillator();
+    bikeGrowlOsc1.type = 'sawtooth';
+    bikeGrowlOsc1.frequency.setValueAtTime(44, now);
+
+    const bikeGrowlOsc2 = ctx.createOscillator();
+    bikeGrowlOsc2.type = 'triangle';
+    bikeGrowlOsc2.frequency.setValueAtTime(44 * 1.504, now);
+
+    const bikeGrowlOsc2SubMix = ctx.createGain();
+    bikeGrowlOsc2SubMix.gain.setValueAtTime(0.68, now);
+
+    const bikeGrowlGain = ctx.createGain();
+    bikeGrowlGain.gain.setValueAtTime(0.08, now);
+
+    // マフラー歪みドライブ＆非対称サチュレーター
+    const bikeDriveGain = ctx.createGain();
+    bikeDriveGain.gain.setValueAtTime(0.6, now);
+
+    const bikeExhaustShaper = ctx.createWaveShaper();
+    bikeExhaustShaper.curve = createExhaustSaturationCurve();
+    bikeExhaustShaper.oversample = 'none'; // M1 iPad Air 軽量化
+
+    const bikeHighpass = ctx.createBiquadFilter();
+    bikeHighpass.type = 'highpass';
+    bikeHighpass.frequency.setValueAtTime(54, now);
+    bikeHighpass.Q.setValueAtTime(0.7, now);
+
+    // iPad 内蔵スピーカーでも V ツインの腹に響く中低音パンチを出すピーキング EQ
+    const bikeLowMidPunch = ctx.createBiquadFilter();
+    bikeLowMidPunch.type = 'peaking';
+    bikeLowMidPunch.frequency.setValueAtTime(168, now);
+    bikeLowMidPunch.Q.setValueAtTime(1.1, now);
+    bikeLowMidPunch.gain.setValueAtTime(5.5, now);
+
+    const bikeMufflerFilter = ctx.createBiquadFilter();
+    bikeMufflerFilter.type = 'lowpass';
+    bikeMufflerFilter.frequency.setValueAtTime(460, now);
+    bikeMufflerFilter.Q.setValueAtTime(1.8, now);
+
+    const bikeMasterGain = ctx.createGain();
+    bikeMasterGain.gain.setValueAtTime(0.0001, now);
+
+    // アイドリング時の不規則ローピング＆エンブレ時のバブル揺らぎ用低速 LFO
+    const bikeLopeLfo = ctx.createOscillator();
+    bikeLopeLfo.type = 'sine';
+    bikeLopeLfo.frequency.setValueAtTime(2.6, now);
+    const bikeLopeGain = ctx.createGain();
+    bikeLopeGain.gain.setValueAtTime(0.0, now);
+    bikeLopeLfo.connect(bikeLopeGain);
+    bikeLopeGain.connect(bikeMasterGain.gain);
+
+    bikePulseSource.connect(bikePulseGain);
+    bikePulseGain.connect(bikeDriveGain);
+
+    bikeGrowlOsc1.connect(bikeGrowlGain);
+    bikeGrowlOsc2.connect(bikeGrowlOsc2SubMix);
+    bikeGrowlOsc2SubMix.connect(bikeGrowlGain);
+    bikeGrowlGain.connect(bikeDriveGain);
+
+    bikeDriveGain.connect(bikeExhaustShaper);
+    bikeExhaustShaper.connect(bikeHighpass);
+    bikeHighpass.connect(bikeLowMidPunch);
+    bikeLowMidPunch.connect(bikeMufflerFilter);
+    bikeMufflerFilter.connect(bikeMasterGain);
+    bikeMasterGain.connect(masterGain);
+
+    bikePulseSource.start(now);
+    bikeGrowlOsc1.start(now);
+    bikeGrowlOsc2.start(now);
+    bikeLopeLfo.start(now);
+
+    this.bikePulseSource = bikePulseSource;
+    this.bikePulseGain = bikePulseGain;
+    this.bikeGrowlOsc1 = bikeGrowlOsc1;
+    this.bikeGrowlOsc2 = bikeGrowlOsc2;
+    this.bikeGrowlGain = bikeGrowlGain;
+    this.bikeLopeLfo = bikeLopeLfo;
+    this.bikeLopeGain = bikeLopeGain;
+    this.bikeDriveGain = bikeDriveGain;
+    this.bikeMufflerFilter = bikeMufflerFilter;
+    this.bikeMasterGain = bikeMasterGain;
+
+    // バイク高速走行時のオープンエア風切り音（ピンクノイズ + ハイパス + 速度連動バンドパス）
+    const bikeWindSource = ctx.createBufferSource();
+    bikeWindSource.buffer = this.pinkNoiseBuffer;
+    bikeWindSource.loop = true;
+
+    const bikeWindHighpass = ctx.createBiquadFilter();
+    bikeWindHighpass.type = 'highpass';
+    bikeWindHighpass.frequency.setValueAtTime(260, now);
+    bikeWindHighpass.Q.setValueAtTime(0.7, now);
+
+    const bikeWindBandpass = ctx.createBiquadFilter();
+    bikeWindBandpass.type = 'bandpass';
+    bikeWindBandpass.frequency.setValueAtTime(380, now);
+    bikeWindBandpass.Q.setValueAtTime(0.72, now);
+
+    const bikeWindGain = ctx.createGain();
+    bikeWindGain.gain.setValueAtTime(0.0001, now);
+
+    bikeWindSource.connect(bikeWindHighpass);
+    bikeWindHighpass.connect(bikeWindBandpass);
+    bikeWindBandpass.connect(bikeWindGain);
+    bikeWindGain.connect(masterGain);
+    bikeWindSource.start(now, 0.45);
+
+    this.bikeWindSource = bikeWindSource;
+    this.bikeWindBandpass = bikeWindBandpass;
+    this.bikeWindGain = bikeWindGain;
+
     // --- 2b. 車両ロードノイズ（走行時のタイヤ・風切り音） ---
     const roadSource = ctx.createBufferSource();
     roadSource.buffer = this.pinkNoiseBuffer;
@@ -1468,4 +1817,118 @@ function createPinkNoiseBuffer(ctx: AudioContext, durationSec: number): AudioBuf
   }
 
   return buffer;
+}
+
+/**
+ * PHASE 5-Fix1: カスタムバイク（45° Vツイン2気筒）専用の排気パルス循環 AudioBuffer を生成する。
+ *
+ * - 720°（クランク2回転）の1燃焼サイクル内で、前気筒(0°)と後気筒(315°=0.4375周期)の
+ *   不等間隔爆発（315°/405°）を再現し、ハーレー特有の「ドコッ・ドコッ…」という鼓動感を作る。
+ * - 8サイクル分を1ループに収め、わずかなタイミング揺らぎと音量ローピングを織り込むことで
+ *   単調な電子メトロノーム感を排除し、生々しいアイドリング脈動を実現。
+ * - 端部の波形をモジュロ加算でラップするためループ境界のクリックノイズはゼロ。
+ */
+function createVTwinExhaustPulseBuffer(ctx: AudioContext): AudioBuffer {
+  const sampleRate = ctx.sampleRate;
+  const refCycleHz = 7.2; // 基準アイドリング ~864 RPM（720°サイクル/秒）
+  const numCycles = 8;
+  const cycleSamples = Math.round(sampleRate / refCycleHz);
+  const totalSamples = cycleSamples * numCycles;
+
+  const buffer = ctx.createBuffer(1, totalSamples, sampleRate);
+  const data = buffer.getChannelData(0);
+
+  // 決定論的疑似乱数（毎起動で安定した荒々しい排気ガスノイズ成分を合成）
+  let rngState = 0x51a7c3f1;
+  const nextRand = (): number => {
+    rngState = (Math.imul(rngState, 1664525) + 1013904223) >>> 0;
+    return (rngState / 0xffffffff) * 2 - 1;
+  };
+
+  // 各サイクルの有機的タイミング揺らぎ・音量ローピング（Vツイン特有のキャブ脈動）
+  const jitterTable = [0.0, 0.014, -0.011, 0.017, -0.015, 0.009, -0.013, 0.008];
+  const ampTable = [1.0, 0.91, 1.09, 0.94, 1.12, 0.88, 1.05, 0.95];
+
+  const pulseDurationSec = 0.095;
+  const pulseSamples = Math.min(totalSamples, Math.floor(pulseDurationSec * sampleRate));
+
+  const addCombustionPulse = (
+    startSample: number,
+    baseFreqHz: number,
+    gain: number,
+    barkBright: number,
+  ) => {
+    let lpGas = 0;
+    for (let i = 0; i < pulseSamples; i += 1) {
+      const t = i / sampleRate;
+      // 排気弁開放の鋭い立ち上がり (~2.8ms)
+      const attack = 1 - Math.exp(-t / 0.0028);
+
+      // 重低音パンチ（78〜84Hz）＋ iPad 内蔵スピーカーで明確に鳴る中低音倍音（155〜285Hz）
+      const envLow = Math.exp(-t / 0.032);
+      const envMid = Math.exp(-t / 0.02);
+      const envBark = Math.exp(-t / 0.011);
+
+      // 排気の圧力抜けによるわずかなピッチドロップ（ドコッという太いアタック）
+      const pitchDrop = 1 + 0.34 * Math.exp(-t / 0.009);
+      const phase1 = 2 * Math.PI * baseFreqHz * pitchDrop * t;
+      const phase2 = 2 * Math.PI * baseFreqHz * 2.02 * pitchDrop * t;
+      const phase3 = 2 * Math.PI * baseFreqHz * 3.12 * t;
+
+      const body =
+        Math.sin(phase1) * 0.58 * envLow +
+        Math.sin(phase2 + 0.4) * 0.46 * envMid +
+        Math.sin(phase3 + 1.1) * (0.24 * barkBright) * envBark;
+
+      // マフラー内のガス噴出ノイズ（短い低域寄りチャッフ音）
+      const rawNoise = nextRand();
+      lpGas = lpGas * 0.68 + rawNoise * 0.32;
+      const gasChuff = lpGas * 0.36 * Math.exp(-t / 0.013) * barkBright;
+
+      const sample = attack * gain * (body + gasChuff);
+      const idx = ((startSample + i) % totalSamples + totalSamples) % totalSamples;
+      data[idx] += sample;
+    }
+  };
+
+  for (let c = 0; c < numCycles; c += 1) {
+    const cycleStart = c * cycleSamples;
+    const j = jitterTable[c % jitterTable.length];
+    const amp = ampTable[c % ampTable.length];
+
+    // 前気筒（0°）: やや低く太い排気鼓動
+    const frontStart = Math.round(cycleStart + j * cycleSamples);
+    addCombustionPulse(frontStart, 76, 1.0 * amp, 0.95);
+
+    // 後気筒（315° = 0.4375 周期、次の前気筒まで 405° = 0.5625 周期）: 少し締まった歯切れのよい排気
+    const rearStart = Math.round(cycleStart + (0.4375 - j * 0.6) * cycleSamples);
+    addCombustionPulse(rearStart, 84, 0.94 * amp, 1.12);
+  }
+
+  // ピーク正規化（0.92 へ揃えて WaveShaper のドライブ応答を安定化）
+  let peak = 0.001;
+  for (let i = 0; i < totalSamples; i += 1) {
+    const a = Math.abs(data[i]);
+    if (a > peak) peak = a;
+  }
+  const norm = 0.92 / peak;
+  for (let i = 0; i < totalSamples; i += 1) {
+    data[i] *= norm;
+  }
+
+  return buffer;
+}
+
+/**
+ * PHASE 5-Fix1: マフラー排気の荒々しさと温かい偶数次倍音を生み出す非対称ソフトサチュレーション曲線。
+ */
+function createExhaustSaturationCurve(samples = 256): Float32Array {
+  const curve = new Float32Array(samples);
+  const norm = Math.tanh(2.35);
+  for (let i = 0; i < samples; i += 1) {
+    const x = (i / (samples - 1)) * 2 - 1;
+    const shaped = Math.tanh(x * 2.25 + 0.16 * x * x) / norm;
+    curve[i] = Math.max(-1, Math.min(1, shaped));
+  }
+  return curve;
 }

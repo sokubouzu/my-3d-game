@@ -508,7 +508,10 @@ export function buildG2GlbEnhancements(
   };
 
   // =========================================================================
-  // 5. 高精細道路小物抜粋 (road_pack_not_including_the_road.glb: 街灯・スチール柵)
+  // 5. 高精細道路小物抜粋 (road_pack_not_including_the_road.glb: ダブル街灯のみ)
+  //    ※ PHASE 5-Fix1: 同GLB内の RailingDouble_Railing_0 は折れ・地下沈み込み（minY=-0.542,
+  //      奥行2.62m）を含む複数パーツ結合メッシュであり、接地補正時に水平レールが宙浮き・破損状態に
+  //      見えていたため6箇所すべてを撤去し、車道境界は japaneseProps.ts の正規スチールガードレールへ統一。
   // =========================================================================
   const loadRoadPackProps = async (): Promise<void> => {
     try {
@@ -520,13 +523,7 @@ export function buildG2GlbEnhancements(
       template.updateMatrixWorld(true);
       optimizeObjectMaterials(template, true);
 
-      const found: {
-        lamp: THREE.Mesh | null;
-        railing: THREE.Mesh | null;
-      } = {
-        lamp: null,
-        railing: null,
-      };
+      const found: { lamp: THREE.Mesh | null } = { lamp: null };
 
       template.traverse((obj) => {
         if (!(obj instanceof THREE.Mesh)) return;
@@ -538,8 +535,6 @@ export function buildG2GlbEnhancements(
               trackEmissive(mat, new THREE.Color(0xffe6b3), 0.06, 1.65);
             }
           }
-        } else if (obj.name.startsWith('RailingDouble')) {
-          found.railing = obj;
         }
       });
 
@@ -589,42 +584,6 @@ export function buildG2GlbEnhancements(
             holder.add(inst);
             root.add(holder);
             registerCollider(spot.id, spot.x, spot.z, 0.7, 0.7, spot.yaw, 0, 7.4);
-          }
-        }
-      }
-
-      // 5-B. スチール反射板付きガードレール（ガソリンスタンド縁・広場外縁・外周東アプローチ6箇所）
-      if (found.railing) {
-        const built = makeNormalizedPivot(found.railing, 1.05);
-        if (built) {
-          const railW = built.size.x;
-          const railD = Math.min(1.2, built.size.z);
-          const railSpots: ReadonlyArray<{ id: string; x: number; z: number; yaw: number }> = [
-            { id: 'g2_road_rail_gas_n', x: -120.5, z: -91, yaw: Math.PI / 2 },
-            { id: 'g2_road_rail_gas_s', x: -120.5, z: -61, yaw: Math.PI / 2 },
-            { id: 'g2_road_rail_plaza_w', x: -35, z: 121.8, yaw: 0 },
-            { id: 'g2_road_rail_plaza_e', x: 35, z: 121.8, yaw: 0 },
-            { id: 'g2_road_rail_east_n', x: 120.5, z: -24, yaw: Math.PI / 2 },
-            { id: 'g2_road_rail_east_s', x: 120.5, z: 24, yaw: Math.PI / 2 },
-          ];
-          for (const spot of railSpots) {
-            const inst = built.pivot.clone(true);
-            const holder = new THREE.Group();
-            holder.name = spot.id;
-            holder.position.set(spot.x, 0, spot.z);
-            holder.rotation.y = spot.yaw;
-            holder.add(inst);
-            root.add(holder);
-            registerCollider(
-              spot.id,
-              spot.x,
-              spot.z,
-              railW * 0.94,
-              railD,
-              spot.yaw,
-              0,
-              1.1,
-            );
           }
         }
       }

@@ -1,6 +1,19 @@
 export type AssetCategory = 'buildings' | 'vehicles' | 'props';
 export type ScaleFitMode = 'height' | 'length';
 
+export interface LocalColliderSpec {
+  /** コライダー ID サフィックス（`${instanceId}__${suffix}`） */
+  suffix: string;
+  /** 元 GLB ワールド座標（スケール前）の最小/最大 X */
+  minX: number;
+  maxX: number;
+  /** 元 GLB ワールド座標（スケール前）の最小/最大 Z */
+  minZ: number;
+  maxZ: number;
+  /** 任意: 元 GLB ワールド座標（スケール前）の上端 Y（未指定時はモデル全高） */
+  maxY?: number;
+}
+
 export interface CityAssetPlacement {
   /** 配置インスタンス固有 ID */
   instanceId: string;
@@ -32,16 +45,67 @@ export interface CityAssetPlacement {
   castShadow: boolean;
   /** ロード優先度 (小さいほど先にロード) */
   priority: number;
+  /**
+   * PHASE 5-Fix1: 正規化・BBox計測・描画から除外する不要ノード名一覧
+   * （例: tokyo_japanese_house の巨大白色地面板 Carretera_Material_0）。
+   */
+  excludeNodeNames?: readonly string[];
+  /**
+   * PHASE 5-Fix1: 元 GLB 空間で実際の地面・基礎上端とみなす Y 座標。
+   * 地下へ突き出た基礎スカート等で Box3.min.y が下がり建物が宙浮きするのを防止する。
+   */
+  rawGroundY?: number;
+  /**
+   * PHASE 5-Fix1: 接地先となるワールド地面高さ (m)。
+   * 内側コア街区歩道上は 0.12、外周エリアは 0.0（薄い舗装スラブ付き店舗は +0.02 で Z ファイティング回避）。
+   */
+  groundSurfaceY?: number;
+  /**
+   * PHASE 5-Fix1: 建物本体・塀など実体構造物のみへ絞った分割 OBB コライダー定義（元 GLB 座標系）。
+   * 庭・駐車場・玄関前アプローチ・軒先下をプレイヤーが歩けるようにする。
+   */
+  localColliders?: readonly LocalColliderSpec[];
 }
 
 /**
- * 1-D (単体モデル厳選・埋まりゼロ/浮きゼロ版):
- * 既存の道路と干渉する「街全体ジオラマセット・広域フォトグラメトリスキャン・航空機/水上バイク」
- * （stylized_little_japanese_town_street, night_city_japan, vancouver_police,
- *   road_pack_not_including_the_road, japan_street, low_road_-_2, train_track,
- *   train_ride, 2012_sea-doo_gti_se_130, porco_plane）を配置リストから除外し、
- * 単体の日本風住宅・商業店舗・駐車車両・街の小物のみ（14種・計22インスタンス）を配置する。
- * ※ すべての親 Group は position.y = 0 固定、子モデルは position.y = -box.min.y で接地。
+ * PHASE 5-Fix1: 各建物 GLB の実測構造物 OBB 定義（元 GLB 空間の壁・基礎・塀のみに限定）。
+ */
+const BUSTER_BROWN_COLLIDERS: readonly LocalColliderSpec[] = [
+  // 店舗建物本体（Object_8/9/10/11: 駐車場・周囲芝生は歩行可能化）
+  { suffix: 'store', minX: -8.15, maxX: 7.82, minZ: 9.0, maxZ: 30.3 },
+  // ロードサイド看板台座（Object_4/5）
+  { suffix: 'sign', minX: -0.5, maxX: 0.25, minZ: -6.2, maxZ: -3.9 },
+];
+
+const TOKYO_HOUSE_EXCLUDE_NODES: readonly string[] = ['Carretera_Material_0'];
+const TOKYO_HOUSE_COLLIDERS: readonly LocalColliderSpec[] = [
+  // 2階建て住宅本体（Casa_1: 西側駐車スペース・玄関前・東側庭・裏通路を通行可能化）
+  { suffix: 'house', minX: -376.5, maxX: 430.0, minZ: 183.2, maxZ: 1011.6 },
+  // 前面擁壁（Muro_1: X=-672..-341 の幅約3.1mの車庫・玄関入口を完全開放）
+  { suffix: 'wall_front', minX: -340.6, maxX: 658.4, minZ: -28.2, maxZ: 16.9, maxY: 100.0 },
+  // 西側外周塀（Muro_2）
+  { suffix: 'wall_west', minX: -695.1, maxX: -672.2, minZ: -28.1, maxZ: 1150.3, maxY: 89.0 },
+  // 東側外周塀（Muro_3）
+  { suffix: 'wall_east', minX: 656.3, maxX: 673.8, minZ: -6.4, maxZ: 1123.2, maxY: 89.0 },
+  // 裏側外周塀（Muro_atr）
+  { suffix: 'wall_rear', minX: -680.0, maxX: 674.0, minZ: 1122.1, maxZ: 1149.4, maxY: 105.9 },
+];
+
+const MILESTONE_HOUSE_COLLIDERS: readonly LocalColliderSpec[] = [
+  // 石垣・木壁・玄関ドアの建物コア（屋根軒先 ~1.7m の張り出しを除外し玄関前まで歩行可能化）
+  { suffix: 'body', minX: -6.9, maxX: 4.98, minZ: -6.77, maxZ: 1.9 },
+];
+
+const JAPANESE_HOUSE_COLLIDERS: readonly LocalColliderSpec[] = [
+  // 住宅壁面コア（土台プレート外縁・軒先を除外し周囲アプローチを歩行可能化）
+  { suffix: 'body', minX: -0.93, maxX: 1.24, minZ: -1.18, maxZ: 1.12 },
+];
+
+/**
+ * 1-D / 5-Fix1:
+ * 単体の日本風住宅・商業店舗・駐車車両・街の小物のみを配置し、
+ * 不要な白い地面板（Carretera_Material_0）の除去・地下基礎による宙浮き補正（rawGroundY）・
+ * 建物本体/塀のみへ絞った構造物 OBB（localColliders）で接地と敷地内歩行を両立する。
  */
 export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
   // =========================================================================
@@ -76,8 +140,10 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     targetSize: 7.8,
     maxFootprint: 18.0,
     hasCollision: true,
-    colliderShrink: 0.92,
-    placeholderFootprint: { width: 14, depth: 10, height: 7.8 },
+    rawGroundY: -0.02,
+    groundSurfaceY: 0.12,
+    localColliders: MILESTONE_HOUSE_COLLIDERS,
+    placeholderFootprint: { width: 11.5, depth: 8.5, height: 7.8 },
     castShadow: true,
     priority: 2,
   },
@@ -97,8 +163,10 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     targetSize: 7.2,
     maxFootprint: 12.0,
     hasCollision: true,
-    colliderShrink: 0.92,
-    placeholderFootprint: { width: 7, depth: 6, height: 7.2 },
+    rawGroundY: -0.015,
+    groundSurfaceY: 0.12,
+    localColliders: JAPANESE_HOUSE_COLLIDERS,
+    placeholderFootprint: { width: 5.5, depth: 5.6, height: 7.2 },
     castShadow: true,
     priority: 1,
   },
@@ -114,8 +182,10 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     targetSize: 7.2,
     maxFootprint: 12.0,
     hasCollision: true,
-    colliderShrink: 0.92,
-    placeholderFootprint: { width: 7, depth: 6, height: 7.2 },
+    rawGroundY: -0.015,
+    groundSurfaceY: 0.12,
+    localColliders: JAPANESE_HOUSE_COLLIDERS,
+    placeholderFootprint: { width: 5.5, depth: 5.6, height: 7.2 },
     castShadow: true,
     priority: 2,
   },
@@ -131,8 +201,9 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     targetSize: 6.8,
     maxFootprint: 15.0,
     hasCollision: true,
-    colliderShrink: 0.92,
-    placeholderFootprint: { width: 7.5, depth: 12.5, height: 6.8 },
+    colliderShrink: 0.88,
+    groundSurfaceY: 0.12,
+    placeholderFootprint: { width: 7.0, depth: 11.5, height: 6.8 },
     castShadow: true,
     priority: 2,
   },
@@ -146,10 +217,13 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     rotationY: 0,
     fitMode: 'height',
     targetSize: 7.0,
-    maxFootprint: 40.0,
+    maxFootprint: 18.0,
     hasCollision: true,
-    colliderShrink: 0.92,
-    placeholderFootprint: { width: 40, depth: 20, height: 7.0 },
+    excludeNodeNames: TOKYO_HOUSE_EXCLUDE_NODES,
+    rawGroundY: -100.0,
+    groundSurfaceY: 0.12,
+    localColliders: TOKYO_HOUSE_COLLIDERS,
+    placeholderFootprint: { width: 13.0, depth: 11.0, height: 7.0 },
     castShadow: true,
     priority: 3,
   },
@@ -169,8 +243,10 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     targetSize: 7.2,
     maxFootprint: 12.0,
     hasCollision: true,
-    colliderShrink: 0.92,
-    placeholderFootprint: { width: 7, depth: 6, height: 7.2 },
+    rawGroundY: -0.015,
+    groundSurfaceY: 0.12,
+    localColliders: JAPANESE_HOUSE_COLLIDERS,
+    placeholderFootprint: { width: 5.5, depth: 5.6, height: 7.2 },
     castShadow: true,
     priority: 1,
   },
@@ -186,8 +262,10 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     targetSize: 7.8,
     maxFootprint: 18.0,
     hasCollision: true,
-    colliderShrink: 0.92,
-    placeholderFootprint: { width: 10, depth: 14, height: 7.8 },
+    rawGroundY: -0.02,
+    groundSurfaceY: 0.12,
+    localColliders: MILESTONE_HOUSE_COLLIDERS,
+    placeholderFootprint: { width: 8.5, depth: 11.5, height: 7.8 },
     castShadow: true,
     priority: 2,
   },
@@ -203,8 +281,10 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     targetSize: 10.5,
     maxFootprint: 36.0,
     hasCollision: true,
-    colliderShrink: 0.92,
-    placeholderFootprint: { width: 36, depth: 25, height: 8.0 },
+    rawGroundY: 0.059,
+    groundSurfaceY: 0.14,
+    localColliders: BUSTER_BROWN_COLLIDERS,
+    placeholderFootprint: { width: 19, depth: 14, height: 7.2 },
     castShadow: true,
     priority: 3,
   },
@@ -224,8 +304,10 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     targetSize: 7.2,
     maxFootprint: 12.0,
     hasCollision: true,
-    colliderShrink: 0.92,
-    placeholderFootprint: { width: 7, depth: 6, height: 7.2 },
+    rawGroundY: -0.015,
+    groundSurfaceY: 0.12,
+    localColliders: JAPANESE_HOUSE_COLLIDERS,
+    placeholderFootprint: { width: 5.5, depth: 5.6, height: 7.2 },
     castShadow: true,
     priority: 1,
   },
@@ -241,8 +323,9 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     targetSize: 6.8,
     maxFootprint: 15.0,
     hasCollision: true,
-    colliderShrink: 0.92,
-    placeholderFootprint: { width: 7.5, depth: 12.5, height: 6.8 },
+    colliderShrink: 0.88,
+    groundSurfaceY: 0.12,
+    placeholderFootprint: { width: 7.0, depth: 11.5, height: 6.8 },
     castShadow: true,
     priority: 2,
   },
@@ -256,10 +339,13 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     rotationY: Math.PI,
     fitMode: 'height',
     targetSize: 7.0,
-    maxFootprint: 40.0,
+    maxFootprint: 18.0,
     hasCollision: true,
-    colliderShrink: 0.92,
-    placeholderFootprint: { width: 40, depth: 20, height: 7.0 },
+    excludeNodeNames: TOKYO_HOUSE_EXCLUDE_NODES,
+    rawGroundY: -100.0,
+    groundSurfaceY: 0.12,
+    localColliders: TOKYO_HOUSE_COLLIDERS,
+    placeholderFootprint: { width: 13.0, depth: 11.0, height: 7.0 },
     castShadow: true,
     priority: 3,
   },
@@ -414,7 +500,7 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
   },
 
   // =========================================================================
-  // 7. 拡張エリア外周沿いの既存承認済み建物クローン (Phase 4-A, Y = 0, castShadow: false)
+  // 7. 拡張エリア外周沿いの既存承認済み建物クローン (Phase 4-A / 5-Fix1, Y = 0, castShadow: false)
   //    既存テンプレートキャッシュ再利用のため追加ダウンロードゼロ
   // =========================================================================
   {
@@ -429,8 +515,10 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     targetSize: 7.8,
     maxFootprint: 18.0,
     hasCollision: true,
-    colliderShrink: 0.92,
-    placeholderFootprint: { width: 14, depth: 10, height: 7.8 },
+    rawGroundY: -0.02,
+    groundSurfaceY: 0.0,
+    localColliders: MILESTONE_HOUSE_COLLIDERS,
+    placeholderFootprint: { width: 11.5, depth: 8.5, height: 7.8 },
     castShadow: false,
     priority: 4,
   },
@@ -463,8 +551,10 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     targetSize: 7.4,
     maxFootprint: 12.0,
     hasCollision: true,
-    colliderShrink: 0.92,
-    placeholderFootprint: { width: 7, depth: 6, height: 7.4 },
+    rawGroundY: -0.015,
+    groundSurfaceY: 0.0,
+    localColliders: JAPANESE_HOUSE_COLLIDERS,
+    placeholderFootprint: { width: 5.5, depth: 5.6, height: 7.4 },
     castShadow: false,
     priority: 4,
   },
@@ -480,8 +570,9 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     targetSize: 7.0,
     maxFootprint: 15.0,
     hasCollision: true,
-    colliderShrink: 0.92,
-    placeholderFootprint: { width: 12.5, depth: 7.5, height: 7.0 },
+    colliderShrink: 0.88,
+    groundSurfaceY: 0.0,
+    placeholderFootprint: { width: 11.5, depth: 7.0, height: 7.0 },
     castShadow: false,
     priority: 4,
   },
@@ -497,8 +588,10 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     targetSize: 7.4,
     maxFootprint: 12.0,
     hasCollision: true,
-    colliderShrink: 0.92,
-    placeholderFootprint: { width: 7, depth: 6, height: 7.4 },
+    rawGroundY: -0.015,
+    groundSurfaceY: 0.0,
+    localColliders: JAPANESE_HOUSE_COLLIDERS,
+    placeholderFootprint: { width: 5.5, depth: 5.6, height: 7.4 },
     castShadow: false,
     priority: 4,
   },
@@ -514,8 +607,10 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     targetSize: 7.8,
     maxFootprint: 18.0,
     hasCollision: true,
-    colliderShrink: 0.92,
-    placeholderFootprint: { width: 10, depth: 14, height: 7.8 },
+    rawGroundY: -0.02,
+    groundSurfaceY: 0.0,
+    localColliders: MILESTONE_HOUSE_COLLIDERS,
+    placeholderFootprint: { width: 8.5, depth: 11.5, height: 7.8 },
     castShadow: false,
     priority: 4,
   },
@@ -531,8 +626,10 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     targetSize: 9.2,
     maxFootprint: 26.0,
     hasCollision: true,
-    colliderShrink: 0.92,
-    placeholderFootprint: { width: 26, depth: 18, height: 8.0 },
+    rawGroundY: 0.059,
+    groundSurfaceY: 0.02,
+    localColliders: BUSTER_BROWN_COLLIDERS,
+    placeholderFootprint: { width: 10, depth: 14, height: 5.5 },
     castShadow: false,
     priority: 4,
   },
@@ -548,8 +645,9 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     targetSize: 7.0,
     maxFootprint: 15.0,
     hasCollision: true,
-    colliderShrink: 0.92,
-    placeholderFootprint: { width: 7.5, depth: 12.5, height: 7.0 },
+    colliderShrink: 0.88,
+    groundSurfaceY: 0.0,
+    placeholderFootprint: { width: 7.0, depth: 11.5, height: 7.0 },
     castShadow: false,
     priority: 4,
   },

@@ -1341,6 +1341,8 @@ function buildInstancedParkFences(
     fenceMat,
     railSpans.length * 2,
   );
+  postInst.frustumCulled = false;
+  railInst.frustumCulled = false;
   const dummy = new THREE.Object3D();
 
   for (let i = 0; i < postPositions.length; i += 1) {
