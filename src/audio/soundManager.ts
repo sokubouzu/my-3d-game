@@ -1922,8 +1922,8 @@ function createVTwinExhaustPulseBuffer(ctx: AudioContext): AudioBuffer {
 /**
  * PHASE 5-Fix1: マフラー排気の荒々しさと温かい偶数次倍音を生み出す非対称ソフトサチュレーション曲線。
  */
-function createExhaustSaturationCurve(samples = 256): Float32Array {
-  const curve = new Float32Array(samples);
+function createExhaustSaturationCurve(samples = 256): Float32Array<ArrayBuffer> {
+  const curve = new Float32Array(new ArrayBuffer(samples * Float32Array.BYTES_PER_ELEMENT));
   const norm = Math.tanh(2.35);
   for (let i = 0; i < samples; i += 1) {
     const x = (i / (samples - 1)) * 2 - 1;
