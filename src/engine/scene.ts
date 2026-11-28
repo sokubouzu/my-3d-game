@@ -486,6 +486,10 @@ export function startGameEngine(
     scene,
     collisionWorld,
     maxAnisotropy,
+    cityBuilder.getSharedTemplate(
+      './assets/props/japanese_inspired_vending_machines.glb',
+      'props',
+    ),
   );
   // 5-G2: 既存エリアのGLB差し替え＆景観リアル化（ベンチ・公園遊具・ガソリンスタンド・遠景ビル群・道路小物抜粋）
   const g2Enhancements = buildG2GlbEnhancements(

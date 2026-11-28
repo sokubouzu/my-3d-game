@@ -1,6 +1,6 @@
 {
-  "schemaVersion": "1.8.0",
-  "taskId": "5-G2b",
+  "schemaVersion": "1.9.0",
+  "taskId": "5-G2c",
   "targetDevice": "iPad Air (5th gen, Apple M1 / 8GB RAM)",
   "summary": {
     "totalAssets": 63,
@@ -15,7 +15,7 @@
       "pedestrians": 8
     },
     "placedApprovedCount": 32,
-    "placedInstanceCount": 35,
+    "placedInstanceCount": 45,
     "g2EnhancedAssetCount": 5,
     "g2bVegetationEnhancements": {
       "route": "Offline fallback (Poly Haven API unreachable in VM; gardening._park._landscape.13.glb verified unsuitable as merged 17.8m hedge slab) -> Rescued GLB Grass + Procedural High-Res Multi-Layer Alpha Leaf Card Trees & PBR Lawn",
@@ -46,6 +46,20 @@
         "estimatedVramMB": 8.0
       },
       "estimatedNetVramIncreaseMB": 24.3
+    },
+    "g2cVendingUnification": {
+      "sharedGlbPath": "public/assets/props/japanese_inspired_vending_machines.glb",
+      "glbTotalTriangles": 14006,
+      "variant1Triangles": 6992,
+      "variant2Triangles": 7014,
+      "replacedProceduralCount": 10,
+      "existingPairedCityCount": 3,
+      "instancedDrawCalls": 4,
+      "nightGlowPoolDrawCalls": 1,
+      "totalReplacedTriangles": 70030,
+      "targetHeightMeters": 1.85,
+      "castShadow": false,
+      "estimatedNetVramIncreaseMB": 0.0
     }
   },
   "assets": {
@@ -3145,33 +3159,68 @@
         "animationCount": 0,
         "verification": {
           "rank": "B",
-          "note": "GLBバイナリ検証・用途別配置済み、および1-D街区コード配置・CIビルド＆GitHub Pagesデプロイ成功（状態B）。実ブラウザでの描画確認（状態C）・衝突/動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
+          "note": "GLBバイナリ検証・用途別配置済み、および1-D街区3ペア配置＋5-G2cプロシージャル自販機10基の共有InstancedMesh全面統一・CIビルド＆GitHub Pagesデプロイ成功（状態B）。実ブラウザでの描画確認（状態C）・衝突/動作検証（状態D）・iPad Air 第5世代実機検証（状態E）は未実施。"
         },
         "cityPlacement": {
-          "taskId": "1-D",
-          "instanceCount": 2,
+          "taskId": "1-D / 5-G2c",
+          "instanceCount": 3,
           "instances": [
             {
               "instanceId": "prop_vending_nw",
               "positionXZ": [
-                -8.2,
+                -10.3,
                 -14.0
               ],
               "fitMode": "height",
               "targetSizeMeters": 1.95,
-              "hasCollision": true
+              "hasCollision": true,
+              "castShadow": false
             },
             {
               "instanceId": "prop_vending_se",
               "positionXZ": [
-                8.2,
+                10.3,
                 14.0
               ],
               "fitMode": "height",
               "targetSizeMeters": 1.95,
-              "hasCollision": true
+              "hasCollision": true,
+              "castShadow": false
+            },
+            {
+              "instanceId": "prop_vending_sw",
+              "positionXZ": [
+                -10.3,
+                24.0
+              ],
+              "fitMode": "height",
+              "targetSizeMeters": 1.95,
+              "hasCollision": true,
+              "castShadow": false
             }
           ]
+        },
+        "g2cUnifiedPlacement": {
+          "taskId": "5-G2c",
+          "replacedProceduralCount": 10,
+          "variants": [
+            {
+              "nodeName": "Vending_machine_1",
+              "triangles": 6992,
+              "instances": 5
+            },
+            {
+              "nodeName": "Vending_machine_2",
+              "triangles": 7014,
+              "instances": 5
+            }
+          ],
+          "totalTriangles": 70030,
+          "instancedDrawCalls": 4,
+          "targetHeightMeters": 1.85,
+          "castShadow": false,
+          "sharedGeometryAndMaterials": true,
+          "estimatedExtraVramMB": 0.0
         }
       },
       {

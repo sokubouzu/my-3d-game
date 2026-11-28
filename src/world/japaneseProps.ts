@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { getGltfLoader } from '../engine/loaders';
 import { CITY_METRICS, type CollisionWorld } from './collisionWorld';
 import { sampleRoundedLoopPoints } from './expandedWorld';
 import { createRadialGlowTexture } from './streetLights';
@@ -16,7 +17,6 @@ export interface JapanesePropsHandle {
   dispose: () => void;
 }
 
-type VendingTheme = 'blue' | 'red' | 'white';
 type SignTheme = 'konbini' | 'izakaya' | 'cafe' | 'parking';
 type RoadSignType = 'tomare' | 'speed40' | 'speed60' | 'crosswalk' | 'chevron';
 
@@ -26,7 +26,8 @@ interface VendingSpec {
   z: number;
   yaw: number;
   baseY: number;
-  theme: VendingTheme;
+  /** 0 = Vending_machine_1, 1 = Vending_machine_2 (shared GLB内2種を交互配置) */
+  variant: 0 | 1;
 }
 
 interface ShopSignSpec {
@@ -61,10 +62,12 @@ interface RoadSignSpec {
 const WHITE_COLOR = new THREE.Color(0xffffff);
 const REFLECTOR_EMISSIVE = new THREE.Color(0xffb830);
 const UNLIT_COLOR = new THREE.Color(0x000000);
+const VENDING_GLB_URL = './assets/props/japanese_inspired_vending_machines.glb';
+const VENDING_TARGET_HEIGHT_M = 1.85;
 
 /**
- * PHASE 4-A: 日本の街並み装飾プロップ一括構築システム（昼夜ライティング連動・InstancedMesh 最適化）。
- * - 自動販売機（青・赤・白、夕方・夜に前面ディスプレイ発光）
+ * PHASE 4-A / 5-G2c: 日本の街並み装飾プロップ一括構築システム（昼夜ライティング連動・InstancedMesh 最適化）。
+ * - 自動販売機（5-G2c: 既存 GLB 2種のジオメトリ/マテリアル共有 InstancedMesh 統一・castShadow=false・夕方/夜発光＆足元こぼれ光）
  * - コンビニ・店舗風の光る袖看板／ファサード看板（夕方・夜に点灯）
  * - 白いスチール製ガードレール（歩道境界・外周カーブ、低め OBB コリジョン付き、InstancedMesh）
  * - 日本の道路標識（止まれ・制限速度40/60・横断歩道・カーブシェブロン、InstancedMesh）
@@ -74,15 +77,18 @@ export function buildJapaneseStreetProps(
   scene: THREE.Scene,
   collisionWorld: CollisionWorld,
   maxAnisotropy: number,
+  sharedVendingTemplatePromise?: Promise<THREE.Group>,
 ): JapanesePropsHandle {
   const root = new THREE.Group();
   root.name = 'JapaneseStreetPropsRoot';
   scene.add(root);
 
+  let isDisposed = false;
   const aniso = Math.min(4, Math.max(1, maxAnisotropy));
   const geometries: THREE.BufferGeometry[] = [];
   const materials: THREE.Material[] = [];
   const textures: THREE.Texture[] = [];
+  const sharedInstancedMeshes: THREE.InstancedMesh[] = [];
   const colliderIds: string[] = [];
 
   const trackGeo = <T extends THREE.BufferGeometry>(g: T): T => {
@@ -132,71 +138,30 @@ export function buildJapaneseStreetProps(
   const swY = CITY_METRICS.sidewalkHeight; // 0.12
 
   // =========================================================================
-  // 1. 自動販売機（青・赤・白 10基 — 歩道外縁/壁際へ整列、夕方・夜に自然な明るさで発光）
+  // 1. 自動販売機（PHASE 5-G2c: 既存 GLB 2種をジオメトリ・マテリアル共有で 10基 InstancedMesh 統一）
+  //    - castShadow = false、VRAM 増分ほぼゼロ、昼夜エミッシブは cityBuilder 共有マテリアルと自動連動
   // =========================================================================
   const vendingSpecs: VendingSpec[] = [
-    { id: 'jp_vm_n_west', x: -10.35, z: -38, yaw: Math.PI / 2, baseY: swY, theme: 'blue' },
-    { id: 'jp_vm_n_east', x: 10.35, z: -48, yaw: -Math.PI / 2, baseY: swY, theme: 'red' },
-    { id: 'jp_vm_s_west', x: -10.35, z: 44, yaw: Math.PI / 2, baseY: swY, theme: 'white' },
-    { id: 'jp_vm_s_east', x: 10.35, z: 52, yaw: -Math.PI / 2, baseY: swY, theme: 'blue' },
-    { id: 'jp_vm_w_north', x: -36, z: -10.35, yaw: 0, baseY: swY, theme: 'red' },
-    { id: 'jp_vm_e_south', x: 38, z: 10.35, yaw: Math.PI, baseY: swY, theme: 'white' },
-    { id: 'jp_vm_park_w', x: 13.4, z: -95.5, yaw: -Math.PI / 2, baseY: 0, theme: 'blue' },
-    { id: 'jp_vm_park_n', x: 61.5, z: -120.6, yaw: Math.PI, baseY: 0, theme: 'white' },
-    { id: 'jp_vm_plaza_w', x: -29.8, z: 91.5, yaw: Math.PI / 2, baseY: 0, theme: 'red' },
-    { id: 'jp_vm_plaza_e', x: 28.0, z: 104.0, yaw: -Math.PI / 2, baseY: 0, theme: 'blue' },
+    { id: 'jp_vm_n_west', x: -10.35, z: -38, yaw: Math.PI / 2, baseY: swY, variant: 0 },
+    { id: 'jp_vm_n_east', x: 10.35, z: -48, yaw: -Math.PI / 2, baseY: swY, variant: 1 },
+    { id: 'jp_vm_s_west', x: -10.35, z: 44, yaw: Math.PI / 2, baseY: swY, variant: 0 },
+    { id: 'jp_vm_s_east', x: 10.35, z: 52, yaw: -Math.PI / 2, baseY: swY, variant: 1 },
+    { id: 'jp_vm_w_north', x: -36, z: -10.35, yaw: 0, baseY: swY, variant: 0 },
+    { id: 'jp_vm_e_south', x: 38, z: 10.35, yaw: Math.PI, baseY: swY, variant: 1 },
+    { id: 'jp_vm_park_w', x: 13.4, z: -95.5, yaw: -Math.PI / 2, baseY: 0, variant: 0 },
+    { id: 'jp_vm_park_n', x: 61.5, z: -120.6, yaw: Math.PI, baseY: 0, variant: 1 },
+    { id: 'jp_vm_plaza_w', x: -29.8, z: 91.5, yaw: Math.PI / 2, baseY: 0, variant: 0 },
+    { id: 'jp_vm_plaza_e', x: 28.0, z: 104.0, yaw: -Math.PI / 2, baseY: 0, variant: 1 },
   ];
 
-  const vmBodyGeo = trackGeo(new THREE.BoxGeometry(1.12, 1.84, 0.72));
-  const vmTopTrimGeo = trackGeo(new THREE.BoxGeometry(1.16, 0.08, 0.76));
-  const vmDisplayGeo = trackGeo(new THREE.PlaneGeometry(0.98, 1.06));
-  const vmBinGeo = trackGeo(new THREE.BoxGeometry(0.36, 0.78, 0.44));
-  const vmGlowPoolGeo = trackGeo(new THREE.PlaneGeometry(2.6, 2.2));
-  vmGlowPoolGeo.rotateX(-Math.PI / 2);
-
-  const vmBodyMats: Record<VendingTheme, THREE.MeshStandardMaterial> = {
-    blue: trackMat(
-      new THREE.MeshStandardMaterial({
-        color: 0x1d63b8,
-        roughness: 0.36,
-        metalness: 0.35,
-      }),
-    ),
-    red: trackMat(
-      new THREE.MeshStandardMaterial({
-        color: 0xc2282d,
-        roughness: 0.36,
-        metalness: 0.35,
-      }),
-    ),
-    white: trackMat(
-      new THREE.MeshStandardMaterial({
-        color: 0xecf0f4,
-        roughness: 0.34,
-        metalness: 0.28,
-      }),
-    ),
-  };
-  const vmBinMat = trackMat(
-    new THREE.MeshStandardMaterial({
-      color: 0x475569,
-      roughness: 0.55,
-      metalness: 0.45,
-    }),
-  );
-  const vmDisplayMats: Record<VendingTheme, THREE.MeshStandardMaterial> = {
-    blue: createVendingDisplayMaterial('blue', aniso, trackTex, trackMat),
-    red: createVendingDisplayMaterial('red', aniso, trackTex, trackMat),
-    white: createVendingDisplayMaterial('white', aniso, trackTex, trackMat),
-  };
-  for (const theme of ['blue', 'red', 'white'] as const) {
-    emissiveDisplayMats.push({
-      mat: vmDisplayMats[theme],
-      dayIntensity: 0.02,
-      nightIntensity: 1.18,
-    });
+  // ロード前すり抜け防止のため単体 GLB 実寸（幅約0.98m × 奥行約0.77m × 高1.85m）の OBB を即時登録
+  for (const spec of vendingSpecs) {
+    addCollider(spec.id, spec.x, spec.z, 0.98, 0.77, spec.yaw, spec.baseY, spec.baseY + VENDING_TARGET_HEIGHT_M);
   }
 
+  // 夕方・夜の前面足元こぼれ光デカール（10基を 1 ドローコール InstancedMesh 化）
+  const vmGlowPoolGeo = trackGeo(new THREE.PlaneGeometry(2.4, 2.0));
+  vmGlowPoolGeo.rotateX(-Math.PI / 2);
   const vmGlowTex = trackTex(
     createRadialGlowTexture(
       128,
@@ -218,43 +183,149 @@ export function buildJapaneseStreetProps(
       polygonOffsetUnits: -2,
     }),
   );
-  nightGlowMats.push({ mat: vmGlowPoolMat, maxOpacity: 0.26 });
+  nightGlowMats.push({ mat: vmGlowPoolMat, maxOpacity: 0.24 });
 
-  for (const spec of vendingSpecs) {
-    const g = new THREE.Group();
-    g.name = spec.id;
-    g.position.set(spec.x, spec.baseY, spec.z);
-    g.rotation.y = spec.yaw;
-
-    const body = new THREE.Mesh(vmBodyGeo, vmBodyMats[spec.theme]);
-    body.position.y = 0.94;
-    body.receiveShadow = true;
-    g.add(body);
-
-    const trim = new THREE.Mesh(vmTopTrimGeo, vmBinMat);
-    trim.position.y = 1.88;
-    g.add(trim);
-
-    // 前面ディスプレイ（+Z 正面、夕方・夜に発光）
-    const display = new THREE.Mesh(vmDisplayGeo, vmDisplayMats[spec.theme]);
-    display.position.set(0, 1.24, 0.368);
-    g.add(display);
-
-    // 隣接する空き缶・ペットボトルリサイクルボックス
-    const bin = new THREE.Mesh(vmBinGeo, vmBinMat);
-    bin.position.set(0.76, 0.39, 0.04);
-    g.add(bin);
-
-    // 夜間足元こぼれ光デカール
-    const pool = new THREE.Mesh(vmGlowPoolGeo, vmGlowPoolMat);
-    pool.position.set(0, 0.025, 1.05);
-    pool.visible = false;
-    g.add(pool);
-    nightGlowMeshes.push(pool);
-
-    root.add(g);
-    addCollider(spec.id, spec.x, spec.z, 1.5, 0.78, spec.yaw, spec.baseY, spec.baseY + 1.9);
+  const vmGlowPoolInst = new THREE.InstancedMesh(
+    vmGlowPoolGeo,
+    vmGlowPoolMat,
+    vendingSpecs.length,
+  );
+  vmGlowPoolInst.name = 'GlbVendingNightGlowPools';
+  vmGlowPoolInst.castShadow = false;
+  vmGlowPoolInst.receiveShadow = false;
+  vmGlowPoolInst.frustumCulled = false;
+  vmGlowPoolInst.visible = false;
+  const glowDummy = new THREE.Object3D();
+  for (let i = 0; i < vendingSpecs.length; i += 1) {
+    const spec = vendingSpecs[i];
+    const frontOffset = 0.95;
+    glowDummy.position.set(
+      spec.x + Math.sin(spec.yaw) * frontOffset,
+      spec.baseY + 0.025,
+      spec.z + Math.cos(spec.yaw) * frontOffset,
+    );
+    glowDummy.rotation.set(0, spec.yaw, 0);
+    glowDummy.scale.set(1, 1, 1);
+    glowDummy.updateMatrix();
+    vmGlowPoolInst.setMatrixAt(i, glowDummy.matrix);
   }
+  vmGlowPoolInst.instanceMatrix.needsUpdate = true;
+  root.add(vmGlowPoolInst);
+  sharedInstancedMeshes.push(vmGlowPoolInst);
+  nightGlowMeshes.push(vmGlowPoolInst);
+
+  // 既存 GLB テンプレート（japanese_inspired_vending_machines.glb）のジオメトリ・マテリアルを直接共有して 10基配置
+  const vendingTemplatePromise =
+    sharedVendingTemplatePromise ??
+    getGltfLoader()
+      .loadAsync(VENDING_GLB_URL)
+      .then((gltf) => gltf.scene);
+
+  void vendingTemplatePromise
+    .then((template) => {
+      if (isDisposed) return;
+
+      template.updateMatrixWorld(true);
+      const variant0Root = template.getObjectByName('Vending_machine_1') ?? template;
+      const variant1Root = template.getObjectByName('Vending_machine_2') ?? variant0Root;
+      const variantRoots: readonly [THREE.Object3D, THREE.Object3D] = [
+        variant0Root,
+        variant1Root,
+      ];
+
+      const vendingGroup = new THREE.Group();
+      vendingGroup.name = 'Phase5G2cGlbVendingMachines';
+
+      const size = new THREE.Vector3();
+      const center = new THREE.Vector3();
+      const rotFrontToPlusZ = new THREE.Matrix4().makeRotationY(-Math.PI / 2);
+      const scaleMat = new THREE.Matrix4();
+      const transMat = new THREE.Matrix4();
+      const normMatrix = new THREE.Matrix4();
+      const placementMatrix = new THREE.Matrix4();
+      const meshLocalNorm = new THREE.Matrix4();
+      const finalMatrix = new THREE.Matrix4();
+      const placeDummy = new THREE.Object3D();
+
+      for (const variantIdx of [0, 1] as const) {
+        const specsForVariant = vendingSpecs.filter((s) => s.variant === variantIdx);
+        if (specsForVariant.length === 0) continue;
+
+        const variantRoot = variantRoots[variantIdx];
+        const bounds = new THREE.Box3().setFromObject(variantRoot);
+        if (bounds.isEmpty()) continue;
+        bounds.getSize(size);
+        bounds.getCenter(center);
+        if (size.y < 1e-4) continue;
+
+        const uniformScale = VENDING_TARGET_HEIGHT_M / size.y;
+        // GLB 内の自販機は +X 側が前面ガラスのため、底面中心を原点揃え→高さ 1.85m スケール→Y軸 -90度回転で +Z 前面へ統一
+        transMat.makeTranslation(-center.x, -bounds.min.y, -center.z);
+        scaleMat.makeScale(uniformScale, uniformScale, uniformScale);
+        normMatrix.multiplyMatrices(rotFrontToPlusZ, scaleMat).multiply(transMat);
+
+        // 実測サイズで OBB コライダーを厳密同期（-90度回転により Z->X幅、X->Z奥行）
+        const exactWidth = Math.max(0.5, size.z * uniformScale * 0.96);
+        const exactDepth = Math.max(0.45, size.x * uniformScale * 0.96);
+        const exactHeight = size.y * uniformScale;
+        for (const spec of specsForVariant) {
+          collisionWorld.upsertCollider(
+            spec.id,
+            spec.x,
+            spec.z,
+            exactWidth,
+            exactDepth,
+            spec.yaw,
+            spec.baseY,
+            spec.baseY + exactHeight,
+          );
+        }
+
+        const variantMeshes: THREE.Mesh[] = [];
+        variantRoot.traverse((obj) => {
+          if (obj instanceof THREE.Mesh && obj.geometry) {
+            variantMeshes.push(obj);
+          }
+        });
+
+        for (const srcMesh of variantMeshes) {
+          // ジオメトリ・マテリアルをクローンせず直接共有（VRAM 増分ほぼゼロ）
+          const inst = new THREE.InstancedMesh(
+            srcMesh.geometry,
+            srcMesh.material,
+            specsForVariant.length,
+          );
+          inst.name = `GlbVending_v${variantIdx}_${srcMesh.name}`;
+          inst.castShadow = false;
+          inst.receiveShadow = true;
+          inst.frustumCulled = false;
+
+          meshLocalNorm.multiplyMatrices(normMatrix, srcMesh.matrixWorld);
+
+          for (let i = 0; i < specsForVariant.length; i += 1) {
+            const spec = specsForVariant[i];
+            placeDummy.position.set(spec.x, spec.baseY, spec.z);
+            placeDummy.rotation.set(0, spec.yaw, 0);
+            placeDummy.scale.set(1, 1, 1);
+            placeDummy.updateMatrix();
+            placementMatrix.copy(placeDummy.matrix);
+
+            finalMatrix.multiplyMatrices(placementMatrix, meshLocalNorm);
+            inst.setMatrixAt(i, finalMatrix);
+          }
+          inst.instanceMatrix.needsUpdate = true;
+          vendingGroup.add(inst);
+          sharedInstancedMeshes.push(inst);
+        }
+      }
+
+      if (vendingGroup.children.length > 0) {
+        root.add(vendingGroup);
+      }
+    })
+    .catch((err: unknown) => {
+      console.warn('[JapaneseProps] Failed to attach shared GLB vending machines:', err);
+    });
 
   // =========================================================================
   // 2. コンビニ・店舗風の光る袖看板／ファサード看板（夕方・夜に点灯）
@@ -497,11 +568,16 @@ export function buildJapaneseStreetProps(
     getVegetationMaterials: () => realisticTrees.vegetationMaterials,
     setNightFactor,
     dispose: () => {
+      isDisposed = true;
       for (const id of colliderIds) {
         collisionWorld.removeCollider(id);
       }
       colliderIds.length = 0;
       scene.remove(root);
+      for (const inst of sharedInstancedMeshes) {
+        inst.dispose();
+      }
+      sharedInstancedMeshes.length = 0;
       for (const g of geometries) g.dispose();
       for (const m of materials) m.dispose();
       for (const t of textures) t.dispose();
@@ -1062,108 +1138,8 @@ function buildTreeLayout(swY: number): VegetationTreePlacement[] {
 }
 
 // ===========================================================================
-// テクスチャ生成ユーティリティ（自販機・看板・道路標識・樹皮・葉）
+// テクスチャ生成ユーティリティ（看板・道路標識）
 // ===========================================================================
-
-function createVendingDisplayMaterial(
-  theme: VendingTheme,
-  aniso: number,
-  trackTex: <T extends THREE.Texture>(t: T) => T,
-  trackMat: <T extends THREE.Material>(m: T) => T,
-): THREE.MeshStandardMaterial {
-  const w = 256;
-  const h = 256;
-  const diffCanvas = document.createElement('canvas');
-  diffCanvas.width = w;
-  diffCanvas.height = h;
-  const dCtx = diffCanvas.getContext('2d');
-
-  const emisCanvas = document.createElement('canvas');
-  emisCanvas.width = w;
-  emisCanvas.height = h;
-  const eCtx = emisCanvas.getContext('2d');
-
-  const headerColor =
-    theme === 'blue' ? '#0ea5e9' : theme === 'red' ? '#ef4444' : '#22c55e';
-  const bottleColors =
-    theme === 'blue'
-      ? ['#38bdf8', '#0284c7', '#e0f2fe', '#facc15', '#34d399', '#fb923c']
-      : theme === 'red'
-        ? ['#dc2626', '#f97316', '#f8fafc', '#fbbf24', '#22c55e', '#38bdf8']
-        : ['#22c55e', '#84cc16', '#f5f5f4', '#eab308', '#38bdf8', '#b45309'];
-
-  for (const ctx of [dCtx, eCtx]) {
-    if (!ctx) continue;
-    const isEmissive = ctx === eCtx;
-    // 背景
-    ctx.fillStyle = isEmissive ? '#080c12' : '#1e293b';
-    ctx.fillRect(0, 0, w, h);
-
-    // 上部ドリンクディスプレイ窓（夜間に白飛びせずカラフルな飲料棚が映える適度な白バックライト）
-    ctx.fillStyle = isEmissive ? '#cde4f5' : '#f1f5f9';
-    ctx.fillRect(10, 10, w - 20, 152);
-
-    // 3段のドリンク棚＋カラフルな缶・ペットボトル
-    for (let row = 0; row < 3; row += 1) {
-      const shelfY = 16 + row * 48;
-      // 棚下段の価格・ボタン帯（赤「あったか〜い」/ 青「つめた〜い」）
-      ctx.fillStyle = row === 2 ? '#ef4444' : '#0284c7';
-      ctx.fillRect(14, shelfY + 34, w - 28, 10);
-
-      for (let col = 0; col < 7; col += 1) {
-        const bx = 20 + col * 31;
-        ctx.fillStyle = bottleColors[(row * 3 + col) % bottleColors.length];
-        ctx.fillRect(bx, shelfY + 4, 20, 28);
-        // ラベル白帯
-        ctx.fillStyle = 'rgba(255,255,255,0.75)';
-        ctx.fillRect(bx + 2, shelfY + 12, 16, 8);
-      }
-    }
-
-    // 中段ブランドバナー＆コイン投入口
-    ctx.fillStyle = headerColor;
-    ctx.fillRect(10, 170, w - 20, 26);
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 16px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(
-      theme === 'blue' ? 'DRINK 24H' : theme === 'red' ? 'COLD & HOT' : 'GREEN TEA',
-      w * 0.5,
-      183,
-    );
-
-    // 下段取り出し口フラップ（発光しない暗い金属面）
-    ctx.fillStyle = isEmissive ? '#000000' : '#0f172a';
-    ctx.fillRect(18, 204, w - 36, 42);
-    if (!isEmissive) {
-      ctx.strokeStyle = '#64748b';
-      ctx.lineWidth = 3;
-      ctx.strokeRect(18, 204, w - 36, 42);
-    }
-  }
-
-  const mapTex = trackTex(new THREE.CanvasTexture(diffCanvas));
-  mapTex.anisotropy = aniso;
-  mapTex.colorSpace = THREE.SRGBColorSpace;
-  mapTex.needsUpdate = true;
-
-  const emisTex = trackTex(new THREE.CanvasTexture(emisCanvas));
-  emisTex.anisotropy = aniso;
-  emisTex.colorSpace = THREE.SRGBColorSpace;
-  emisTex.needsUpdate = true;
-
-  return trackMat(
-    new THREE.MeshStandardMaterial({
-      map: mapTex,
-      emissiveMap: emisTex,
-      emissive: WHITE_COLOR.clone(),
-      emissiveIntensity: 0.02,
-      roughness: 0.25,
-      metalness: 0.1,
-    }),
-  );
-}
 
 function createShopSignMaterial(
   theme: SignTheme,

@@ -358,7 +358,7 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     hasCollision: true,
     colliderShrink: 0.92,
     placeholderFootprint: { width: 1.1, depth: 2.4, height: 1.95 },
-    castShadow: true,
+    castShadow: false,
     priority: 1,
   },
   {
@@ -375,7 +375,7 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     hasCollision: true,
     colliderShrink: 0.92,
     placeholderFootprint: { width: 1.1, depth: 2.4, height: 1.95 },
-    castShadow: true,
+    castShadow: false,
     priority: 2,
   },
   {
@@ -392,7 +392,7 @@ export const JAPANESE_CITY_PLACEMENTS: readonly CityAssetPlacement[] = [
     hasCollision: true,
     colliderShrink: 0.92,
     placeholderFootprint: { width: 1.1, depth: 2.4, height: 1.95 },
-    castShadow: true,
+    castShadow: false,
     priority: 2,
   },
   {

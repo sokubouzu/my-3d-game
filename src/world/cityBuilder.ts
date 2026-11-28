@@ -15,6 +15,10 @@ export interface CityBuildProgress {
 
 export interface CityBuilderHandle {
   group: THREE.Group;
+  getSharedTemplate: (
+    url: string,
+    category?: CityAssetPlacement['category'],
+  ) => Promise<THREE.Group>;
   setNightFactor: (factor: number) => void;
   dispose: () => void;
 }
@@ -222,6 +226,10 @@ export function buildJapaneseCity(
 
   return {
     group: cityGroup,
+    getSharedTemplate: (
+      url: string,
+      category: CityAssetPlacement['category'] = 'props',
+    ) => loadTemplate(url, category),
     setNightFactor: (factor: number) => {
       const clamped = Math.max(0, Math.min(1, factor));
       if (Math.abs(clamped - currentNightFactor) < 0.005) return;
