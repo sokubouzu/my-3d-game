@@ -299,6 +299,19 @@ export class WeatherController {
   }
 
   /**
+   * 公園芝生・樹木・最適化草 GLB などの植生マテリアルを雨天時の自然な湿り表現として登録する。
+   * 路面ほど鏡面化させず、わずかに暗くしっとりした質感へ変化させ、晴天復帰で原状復元する。
+   */
+  public registerVegetationMaterial(mat: THREE.MeshStandardMaterial): void {
+    this.trackMaterial(mat, {
+      targetRoughness: Math.max(0.52, mat.roughness * 0.68),
+      targetMetalness: 0.0,
+      targetEnvMapIntensity: Math.min(1.12, Math.max(0.85, mat.envMapIntensity * 1.08)),
+      wetTintHex: 0xd4ded2,
+    });
+  }
+
+  /**
    * 運転可能車両・AI交通車両のボディマテリアルを濡れ表現対象として登録する。
    * ロード完了後に非同期で呼ばれても、現在の濡れ状態を即座に反映する。
    */

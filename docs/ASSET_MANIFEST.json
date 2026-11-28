@@ -1,22 +1,52 @@
 {
-  "schemaVersion": "1.7.0",
-  "taskId": "5-G2",
+  "schemaVersion": "1.8.0",
+  "taskId": "5-G2b",
   "targetDevice": "iPad Air (5th gen, Apple M1 / 8GB RAM)",
   "summary": {
-    "totalAssets": 62,
-    "approvedCount": 39,
+    "totalAssets": 63,
+    "approvedCount": 40,
     "holdCount": 23,
-    "dracoCompressedCount": 23,
+    "dracoCompressedCount": 24,
     "byCategory": {
       "characters": 1,
       "buildings": 27,
       "vehicles": 12,
-      "props": 14,
+      "props": 15,
       "pedestrians": 8
     },
-    "placedApprovedCount": 31,
+    "placedApprovedCount": 32,
     "placedInstanceCount": 35,
-    "g2EnhancedAssetCount": 5
+    "g2EnhancedAssetCount": 5,
+    "g2bVegetationEnhancements": {
+      "route": "Offline fallback (Poly Haven API unreachable in VM; gardening._park._landscape.13.glb verified unsuitable as merged 17.8m hedge slab) -> Rescued GLB Grass + Procedural High-Res Multi-Layer Alpha Leaf Card Trees & PBR Lawn",
+      "rescuedGrassGlb": "public/assets/props/optimized/simple_grass_chunks_opt.glb (513KB, 4,619 Tris, 5 textures <=512px, ~5.93MB VRAM, 3 InstancedMesh DC)",
+      "proceduralPbrTrees": {
+        "speciesCount": 2,
+        "zelkovaStreetTree": {
+          "trianglesPerTree": 740,
+          "instances": 52,
+          "drawCalls": 2
+        },
+        "broadleafParkTree": {
+          "trianglesPerTree": 856,
+          "instances": 27,
+          "drawCalls": 2
+        },
+        "treePits": {
+          "instances": 47,
+          "drawCalls": 2
+        },
+        "totalTreeTriangles": 61592,
+        "textureBudgetVramMB": 12.33
+      },
+      "proceduralPbrLawn": {
+        "baseColorPx": 1024,
+        "normalMapPx": 512,
+        "roughnessMapPx": 512,
+        "estimatedVramMB": 8.0
+      },
+      "estimatedNetVramIncreaseMB": 24.3
+    }
   },
   "assets": {
     "characters": [
@@ -1629,9 +1659,9 @@
         "animationCount": 0,
         "verification": {
           "rank": "B",
-          "note": "PHASE 5-G1棚卸し・構造検査済み（分類C / 保留）：39.0万Tris＋KHR_materials_unlitのため保留"
+          "note": "PHASE 5-G1棚卸し・5-G2b 3Dジオメトリ詳細検査済み（分類C / 保留）：幅17.8mの傾斜生垣フォトグラメトリ単一スラブ（5分割マージ済み・単体樹木ノードなし・389,605 Tris＋KHR_materials_unlit）のため街路樹抽出不可・保留"
         },
-        "holdReason": "39.0万Tris＋KHR_materials_unlitのため保留"
+        "holdReason": "単体樹木ノード不在（17.8m連結生垣スラブ）・39.0万Tris＋KHR_materials_unlitのため保留"
       },
       {
         "id": "pavement_in_the_park",
@@ -3451,9 +3481,76 @@
         "animationCount": 0,
         "verification": {
           "rank": "B",
-          "note": "PHASE 5-G1棚卸し・構造検査済み（分類C / 保留）：KHR_materials_pbrSpecularGlossiness非互換＋7.7万Tris/59MB VRAM過大のため保留"
+          "note": "PHASE 5-G1棚卸し（分類C / 原本保管）：原本はKHR_materials_pbrSpecularGlossiness非互換＋7.7万Tris/59MB VRAMのため未ロード保管。PHASE 5-G2bにて Three.js r170互換PBR化＋4,619 Tris化＋512px化した派生版 public/assets/props/optimized/simple_grass_chunks_opt.glb を生成・導入済み。"
         },
         "holdReason": "KHR_materials_pbrSpecularGlossiness非互換＋7.7万Tris/59MB VRAM過大のため保留"
+      },
+      {
+        "id": "simple_grass_chunks_opt",
+        "category": "props",
+        "path": "public/assets/props/optimized/simple_grass_chunks_opt.glb",
+        "derivedFrom": "public/assets/props/simple_grass_chunks.glb",
+        "format": "glb",
+        "fileSizeBytes": 513332,
+        "title": "Simple grass chunks (Optimized PBR / 5-G2b)",
+        "author": "3dhdscan (https://sketchfab.com/3dhdscan)",
+        "license": "CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)",
+        "source": "https://sketchfab.com/3d-models/simple-grass-chunks-eb4f6dc9d4e3455ea3435385faf58b60",
+        "placementStatus": "approved",
+        "g1Category": "A (5-G2b Rescued)",
+        "hasDracoCompression": true,
+        "extensionsUsed": [
+          "KHR_draco_mesh_compression"
+        ],
+        "geometry": {
+          "vertices": 5519,
+          "triangles": 4619,
+          "subMeshes": [
+            {
+              "name": "grass_tuft_tall",
+              "triangles": 37,
+              "targetHeightMeters": 0.36
+            },
+            {
+              "name": "grass_tuft_herb",
+              "triangles": 31,
+              "targetHeightMeters": 0.18
+            },
+            {
+              "name": "grass_clump_patch",
+              "triangles": 4551,
+              "targetHeightMeters": 0.42
+            }
+          ],
+          "reductionVsOriginal": "-94.0% triangles (76,607 -> 4,619), -96.3% file size (13.74MB -> 0.51MB)"
+        },
+        "textures": {
+          "imageCount": 5,
+          "maxTexturePx": 512,
+          "resolutions": [
+            "512x512",
+            "256x256"
+          ],
+          "estimatedVramMB": 5.93,
+          "notes": "KHR_materials_pbrSpecularGlossinessを完全除去し標準pbrMetallicRoughness + alphaMode:MASKへ変換。RGBA拡散2枚へアルファブリード色拡張を適用してミップマップ白フチを防止。"
+        },
+        "animationCount": 0,
+        "cityPlacement": {
+          "taskId": "5-G2b",
+          "drawCalls": 3,
+          "instancedMesh": true,
+          "castShadow": false,
+          "hasCollision": false,
+          "areas": [
+            "さくら中央公園 芝生外縁・中央噴水外周・遊歩道沿い・公園四隅ヒーロー草塊12箇所",
+            "市街地・駅前広場・外周道路ループの全79本の樹木足元（植樹桝内含む）",
+            "駅前ロータリー中央芝生アイランド縁"
+          ]
+        },
+        "verification": {
+          "rank": "B",
+          "note": "PHASE 5-G2b救済・最適化済み（513KB / 4,619 Tris / 512px PBR / VRAM約5.93MB）。3ドローコールInstancedMesh配置・CIビルド検証対象（実機iPad確認＝状態Eは未実施）。"
+        }
       },
       {
         "id": "tree_low_poly_lowpoly",

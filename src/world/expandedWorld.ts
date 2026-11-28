@@ -1,9 +1,11 @@
 import * as THREE from 'three';
 import { CITY_METRICS, type CollisionWorld } from './collisionWorld';
 import { createRadialGlowTexture } from './streetLights';
+import { createRealisticLawnPbr } from './vegetationSystem';
 
 export interface ExpandedWorldHandle {
   group: THREE.Group;
+  grassMaterial: THREE.MeshStandardMaterial;
   setNightFactor: (factor: number) => void;
   setProceduralBenchesVisible: (visible: boolean) => void;
   dispose: () => void;
@@ -258,14 +260,9 @@ export function buildExpandedWorld(
   const parkCx = (parkB.minX + parkB.maxX) * 0.5; // 55
   const parkCz = (parkB.minZ + parkB.maxZ) * 0.5; // -102
 
-  const grassTex = trackTex(createGrassTexture(aniso, 14, 6));
-  const grassMat = trackMat(
-    new THREE.MeshStandardMaterial({
-      map: grassTex,
-      roughness: 0.95,
-      metalness: 0.0,
-    }),
-  );
+  const lawnPbr = createRealisticLawnPbr(aniso, 16, 7);
+  for (const t of lawnPbr.textures) trackTex(t);
+  const grassMat = trackMat(lawnPbr.material);
   const parkPathTex = trackTex(createParkPathTexture(aniso, 12, 5));
   const parkPathMat = trackMat(
     new THREE.MeshStandardMaterial({
@@ -496,11 +493,15 @@ export function buildExpandedWorld(
   islandGrass.receiveShadow = true;
   islandGroup.add(islandGrass);
 
-  // 環状植栽（低木リング）
+  // 環状植栽（低木リング：芝生PBR法線・粗さマップを共有して立体感を付与）
   const shrubMat = trackMat(
     new THREE.MeshStandardMaterial({
-      color: 0x2f6338,
-      roughness: 0.9,
+      color: 0x356436,
+      map: grassMat.map,
+      normalMap: grassMat.normalMap,
+      normalScale: new THREE.Vector2(1.0, 1.0),
+      roughnessMap: grassMat.roughnessMap,
+      roughness: 0.92,
       metalness: 0.0,
     }),
   );
@@ -844,6 +845,7 @@ export function buildExpandedWorld(
 
   return {
     group: root,
+    grassMaterial: grassMat,
     setNightFactor,
     setProceduralBenchesVisible: (visible: boolean) => {
       proceduralBenchGroup.visible = visible;
@@ -1723,59 +1725,6 @@ function createOutskirtsGroundTexture(anisotropy: number): THREE.CanvasTexture {
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
   tex.repeat.set(36, 36);
-  tex.anisotropy = anisotropy;
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.needsUpdate = true;
-  return tex;
-}
-
-function createGrassTexture(
-  anisotropy: number,
-  repeatX: number,
-  repeatY: number,
-): THREE.CanvasTexture {
-  const size = 512;
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d');
-  if (ctx) {
-    ctx.fillStyle = '#3f6b36';
-    ctx.fillRect(0, 0, size, size);
-
-    let seed = 7731;
-    const rand = () => {
-      seed = (seed * 16807) % 2147483647;
-      return (seed - 1) / 2147483646;
-    };
-
-    // 芝生の日向・日陰ムラ
-    for (let i = 0; i < 420; i += 1) {
-      const x = rand() * size;
-      const y = rand() * size;
-      const r = 10 + rand() * 24;
-      ctx.fillStyle =
-        rand() > 0.5 ? 'rgba(92, 140, 62, 0.14)' : 'rgba(34, 66, 30, 0.16)';
-      ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // 細かい芝の葉ディテール
-    for (let i = 0; i < 12000; i += 1) {
-      const x = rand() * size;
-      const y = rand() * size;
-      const g = Math.floor(88 + rand() * 58);
-      const r = Math.floor(g * 0.62);
-      const b = Math.floor(g * 0.42);
-      ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
-      ctx.fillRect(x, y, 2, 4);
-    }
-  }
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(repeatX, repeatY);
   tex.anisotropy = anisotropy;
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.needsUpdate = true;

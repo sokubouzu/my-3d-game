@@ -2,9 +2,16 @@ import * as THREE from 'three';
 import { CITY_METRICS, type CollisionWorld } from './collisionWorld';
 import { sampleRoundedLoopPoints } from './expandedWorld';
 import { createRadialGlowTexture } from './streetLights';
+import {
+  buildRealisticInstancedTrees,
+  type TreeSpecies,
+  type VegetationTreePlacement,
+} from './vegetationSystem';
 
 export interface JapanesePropsHandle {
   group: THREE.Group;
+  getTreePlacements: () => readonly VegetationTreePlacement[];
+  getVegetationMaterials: () => readonly THREE.MeshStandardMaterial[];
   setNightFactor: (factor: number) => void;
   dispose: () => void;
 }
@@ -49,17 +56,6 @@ interface RoadSignSpec {
   yaw: number;
   baseY: number;
   type: RoadSignType;
-}
-
-interface TreeSpec {
-  id: string;
-  x: number;
-  z: number;
-  baseY: number;
-  scale: number;
-  yaw: number;
-  hasPit: boolean;
-  tintHex: number;
 }
 
 const WHITE_COLOR = new THREE.Color(0xffffff);
@@ -451,10 +447,10 @@ export function buildJapaneseStreetProps(
   });
 
   // =========================================================================
-  // 5. 街路樹・公園樹木（InstancedMesh 5ドローコール + 幹 OBB コライダー）
+  // 5. 街路樹・公園樹木（PHASE 5-G2b: 2種の多層アルファ葉カード＋リアル樹皮PBR InstancedMesh + 幹 OBB コライダー）
   // =========================================================================
   const trees = buildTreeLayout(swY);
-  buildInstancedTrees(
+  const realisticTrees = buildRealisticInstancedTrees(
     root,
     trees,
     aniso,
@@ -497,6 +493,8 @@ export function buildJapaneseStreetProps(
 
   return {
     group: root,
+    getTreePlacements: () => trees,
+    getVegetationMaterials: () => realisticTrees.vegetationMaterials,
     setNightFactor,
     dispose: () => {
       for (const id of colliderIds) {
@@ -920,12 +918,13 @@ function buildJapaneseRoadSigns(
 }
 
 // ===========================================================================
-// 街路樹・公園樹木配置・InstancedMesh 構築
+// 街路樹・公園樹木配置（PHASE 5-G2b: 2種の多層アルファ葉カード樹木へ割り当て）
 // ===========================================================================
 
-function buildTreeLayout(swY: number): TreeSpec[] {
-  const trees: TreeSpec[] = [];
-  const leafTints = [0x3d7238, 0x4b803f, 0x366634, 0x568944, 0x44783c];
+function buildTreeLayout(swY: number): VegetationTreePlacement[] {
+  const trees: VegetationTreePlacement[] = [];
+  // 葉カード BaseColor 自体が植物緑を持つため、個体差は明るく自然な色相シフトに留める
+  const leafTints = [0xffffff, 0xf2fae8, 0xe8f5dc, 0xf8f8e2, 0xe2f0d6];
   let idx = 0;
 
   const pushTree = (
@@ -934,6 +933,7 @@ function buildTreeLayout(swY: number): TreeSpec[] {
     baseY: number,
     scale: number,
     hasPit: boolean,
+    species: TreeSpecies,
   ) => {
     const tintHex = leafTints[idx % leafTints.length];
     const yaw = ((idx * 137.5) % 360) * (Math.PI / 180);
@@ -945,12 +945,13 @@ function buildTreeLayout(swY: number): TreeSpec[] {
       scale,
       yaw,
       hasPit,
+      species,
       tintHex,
     });
     idx += 1;
   };
 
-  // 1. 内側コア市街地の歩道街路樹（建物・歩行者±7.2/9.5・街灯±6.45と非干渉な外側帯 ±10.2m）
+  // 1. 内側コア市街地の歩道街路樹（ケヤキ風 zelkova：樹冠高めで車道・歩道と完全非干渉）
   const innerStreetCoords: ReadonlyArray<[number, number]> = [
     [-10.4, -50],
     [-10.4, -66],
@@ -970,10 +971,10 @@ function buildTreeLayout(swY: number): TreeSpec[] {
     [66, 10.4],
   ];
   for (const [x, z] of innerStreetCoords) {
-    pushTree(x, z, swY, 0.92 + (idx % 3) * 0.08, true);
+    pushTree(x, z, swY, 0.92 + (idx % 3) * 0.08, true, 'zelkova');
   }
 
-  // 2. 都市公園エリア（さくら中央公園: x∈[14,96], z∈[-120,-84]、遊歩道と中央噴水を避けて配置）
+  // 2. 都市公園エリア（さくら中央公園: x∈[14,96], z∈[-120,-84]、公園大樹 broadleaf を中心に混植）
   const parkTreeCoords: ReadonlyArray<[number, number, number]> = [
     [19, -116, 1.15],
     [28, -115, 1.05],
@@ -996,11 +997,13 @@ function buildTreeLayout(swY: number): TreeSpec[] {
     [71, -95, 1.02],
     [85, -95, 1.1],
   ];
-  for (const [x, z, sc] of parkTreeCoords) {
-    pushTree(x, z, 0, sc, false);
+  for (let i = 0; i < parkTreeCoords.length; i += 1) {
+    const [x, z, sc] = parkTreeCoords[i];
+    const sp: TreeSpecies = i % 4 === 1 ? 'zelkova' : 'broadleaf';
+    pushTree(x, z, 0, sc, false, sp);
   }
 
-  // 3. 駅前ロータリー広場（広場周囲の並木）
+  // 3. 駅前ロータリー広場（広場周囲のケヤキ並木）
   const plazaTreeCoords: ReadonlyArray<[number, number]> = [
     [-39, 86],
     [-20, 86],
@@ -1011,10 +1014,10 @@ function buildTreeLayout(swY: number): TreeSpec[] {
     [38, 104],
   ];
   for (const [x, z] of plazaTreeCoords) {
-    pushTree(x, z, 0, 1.02, true);
+    pushTree(x, z, 0, 1.02, true, 'zelkova');
   }
 
-  // 4. 外周道路ループ沿いの並木（外側歩道の外縁へ整列し、歩道中央を開放）
+  // 4. 外周道路ループ沿いの並木（外側歩道の外縁へ整列、車道クリアランス重視で zelkova）
   const ringSpan = CITY_METRICS.outerRingHalfSpan; // 134
   const outerVerge =
     ringSpan +
@@ -1022,13 +1025,13 @@ function buildTreeLayout(swY: number): TreeSpec[] {
     CITY_METRICS.outerRingOuterSidewalkWidth -
     0.55; // 145.45 (外側歩道 142..146m の外縁)
   for (const coord of [-84, -56, -28, 28, 56, 84]) {
-    pushTree(coord, -outerVerge, 0, 1.05 + (idx % 3) * 0.09, true);
-    pushTree(coord, outerVerge, 0, 1.05 + (idx % 3) * 0.09, true);
-    pushTree(-outerVerge, coord, 0, 1.05 + (idx % 3) * 0.09, true);
-    pushTree(outerVerge, coord, 0, 1.05 + (idx % 3) * 0.09, true);
+    pushTree(coord, -outerVerge, 0, 1.05 + (idx % 3) * 0.09, true, 'zelkova');
+    pushTree(coord, outerVerge, 0, 1.05 + (idx % 3) * 0.09, true, 'zelkova');
+    pushTree(-outerVerge, coord, 0, 1.05 + (idx % 3) * 0.09, true, 'zelkova');
+    pushTree(outerVerge, coord, 0, 1.05 + (idx % 3) * 0.09, true, 'zelkova');
   }
 
-  // コーナー外側の街路樹（4コーナー各3本、外側歩道外縁に整列）
+  // コーナー外側の街路樹（4コーナー各3本、緑豊かな broadleaf で景観アクセント）
   const s = ringSpan - CITY_METRICS.outerRingCornerRadius; // 92
   const treeArcR =
     CITY_METRICS.outerRingCornerRadius +
@@ -1044,171 +1047,18 @@ function buildTreeLayout(swY: number): TreeSpec[] {
   for (const [cx, cz, a0, a1] of corners) {
     for (const f of [0.22, 0.5, 0.78]) {
       const a = a0 + (a1 - a0) * f;
-      pushTree(cx + Math.cos(a) * treeArcR, cz + Math.sin(a) * treeArcR, 0, 1.14, false);
+      pushTree(
+        cx + Math.cos(a) * treeArcR,
+        cz + Math.sin(a) * treeArcR,
+        0,
+        1.12,
+        false,
+        'broadleaf',
+      );
     }
   }
 
   return trees;
-}
-
-function buildInstancedTrees(
-  parent: THREE.Group,
-  trees: readonly TreeSpec[],
-  aniso: number,
-  trackGeo: <T extends THREE.BufferGeometry>(g: T) => T,
-  trackMat: <T extends THREE.Material>(m: T) => T,
-  trackTex: <T extends THREE.Texture>(t: T) => T,
-  addCollider: (
-    id: string,
-    cx: number,
-    cz: number,
-    width: number,
-    depth: number,
-    rotationY: number,
-    minY: number,
-    maxY: number,
-  ) => void,
-): void {
-  const barkTex = trackTex(createBarkTexture(aniso));
-  const barkMat = trackMat(
-    new THREE.MeshStandardMaterial({
-      map: barkTex,
-      roughness: 0.92,
-      metalness: 0.02,
-    }),
-  );
-  const foliageTex = trackTex(createFoliageTexture(aniso));
-  const foliageMat = trackMat(
-    new THREE.MeshStandardMaterial({
-      map: foliageTex,
-      color: 0xffffff,
-      roughness: 0.86,
-      metalness: 0.0,
-    }),
-  );
-  const pitMat = trackMat(
-    new THREE.MeshStandardMaterial({
-      color: 0x5d574f,
-      roughness: 0.94,
-      metalness: 0.04,
-    }),
-  );
-
-  const trunkGeo = trackGeo(new THREE.CylinderGeometry(0.12, 0.22, 2.8, 7));
-  const pitGeo = trackGeo(new THREE.BoxGeometry(1.25, 0.06, 1.25));
-  const crownGeoA = trackGeo(createOrganicCanopyGeometry(1.55, 11));
-  const crownGeoB = trackGeo(createOrganicCanopyGeometry(1.25, 29));
-  const crownGeoC = trackGeo(createOrganicCanopyGeometry(1.05, 53));
-
-  const trunkInst = new THREE.InstancedMesh(trunkGeo, barkMat, trees.length);
-  const crownAInst = new THREE.InstancedMesh(crownGeoA, foliageMat, trees.length);
-  const crownBInst = new THREE.InstancedMesh(crownGeoB, foliageMat, trees.length);
-  const crownCInst = new THREE.InstancedMesh(crownGeoC, foliageMat, trees.length);
-
-  const pitTrees = trees.filter((t) => t.hasPit);
-  const pitInst = new THREE.InstancedMesh(
-    pitGeo,
-    pitMat,
-    Math.max(1, pitTrees.length),
-  );
-
-  const dummy = new THREE.Object3D();
-  const colorScratch = new THREE.Color();
-
-  for (let i = 0; i < trees.length; i += 1) {
-    const t = trees[i];
-    const sc = t.scale;
-
-    // 幹
-    dummy.position.set(t.x, t.baseY + 1.4 * sc, t.z);
-    dummy.rotation.set(0, t.yaw, 0);
-    dummy.scale.set(sc, sc, sc);
-    dummy.updateMatrix();
-    trunkInst.setMatrixAt(i, dummy.matrix);
-
-    // 下段主樹冠
-    dummy.position.set(t.x, t.baseY + 3.45 * sc, t.z);
-    dummy.rotation.set(0, t.yaw, 0);
-    dummy.scale.set(1.12 * sc, 0.88 * sc, 1.08 * sc);
-    dummy.updateMatrix();
-    crownAInst.setMatrixAt(i, dummy.matrix);
-    colorScratch.setHex(t.tintHex);
-    crownAInst.setColorAt(i, colorScratch);
-
-    // 中段オフセット樹冠
-    const cCos = Math.cos(t.yaw);
-    const cSin = Math.sin(t.yaw);
-    dummy.position.set(
-      t.x + cCos * 0.55 * sc,
-      t.baseY + 4.35 * sc,
-      t.z + cSin * 0.55 * sc,
-    );
-    dummy.rotation.set(0, t.yaw + 1.1, 0);
-    dummy.scale.set(1.0 * sc, 0.92 * sc, 1.0 * sc);
-    dummy.updateMatrix();
-    crownBInst.setMatrixAt(i, dummy.matrix);
-    colorScratch.setHex(t.tintHex).offsetHSL(0.015, 0.03, 0.04);
-    crownBInst.setColorAt(i, colorScratch);
-
-    // 上段頂部樹冠
-    dummy.position.set(
-      t.x - cCos * 0.35 * sc,
-      t.baseY + 4.95 * sc,
-      t.z - cSin * 0.35 * sc,
-    );
-    dummy.rotation.set(0, t.yaw + 2.3, 0);
-    dummy.scale.set(0.95 * sc, 0.86 * sc, 0.95 * sc);
-    dummy.updateMatrix();
-    crownCInst.setMatrixAt(i, dummy.matrix);
-    colorScratch.setHex(t.tintHex).offsetHSL(-0.01, 0.02, 0.07);
-    crownCInst.setColorAt(i, colorScratch);
-
-    // 幹のみのスリムな OBB コライダー（高い樹冠は通過可能）
-    addCollider(t.id, t.x, t.z, 0.44 * sc, 0.44 * sc, 0, t.baseY, t.baseY + 3.0 * sc);
-  }
-
-  for (let i = 0; i < pitTrees.length; i += 1) {
-    const t = pitTrees[i];
-    dummy.position.set(t.x, t.baseY + 0.03, t.z);
-    dummy.rotation.set(0, 0, 0);
-    dummy.scale.set(1, 1, 1);
-    dummy.updateMatrix();
-    pitInst.setMatrixAt(i, dummy.matrix);
-  }
-  pitInst.count = pitTrees.length;
-
-  trunkInst.instanceMatrix.needsUpdate = true;
-  crownAInst.instanceMatrix.needsUpdate = true;
-  crownBInst.instanceMatrix.needsUpdate = true;
-  crownCInst.instanceMatrix.needsUpdate = true;
-  pitInst.instanceMatrix.needsUpdate = true;
-  if (crownAInst.instanceColor) crownAInst.instanceColor.needsUpdate = true;
-  if (crownBInst.instanceColor) crownBInst.instanceColor.needsUpdate = true;
-  if (crownCInst.instanceColor) crownCInst.instanceColor.needsUpdate = true;
-
-  parent.add(trunkInst, crownAInst, crownBInst, crownCInst, pitInst);
-}
-
-/** 決定論的ノイズで有機的に凹凸を付けた樹冠ジオメトリを生成（ローポリ箱・平面回避） */
-function createOrganicCanopyGeometry(
-  radius: number,
-  seedOffset: number,
-): THREE.BufferGeometry {
-  const geo = new THREE.IcosahedronGeometry(radius, 1);
-  const pos = geo.attributes.position;
-  for (let i = 0; i < pos.count; i += 1) {
-    const vx = pos.getX(i);
-    const vy = pos.getY(i);
-    const vz = pos.getZ(i);
-    const wave =
-      Math.sin(vx * 2.7 + seedOffset) *
-      Math.cos(vy * 3.1 + seedOffset * 0.7) *
-      Math.sin(vz * 2.5 - seedOffset * 0.4);
-    const factor = 1.0 + wave * 0.16;
-    pos.setXYZ(i, vx * factor, vy * factor * 0.92, vz * factor);
-  }
-  geo.computeVertexNormals();
-  return geo;
 }
 
 // ===========================================================================
@@ -1542,72 +1392,4 @@ function createRoadSignPlateMaterial(
       metalness: 0.12,
     }),
   );
-}
-
-function createBarkTexture(anisotropy: number): THREE.CanvasTexture {
-  const size = 256;
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d');
-  if (ctx) {
-    ctx.fillStyle = '#534336';
-    ctx.fillRect(0, 0, size, size);
-    let seed = 3141;
-    const rand = () => {
-      seed = (seed * 16807) % 2147483647;
-      return (seed - 1) / 2147483646;
-    };
-    for (let i = 0; i < 420; i += 1) {
-      const x = rand() * size;
-      const y = rand() * size;
-      const h = 16 + rand() * 44;
-      const v = Math.floor(55 + rand() * 42);
-      ctx.fillStyle = `rgb(${v + 12}, ${v + 4}, ${v - 6})`;
-      ctx.fillRect(x, y, 2 + rand() * 3, h);
-    }
-  }
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(2, 3);
-  tex.anisotropy = anisotropy;
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.needsUpdate = true;
-  return tex;
-}
-
-function createFoliageTexture(anisotropy: number): THREE.CanvasTexture {
-  const size = 256;
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d');
-  if (ctx) {
-    ctx.fillStyle = '#a2c29c';
-    ctx.fillRect(0, 0, size, size);
-    let seed = 8821;
-    const rand = () => {
-      seed = (seed * 16807) % 2147483647;
-      return (seed - 1) / 2147483646;
-    };
-    for (let i = 0; i < 950; i += 1) {
-      const x = rand() * size;
-      const y = rand() * size;
-      const r = 3 + rand() * 7;
-      const shade = Math.floor(135 + rand() * 95);
-      ctx.fillStyle = `rgb(${Math.floor(shade * 0.85)}, ${shade}, ${Math.floor(shade * 0.78)})`;
-      ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(2, 2);
-  tex.anisotropy = anisotropy;
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.needsUpdate = true;
-  return tex;
 }

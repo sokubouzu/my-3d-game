@@ -52,5 +52,6 @@ iPad Air 第5世代（Apple M1 / 8GB RAM）での実プレイをターゲット�
 | Park facility asset | https://sketchfab.com/3d-models/park-facility-asset-1b99e093f1194aea921d4de4ca654800 | Solarliu (https://sketchfab.com/jacky15621419) | `public/assets/props/park_facility_asset.glb` |
 | Park Rocks Wall | https://sketchfab.com/3d-models/park-rocks-wall-a49da2f0d7894c47a607574275b54e4b | andrea.notarstefano (https://sketchfab.com/andrea.notarstefano) | `public/assets/props/park_rocks_wall.glb` |
 | Simple grass chunks | https://sketchfab.com/3d-models/simple-grass-chunks-eb4f6dc9d4e3455ea3435385faf58b60 | 3dhdscan (https://sketchfab.com/3dhdscan) | `public/assets/props/simple_grass_chunks.glb` |
+| Simple grass chunks (Optimized PBR / 5-G2b) | https://sketchfab.com/3d-models/simple-grass-chunks-eb4f6dc9d4e3455ea3435385faf58b60 | 3dhdscan (https://sketchfab.com/3dhdscan) | `public/assets/props/optimized/simple_grass_chunks_opt.glb` |
 | Tree low poly lowpoly | https://sketchfab.com/3d-models/tree-low-poly-lowpoly-73201f05280d48dcb10ed4ca362d69f8 | 00amza (https://sketchfab.com/00amza) | `public/assets/props/tree_low_poly_lowpoly.glb` |
 

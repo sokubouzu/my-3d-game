@@ -22,6 +22,7 @@ import { StreetLightSystem } from '../world/streetLights';
 import { buildExpandedWorld } from '../world/expandedWorld';
 import { buildJapaneseStreetProps } from '../world/japaneseProps';
 import { buildG2GlbEnhancements } from '../world/g2GlbEnhancements';
+import { buildG2bOptimizedGlbGrass } from '../world/vegetationSystem';
 import {
   TimeOfDayController,
   type TimeOfDayMode,
@@ -495,6 +496,19 @@ export function startGameEngine(
       onParkBenchesLoaded: () => {
         expandedWorld.setProceduralBenchesVisible(false);
       },
+    },
+  );
+  // 5-G2b: 公園芝生PBR・多層アルファ葉カード樹木・最適化草GLBの天候連動およびInstanced配置
+  weatherController.registerVegetationMaterial(expandedWorld.grassMaterial);
+  for (const vegMat of japaneseProps.getVegetationMaterials()) {
+    weatherController.registerVegetationMaterial(vegMat);
+  }
+  const g2bGrass = buildG2bOptimizedGlbGrass(
+    scene,
+    japaneseProps.getTreePlacements(),
+    maxAnisotropy,
+    (grassMat) => {
+      weatherController?.registerVegetationMaterial(grassMat);
     },
   );
 
@@ -1368,6 +1382,7 @@ export function startGameEngine(
       activeVehicle = null;
       nearbyVehicle = null;
 
+      g2bGrass.dispose();
       g2Enhancements.dispose();
       japaneseProps.dispose();
       expandedWorld.dispose();
